@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v8</title>
+  <title>Office Music Mixer v9</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -160,7 +160,7 @@
 </head>
 
 <body>
-  <h1>Office Music Mixer <span class="version">v8</span></h1>
+  <h1>Office Music Mixer <span class="version">v9</span></h1>
   <p>Wybierz osoby obecne w pokoju i wygeneruj wspólną playlistę.</p>
 
   <div class="toolbar">
@@ -779,7 +779,66 @@ function commonCategories(selected) {
   return [...new Set(selected.flatMap(p => p.categories))];
 }
 
+const SEARCH_CACHE_PREFIX = "office_search_cache_v1:";
+const SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const SEARCH_REQUEST_GAP_MS = 700;
+const MAX_RATE_LIMIT_RETRIES = 3;
+let lastSearchRequestAt = 0;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function searchCacheKey(query, offset) {
+  return `${SEARCH_CACHE_PREFIX}${encodeURIComponent(query)}:${offset}`;
+}
+
+function readSearchCache(query, offset) {
+  try {
+    const raw = localStorage.getItem(searchCacheKey(query, offset));
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (!cached?.savedAt || Date.now() - cached.savedAt > SEARCH_CACHE_TTL_MS) {
+      localStorage.removeItem(searchCacheKey(query, offset));
+      return null;
+    }
+    return Array.isArray(cached.items) ? cached.items : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSearchCache(query, offset, items) {
+  try {
+    localStorage.setItem(
+      searchCacheKey(query, offset),
+      JSON.stringify({ savedAt: Date.now(), items })
+    );
+  } catch (err) {
+    console.warn("Nie udało się zapisać cache wyszukiwania.", err);
+  }
+}
+
+async function waitForSearchSlot() {
+  const elapsed = Date.now() - lastSearchRequestAt;
+  if (elapsed < SEARCH_REQUEST_GAP_MS) {
+    await sleep(SEARCH_REQUEST_GAP_MS - elapsed);
+  }
+  lastSearchRequestAt = Date.now();
+}
+
+async function parseJsonSafely(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 async function searchTracks(token, query, offset = 0) {
+  const cached = readSearchCache(query, offset);
+  if (cached) return cached;
+
   const url = new URL("https://api.spotify.com/v1/search");
   url.search = new URLSearchParams({
     q: query,
@@ -788,17 +847,52 @@ async function searchTracks(token, query, offset = 0) {
     offset: String(offset)
   }).toString();
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+    await waitForSearchSlot();
 
-  const data = await response.json();
-  if (!response.ok) {
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    const data = await parseJsonSafely(response);
+
+    if (response.ok) {
+      const items = data?.tracks?.items || [];
+      writeSearchCache(query, offset, items);
+      return items;
+    }
+
+    if (response.status === 429) {
+      const reason = data?.error?.reason;
+      if (reason === "QUOTA_EXCEEDED") {
+        throw new Error(
+          "Spotify: wyczerpano quota aplikacji w Development Mode. To nie jest chwilowy limit szybkości. Odczekaj do odnowienia limitu i spróbuj ponownie później."
+        );
+      }
+
+      const retryAfterHeader = Number(response.headers.get("Retry-After"));
+      const retrySeconds = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader
+        : Math.min(30, 2 ** attempt * 2);
+
+      if (attempt >= MAX_RATE_LIMIT_RETRIES) {
+        throw new Error(
+          `Spotify nadal ogranicza liczbę zapytań (429). Ostatnie Retry-After: ${retrySeconds} s.`
+        );
+      }
+
+      progressBox.textContent =
+        `Spotify zwolniło zapytania. Czekam ${retrySeconds} s i próbuję ponownie...`;
+      await sleep(retrySeconds * 1000 + 250);
+      continue;
+    }
+
     console.error(data);
-    throw new Error(`Błąd wyszukiwania Spotify: ${response.status}`);
+    const message = data?.error?.message ? `: ${data.error.message}` : "";
+    throw new Error(`Błąd wyszukiwania Spotify: ${response.status}${message}`);
   }
 
-  return data.tracks?.items || [];
+  return [];
 }
 
 function normalizeArtistName(name) {
@@ -839,20 +933,26 @@ async function collectFromQueries(
   if (!queries.length || wanted <= 0) return result;
 
   const { allowArtistRepeat = false, ignoreArtistCooldown = false } = options;
-  const shuffledQueries = shuffle(queries);
+  const uniqueQueries = [...new Set(queries)];
+  const shuffledQueries = shuffle(uniqueQueries);
+  const discovery = Number(discoveryLevel.value);
+  const perSearchCap = discovery >= 60 ? 3 : 2;
+  const queryBudget = Math.min(
+    shuffledQueries.length,
+    Math.max(4, Math.ceil(wanted / perSearchCap) + 3)
+  );
+  const maxPagesPerQuery = discovery >= 70 ? 2 : 1;
   let attempts = 0;
-  const maxAttempts = Math.max(60, wanted * 12);
+  const maxAttempts = queryBudget * maxPagesPerQuery;
 
   while (result.length < wanted && attempts < maxAttempts) {
-    const query = shuffledQueries[attempts % shuffledQueries.length];
-    const page = Math.floor(attempts / shuffledQueries.length);
-    const maxPage = Math.max(1, Math.round(Number(discoveryLevel.value) / 15));
-    const offset = (page % (maxPage + 1)) * 10;
+    const queryIndex = attempts % queryBudget;
+    const page = Math.floor(attempts / queryBudget);
+    const query = shuffledQueries[queryIndex];
+    const offset = page * 10;
 
     const found = await searchTracks(token, query, offset);
-    const discovery = Number(discoveryLevel.value);
     const candidates = discovery >= 60 ? shuffle(found) : found;
-    const perSearchCap = discovery >= 60 ? 3 : 2;
     let addedThisSearch = 0;
 
     for (const track of candidates) {
@@ -1165,7 +1265,7 @@ function renderPlaylistResult(playlist, tracks, selected, commonTarget, ignoredP
     model.textContent =
       `Cel wspólnej części: ok. ${commonTarget} utworów. Reszta to indywidualne wtrącenia. ` +
       `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. ` +
-      `Odkrycia: ${discoveryLevel.value}%.`;
+      `Odkrycia: ${discoveryLevel.value}%. Wyszukiwania są buforowane przez 24 h i wysyłane z ograniczoną częstotliwością.`;
     playlistResult.append(summary, model);
 
     if (ignoredProfiles.length) {
