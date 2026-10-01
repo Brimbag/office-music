@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer</title>
+  <title>Office Music Mixer v7</title>
   <style>
     :root {
-      color-scheme: light;
+      color-scheme: light dark;
       font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     body {
@@ -114,11 +114,53 @@
       font-size: 13px;
       color: #555;
     }
+    .version {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #666;
+      vertical-align: middle;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #111315;
+        color: #eceff1;
+      }
+      .box {
+        background: #1a1d20;
+        border-color: #34383d;
+      }
+      .person {
+        border-color: #34383d;
+        background: #171a1d;
+      }
+      .genres, .small, .progress, .history-summary, .version {
+        color: #aeb5bd;
+      }
+      .seed-input, .settings-row select {
+        background: #24282c;
+        color: #f1f3f5;
+        border-color: #4a5057;
+      }
+      button {
+        background: #f1f3f5;
+        color: #111315;
+      }
+      button.secondary {
+        background: #3b4147;
+        color: #f1f3f5;
+      }
+      a { color: #7eb4ff; }
+      .ok { color: #67d486; }
+      .error { color: #ff8d8d; }
+    }
   </style>
 </head>
 
 <body>
-  <h1>Office Music Mixer</h1>
+  <h1>Office Music Mixer <span class="version">v7</span></h1>
   <p>Wybierz osoby obecne w pokoju i wygeneruj wspólną playlistę.</p>
 
   <div class="toolbar">
@@ -184,13 +226,14 @@
 
       <label>
         <input id="avoidRemixes" type="checkbox" checked>
-        Unikaj remixów i wersji live
+        Unikaj alternatywnych wersji (remix/live/remaster/acoustic…)
       </label>
     </div>
 
     <p class="small">
       Około 75% wspólnego mianownika i 25% indywidualnych wtrąceń.
       Artyści wzorcowi mają większą wagę niż same gatunki, a wykonawca zablokowany przez dowolną obecną osobę nie trafi na playlistę.
+      Osoba z pustym profilem może być zaznaczona, ale do czasu uzupełnienia preferencji nie wpływa na dobór muzyki.
       Przed generowaniem aplikacja synchronizuje do 50 ostatnio odtwarzanych utworów ze Spotify
       i łączy je z własną historią zapisanych playlist.
     </p>
@@ -710,7 +753,10 @@ function selectedBlockedArtistNames(selected) {
 function looksLikeUnwantedVariant(track) {
   const text = `${track?.name || ""} ${track?.album?.name || ""}`;
   if (avoidCyrillic.checked && /[\p{Script=Cyrillic}]/u.test(text)) return true;
-  if (avoidRemixes.checked && /\b(remix|live|edit|mix)\b/i.test(text)) return true;
+  if (
+    avoidRemixes.checked &&
+    /\b(remix|live|edit|mix|remaster(?:ed)?|acoustic|slowed|reverb|instrumental|reimagined|orchestra|version|variation(?:s)?)\b/i.test(text)
+  ) return true;
   return false;
 }
 
@@ -736,9 +782,13 @@ async function collectFromQueries(
     const maxPage = Math.max(1, Math.round(Number(discoveryLevel.value) / 15));
     const offset = (page % (maxPage + 1)) * 10;
 
-    const found = shuffle(await searchTracks(token, query, offset));
+    const found = await searchTracks(token, query, offset);
+    const discovery = Number(discoveryLevel.value);
+    const candidates = discovery >= 60 ? shuffle(found) : found;
+    const perSearchCap = discovery >= 60 ? 3 : 2;
+    let addedThisSearch = 0;
 
-    for (const track of found) {
+    for (const track of candidates) {
       if (!track?.id || !track?.uri) continue;
       if (looksLikeUnwantedVariant(track)) continue;
       const primaryArtistId = track.artists?.[0]?.id || track.artists?.[0]?.name;
@@ -753,8 +803,9 @@ async function collectFromQueries(
       usedTracks.add(track.id);
       if (primaryArtistId) usedArtists.add(primaryArtistId);
       result.push(track);
+      addedThisSearch++;
 
-      if (result.length >= wanted) break;
+      if (result.length >= wanted || addedThisSearch >= perSearchCap) break;
     }
 
     attempts++;
@@ -849,6 +900,10 @@ async function addItemsToPlaylist(token, playlistId, uris) {
   return data;
 }
 
+function hasMusicProfile(profile) {
+  return (profile.categories || []).length > 0 || (profile.artists || []).length > 0;
+}
+
 async function generateOfficePlaylist() {
   try {
     generateButton.disabled = true;
@@ -862,6 +917,12 @@ async function generateOfficePlaylist() {
     const selected = selectedProfiles();
     if (!selected.length) throw new Error("Wybierz co najmniej jedną osobę.");
 
+    const mixProfiles = selected.filter(hasMusicProfile);
+    if (!mixProfiles.length) {
+      throw new Error("Wybrane osoby nie mają jeszcze żadnych preferencji ani artystów wzorcowych.");
+    }
+    const ignoredProfiles = selected.filter(profile => !hasMusicProfile(profile));
+
     progressBox.textContent = "Synchronizuję ostatnio odtwarzane utwory ze Spotify...";
     await syncSpotifyRecentHistory(token);
 
@@ -870,7 +931,7 @@ async function generateOfficePlaylist() {
 
     const total = Number(playlistLength.value);
     const commonTarget =
-      selected.length === 1 ? 0 : Math.round(total * 0.75);
+      mixProfiles.length === 1 ? 0 : Math.round(total * 0.75);
     const individualTarget = total - commonTarget;
 
     const usedTracks = new Set();
@@ -883,7 +944,7 @@ async function generateOfficePlaylist() {
 
       const common = await collectFromQueries(
         token,
-        queriesForCommon(selected),
+        queriesForCommon(mixProfiles),
         commonTarget,
         usedTracks,
         usedArtists,
@@ -896,10 +957,10 @@ async function generateOfficePlaylist() {
 
     progressBox.textContent = "Dodaję indywidualne wtrącenia...";
 
-    const perPersonBase = Math.floor(individualTarget / selected.length);
-    let remainder = individualTarget % selected.length;
+    const perPersonBase = Math.floor(individualTarget / mixProfiles.length);
+    let remainder = individualTarget % mixProfiles.length;
 
-    for (const profile of shuffle(selected)) {
+    for (const profile of shuffle(mixProfiles)) {
       const wanted = perPersonBase + (remainder-- > 0 ? 1 : 0);
       if (wanted <= 0) continue;
 
@@ -921,7 +982,7 @@ async function generateOfficePlaylist() {
         `Mam ${tracks.length}/${total}. Uzupełniam playlistę...`;
 
       const fallbackQueries = [
-        ...queriesForCommon(selected),
+        ...queriesForCommon(mixProfiles),
         ...selected.flatMap(queriesForProfile)
       ];
 
@@ -962,7 +1023,13 @@ async function generateOfficePlaylist() {
     );
 
     recordGeneratedTracks(finalTracks);
-    renderPlaylistResult(playlist, finalTracks, selected, commonTarget);
+    renderPlaylistResult(
+      playlist,
+      finalTracks,
+      selected,
+      commonTarget,
+      ignoredProfiles
+    );
     progressBox.textContent = "";
 
   } catch (err) {
@@ -975,7 +1042,7 @@ async function generateOfficePlaylist() {
   }
 }
 
-function renderPlaylistResult(playlist, tracks, selected, commonTarget) {
+function renderPlaylistResult(playlist, tracks, selected, commonTarget, ignoredProfiles = []) {
   playlistResult.textContent = "";
 
   const summary = document.createElement("p");
@@ -992,6 +1059,16 @@ function renderPlaylistResult(playlist, tracks, selected, commonTarget) {
       `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. ` +
       `Odkrycia: ${discoveryLevel.value}%.`;
     playlistResult.append(summary, model);
+
+    if (ignoredProfiles.length) {
+      const warning = document.createElement("p");
+      warning.className = "small";
+      warning.textContent =
+        `Bez wpływu na dobór muzyki (profil jeszcze pusty): ${ignoredProfiles
+          .map(profile => profile.name)
+          .join(", ")}.`;
+      playlistResult.append(warning);
+    }
   } else {
     playlistResult.append(summary);
   }
