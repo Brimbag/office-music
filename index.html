@@ -170,10 +170,27 @@
           <option value="24">24 godziny</option>
         </select>
       </label>
+
+      <label>
+        Odkrycia vs znane
+        <input id="discoveryLevel" type="range" min="0" max="100" value="30" step="10">
+        <span id="discoveryLabel">30% odkryć</span>
+      </label>
+
+      <label>
+        <input id="avoidCyrillic" type="checkbox" checked>
+        Ogranicz przypadkowe wyniki z cyrylicą
+      </label>
+
+      <label>
+        <input id="avoidRemixes" type="checkbox" checked>
+        Unikaj remixów i wersji live
+      </label>
     </div>
 
     <p class="small">
       Około 75% wspólnego mianownika i 25% indywidualnych wtrąceń.
+      Artyści wzorcowi mają większą wagę niż same gatunki, a wykonawca zablokowany przez dowolną obecną osobę nie trafi na playlistę.
       Przed generowaniem aplikacja synchronizuje do 50 ostatnio odtwarzanych utworów ze Spotify
       i łączy je z własną historią zapisanych playlist.
     </p>
@@ -220,6 +237,11 @@ const profiles = {
     name: "Asia",
     genres: ["pop", "rock"],
     categories: ["pop", "rock"]
+  },
+  monika: {
+    name: "Monika",
+    genres: ["profil do uzupełnienia"],
+    categories: []
   }
 };
 
@@ -242,6 +264,10 @@ const peopleDiv = document.getElementById("people");
 const playlistLength = document.getElementById("playlistLength");
 const trackBlockDays = document.getElementById("trackBlockDays");
 const artistCooldownHours = document.getElementById("artistCooldownHours");
+const discoveryLevel = document.getElementById("discoveryLevel");
+const discoveryLabel = document.getElementById("discoveryLabel");
+const avoidCyrillic = document.getElementById("avoidCyrillic");
+const avoidRemixes = document.getElementById("avoidRemixes");
 const generateButton = document.getElementById("generateButton");
 const clearHistoryButton = document.getElementById("clearHistoryButton");
 const historySummary = document.getElementById("historySummary");
@@ -253,6 +279,9 @@ loginButton.addEventListener("click", login);
 logoutButton.addEventListener("click", logout);
 generateButton.addEventListener("click", generateOfficePlaylist);
 clearHistoryButton.addEventListener("click", clearAppHistory);
+discoveryLevel.addEventListener("input", () => {
+  discoveryLabel.textContent = `${discoveryLevel.value}% odkryć`;
+});
 
 const HISTORY_KEY = "office_music_history_v1";
 const HISTORY_MAX_AGE_DAYS = 90;
@@ -445,7 +474,21 @@ function renderProfiles() {
       localStorage.setItem(`office_seed_${id}`, seedInput.value.trim());
     });
 
-    card.append(mainLabel, genres, seedLabel, seedInput);
+    const blockedLabel = document.createElement("label");
+    blockedLabel.className = "small";
+    blockedLabel.textContent = "Blokowani wykonawcy, rozdzieleni przecinkami:";
+
+    const blockedInput = document.createElement("input");
+    blockedInput.className = "seed-input";
+    blockedInput.dataset.blockedProfileId = id;
+    blockedInput.placeholder = "np. wykonawca, którego ta osoba nie chce słyszeć";
+    const defaultBlocked = id === "edyta" ? "Slipknot" : "";
+    blockedInput.value = localStorage.getItem(`office_blocked_${id}`) ?? defaultBlocked;
+    blockedInput.addEventListener("change", () => {
+      localStorage.setItem(`office_blocked_${id}`, blockedInput.value.trim());
+    });
+
+    card.append(mainLabel, genres, seedLabel, seedInput, blockedLabel, blockedInput);
     peopleDiv.appendChild(card);
   }
 }
@@ -459,6 +502,10 @@ function selectedProfiles() {
     id,
     ...profiles[id],
     artists: (localStorage.getItem(`office_seed_${id}`) || "")
+      .split(",")
+      .map(x => x.trim())
+      .filter(Boolean),
+    blockedArtists: (localStorage.getItem(`office_blocked_${id}`) ?? (id === "edyta" ? "Slipknot" : ""))
       .split(",")
       .map(x => x.trim())
       .filter(Boolean)
@@ -647,6 +694,26 @@ async function searchTracks(token, query, offset = 0) {
   return data.tracks?.items || [];
 }
 
+function normalizeArtistName(name) {
+  return (name || "").trim().toLocaleLowerCase("pl-PL");
+}
+
+function selectedBlockedArtistNames(selected) {
+  return new Set(
+    selected
+      .flatMap(profile => profile.blockedArtists || [])
+      .map(normalizeArtistName)
+      .filter(Boolean)
+  );
+}
+
+function looksLikeUnwantedVariant(track) {
+  const text = `${track?.name || ""} ${track?.album?.name || ""}`;
+  if (avoidCyrillic.checked && /[\p{Script=Cyrillic}]/u.test(text)) return true;
+  if (avoidRemixes.checked && /\b(remix|live|edit|mix)\b/i.test(text)) return true;
+  return false;
+}
+
 async function collectFromQueries(
   token,
   queries,
@@ -654,7 +721,8 @@ async function collectFromQueries(
   usedTracks,
   usedArtists,
   blockedTracks,
-  blockedArtists
+  blockedArtists,
+  blockedArtistNames
 ) {
   const result = [];
   if (!queries.length || wanted <= 0) return result;
@@ -665,13 +733,17 @@ async function collectFromQueries(
   while (result.length < wanted && attempts < wanted * 5) {
     const query = shuffledQueries[attempts % shuffledQueries.length];
     const page = Math.floor(attempts / shuffledQueries.length);
-    const offset = (page % 8) * 10;
+    const maxPage = Math.max(1, Math.round(Number(discoveryLevel.value) / 15));
+    const offset = (page % (maxPage + 1)) * 10;
 
     const found = shuffle(await searchTracks(token, query, offset));
 
     for (const track of found) {
       if (!track?.id || !track?.uri) continue;
+      if (looksLikeUnwantedVariant(track)) continue;
       const primaryArtistId = track.artists?.[0]?.id || track.artists?.[0]?.name;
+      const trackArtistNames = (track.artists || []).map(a => normalizeArtistName(a.name));
+      if (trackArtistNames.some(name => blockedArtistNames.has(name))) continue;
 
       if (usedTracks.has(track.id)) continue;
       if (blockedTracks.has(track.id)) continue;
@@ -707,18 +779,20 @@ function queriesForCommon(selected) {
 
   const sharedArtists = [...artistVotes.values()]
     .filter(item => item.count >= 2)
-    .map(item => `artist:"${item.artist}"`);
+    .flatMap(item => Array(4).fill(`artist:"${item.artist}"`));
 
-  return [...new Set([...sharedArtists, ...queries])];
+  return [...sharedArtists, ...queries];
 }
 
 function queriesForProfile(profile) {
-  const artistQueries = profile.artists.map(artist => `artist:"${artist}"`);
+  const artistQueries = profile.artists.flatMap(
+    artist => Array(3).fill(`artist:"${artist}"`)
+  );
   const genreQueries = profile.categories.flatMap(
     category => categoryQueries[category] || []
   );
 
-  return [...new Set([...artistQueries, ...genreQueries])];
+  return [...artistQueries, ...genreQueries];
 }
 
 async function createPlaylist(token, selected, total) {
@@ -792,6 +866,7 @@ async function generateOfficePlaylist() {
     await syncSpotifyRecentHistory(token);
 
     const { blockedTracks, blockedArtists } = buildHistoryBlocklists();
+    const blockedArtistNames = selectedBlockedArtistNames(selected);
 
     const total = Number(playlistLength.value);
     const commonTarget =
@@ -813,7 +888,8 @@ async function generateOfficePlaylist() {
         usedTracks,
         usedArtists,
         blockedTracks,
-        blockedArtists
+        blockedArtists,
+        blockedArtistNames
       );
       tracks.push(...common);
     }
@@ -834,7 +910,8 @@ async function generateOfficePlaylist() {
         usedTracks,
         usedArtists,
         blockedTracks,
-        blockedArtists
+        blockedArtists,
+        blockedArtistNames
       );
       tracks.push(...personal);
     }
@@ -855,7 +932,8 @@ async function generateOfficePlaylist() {
         usedTracks,
         usedArtists,
         blockedTracks,
-        blockedArtists
+        blockedArtists,
+        blockedArtistNames
       );
       tracks.push(...filler);
     }
@@ -911,7 +989,8 @@ function renderPlaylistResult(playlist, tracks, selected, commonTarget) {
     model.className = "small";
     model.textContent =
       `Cel wspólnej części: ok. ${commonTarget} utworów. Reszta to indywidualne wtrącenia. ` +
-      `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz.`;
+      `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. ` +
+      `Odkrycia: ${discoveryLevel.value}%.`;
     playlistResult.append(summary, model);
   } else {
     playlistResult.append(summary);
