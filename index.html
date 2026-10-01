@@ -3,239 +3,332 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v9</title>
+  <title>Office Music Mixer v10</title>
   <style>
     :root {
       color-scheme: light dark;
       font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg: #f3f5f7;
+      --surface: #ffffff;
+      --surface-2: #f8f9fa;
+      --text: #17191c;
+      --muted: #66707a;
+      --border: #dfe3e7;
+      --input-border: #c9d0d6;
+      --accent: #17191c;
+      --accent-text: #ffffff;
+      --secondary: #e9edf0;
+      --secondary-text: #2a3036;
+      --ok: #187a33;
+      --error: #a01818;
+      --link: #095bd8;
+      --shadow: 0 8px 26px rgba(20, 28, 36, .06);
     }
+
+    * { box-sizing: border-box; }
+
     body {
-      max-width: 920px;
-      margin: 32px auto;
-      padding: 0 18px 40px;
-      line-height: 1.5;
-      background: #f6f7f8;
-      color: #171717;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px 18px 44px;
+      line-height: 1.45;
+      background: var(--bg);
+      color: var(--text);
     }
+
     h1, h2, h3 { margin-top: 0; }
+    h1 { font-size: clamp(24px, 4vw, 34px); margin-bottom: 3px; }
+    h2 { font-size: 21px; margin-bottom: 12px; }
     button, select, input { font: inherit; }
+
     button {
-      padding: 11px 16px;
+      padding: 9px 14px;
       border: 0;
       border-radius: 9px;
       cursor: pointer;
-      background: #171717;
-      color: white;
+      background: var(--accent);
+      color: var(--accent-text);
+      font-weight: 650;
     }
-    button.secondary { background: #555; }
+    button.secondary {
+      background: var(--secondary);
+      color: var(--secondary-text);
+    }
     button:disabled { opacity: .55; cursor: default; }
-    .box {
-      margin-top: 18px;
-      padding: 18px;
-      border: 1px solid #ddd;
-      border-radius: 12px;
-      background: white;
+
+    .connection-card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px 18px;
+      align-items: center;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      margin-bottom: 22px;
     }
+    .connection-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 7px;
+    }
+    .connection-subtitle {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .connection-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px 12px;
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .connection-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    #profile p { display: inline; margin: 0; }
+
+    .box {
+      margin-top: 16px;
+      padding: 17px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    #mixerBox {
+      margin-top: 0;
+    }
+
     .toolbar {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
     }
+
     .people {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
-      margin-top: 12px;
+      margin-top: 10px;
     }
     .person {
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: var(--surface-2);
     }
     .person label.main {
       display: flex;
       gap: 8px;
       align-items: center;
-      font-weight: 700;
+      font-weight: 750;
       margin-bottom: 8px;
+      font-size: 16px;
     }
-    .genres {
-      font-size: 14px;
-      color: #555;
-      margin-bottom: 10px;
+    .person .small {
+      display: block;
+      margin-top: 8px;
+      margin-bottom: 4px;
     }
+
     .seed-input, .genre-input {
       width: 100%;
-      box-sizing: border-box;
-      padding: 8px 10px;
-      border: 1px solid #bbb;
+      padding: 7px 9px;
+      border: 1px solid var(--input-border);
       border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
     }
+
     .small {
-      font-size: 13px;
-      color: #666;
+      font-size: 12px;
+      color: var(--muted);
     }
-    .ok { color: #187a33; }
-    .error { color: #a01818; }
-    .result-list {
-      padding-left: 22px;
-    }
-    .result-list li {
-      margin: 4px 0;
-    }
-    a { color: #095bd8; }
+    .ok { color: var(--ok); font-weight: 650; }
+    .error { color: var(--error); font-weight: 650; }
+    .result-list { padding-left: 22px; }
+    .result-list li { margin: 4px 0; }
+    a { color: var(--link); }
     code { word-break: break-all; }
+
     .progress {
       margin-top: 10px;
-      font-size: 14px;
-      color: #555;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .settings-panel {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
     }
     .settings-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 14px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(145px, 1fr));
+      gap: 12px;
       align-items: end;
-      margin-top: 14px;
     }
     .settings-row label {
       display: grid;
       gap: 5px;
-      font-size: 14px;
+      font-size: 13px;
     }
     .settings-row select {
       padding: 7px 9px;
-      border: 1px solid #bbb;
+      border: 1px solid var(--input-border);
       border-radius: 8px;
-      background: white;
+      background: var(--surface);
+      color: var(--text);
     }
-    .history-summary {
+    .settings-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 22px;
       margin-top: 12px;
+    }
+    .settings-checks label {
+      display: flex;
+      gap: 7px;
+      align-items: center;
       font-size: 13px;
-      color: #555;
+    }
+
+    .history-summary {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
     }
     .version {
       display: inline-block;
-      margin-left: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      color: #666;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
       vertical-align: middle;
     }
 
+    @media (max-width: 760px) {
+      body { padding: 14px 12px 32px; }
+      .connection-card { grid-template-columns: 1fr; }
+      .connection-actions { justify-content: flex-start; }
+      .people { grid-template-columns: 1fr; }
+      .settings-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 470px) {
+      .settings-row { grid-template-columns: 1fr; }
+    }
+
     @media (prefers-color-scheme: dark) {
-      body {
-        background: #111315;
-        color: #eceff1;
+      :root {
+        --bg: #101214;
+        --surface: #191c1f;
+        --surface-2: #15181b;
+        --text: #edf0f2;
+        --muted: #aeb6bd;
+        --border: #343a40;
+        --input-border: #4a5158;
+        --accent: #edf0f2;
+        --accent-text: #111315;
+        --secondary: #30363c;
+        --secondary-text: #edf0f2;
+        --ok: #68d487;
+        --error: #ff8e8e;
+        --link: #82b6ff;
+        --shadow: none;
       }
-      .box {
-        background: #1a1d20;
-        border-color: #34383d;
-      }
-      .person {
-        border-color: #34383d;
-        background: #171a1d;
-      }
-      .genres, .small, .progress, .history-summary, .version {
-        color: #aeb5bd;
-      }
-      .seed-input, .genre-input, .settings-row select {
-        background: #24282c;
-        color: #f1f3f5;
-        border-color: #4a5057;
-      }
-      button {
-        background: #f1f3f5;
-        color: #111315;
-      }
-      button.secondary {
-        background: #3b4147;
-        color: #f1f3f5;
-      }
-      a { color: #7eb4ff; }
-      .ok { color: #67d486; }
-      .error { color: #ff8d8d; }
     }
   </style>
 </head>
 
 <body>
-  <h1>Office Music Mixer <span class="version">v9</span></h1>
-  <p>Wybierz osoby obecne w pokoju i wygeneruj wspólną playlistę.</p>
-
-  <div class="toolbar">
-    <button id="loginButton">Połącz ze Spotify</button>
-    <button id="logoutButton" class="secondary" style="display:none;">Wyloguj</button>
-  </div>
-
-  <div class="box">
-    <strong>Status:</strong>
-    <div id="status">Niepołączony</div>
-  </div>
-
-  <div class="box" id="profileBox" style="display:none;">
-    <strong>Konto Spotify:</strong>
-    <div id="profile"></div>
+  <div class="connection-card">
+    <div>
+      <div class="connection-title-row">
+        <h1>Office Music Mixer <span class="version">v10</span></h1>
+      </div>
+      <p class="connection-subtitle">Wspólna playlista dopasowana do osób obecnych w biurze.</p>
+      <div class="connection-meta">
+        <span id="status">Niepołączony</span>
+        <span id="profileBox" style="display:none;">Spotify: <span id="profile"></span></span>
+      </div>
+    </div>
+    <div class="connection-actions">
+      <button id="loginButton">Połącz ze Spotify</button>
+      <button id="logoutButton" class="secondary" style="display:none;">Wyloguj</button>
+    </div>
   </div>
 
   <div class="box" id="mixerBox" style="display:none;">
-    <h2>Kto dziś jest?</h2>
+    <h2>Kto dziś jest w biurze?</h2>
     <div id="people" class="people"></div>
 
-    <div class="settings-row">
-      <label>
-        Długość playlisty
-        <select id="playlistLength">
-          <option value="20">20 utworów</option>
-          <option value="30" selected>30 utworów</option>
-          <option value="40">40 utworów</option>
-        </select>
-      </label>
+    <div class="settings-panel">
+      <div class="settings-row">
+        <label>
+          Długość playlisty
+          <select id="playlistLength">
+            <option value="20">20 utworów</option>
+            <option value="30" selected>30 utworów</option>
+            <option value="40">40 utworów</option>
+          </select>
+        </label>
 
-      <label>
-        Nie powtarzaj utworu przez
-        <select id="trackBlockDays">
-          <option value="3">3 dni</option>
-          <option value="7">7 dni</option>
-          <option value="14" selected>14 dni</option>
-          <option value="30">30 dni</option>
-        </select>
-      </label>
+        <label>
+          Nie powtarzaj utworu przez
+          <select id="trackBlockDays">
+            <option value="3">3 dni</option>
+            <option value="7">7 dni</option>
+            <option value="14" selected>14 dni</option>
+            <option value="30">30 dni</option>
+          </select>
+        </label>
 
-      <label>
-        Nie wracaj do wykonawcy przez
-        <select id="artistCooldownHours">
-          <option value="1">1 godzinę</option>
-          <option value="2" selected>2 godziny</option>
-          <option value="4">4 godziny</option>
-          <option value="8">8 godzin</option>
-          <option value="24">24 godziny</option>
-        </select>
-      </label>
+        <label>
+          Nie wracaj do wykonawcy przez
+          <select id="artistCooldownHours">
+            <option value="1">1 godzinę</option>
+            <option value="2" selected>2 godziny</option>
+            <option value="4">4 godziny</option>
+            <option value="8">8 godzin</option>
+            <option value="24">24 godziny</option>
+          </select>
+        </label>
 
-      <label>
-        Odkrycia vs znane
-        <input id="discoveryLevel" type="range" min="0" max="100" value="30" step="10">
-        <span id="discoveryLabel">30% odkryć</span>
-      </label>
+        <label>
+          Odkrycia vs znane
+          <input id="discoveryLevel" type="range" min="0" max="100" value="30" step="10">
+          <span id="discoveryLabel">30% odkryć</span>
+        </label>
+      </div>
 
-      <label>
-        <input id="avoidCyrillic" type="checkbox" checked>
-        Ogranicz przypadkowe wyniki z cyrylicą
-      </label>
+      <div class="settings-checks">
+        <label>
+          <input id="avoidNonLatin" type="checkbox" checked>
+          Ogranicz wyniki zapisane alfabetami innymi niż łaciński
+        </label>
 
-      <label>
-        <input id="avoidRemixes" type="checkbox" checked>
-        Unikaj alternatywnych wersji (remix/live/remaster/acoustic…)
-      </label>
+        <label>
+          <input id="avoidRemixes" type="checkbox" checked>
+          Unikaj alternatywnych wersji (remix/live/remaster/acoustic…)
+        </label>
+      </div>
     </div>
 
     <p class="small">
       Około 75% wspólnego mianownika i 25% indywidualnych wtrąceń.
       Artyści wzorcowi mają większą wagę niż same gatunki, a wykonawca zablokowany przez dowolną obecną osobę nie trafi na playlistę.
-      Gatunki są edytowalne i możesz wpisać także własne, niszowe określenia. Osoba z pustym profilem może być zaznaczona, ale do czasu uzupełnienia preferencji nie wpływa na dobór muzyki.
-      Przed generowaniem aplikacja synchronizuje do 50 ostatnio odtwarzanych utworów ze Spotify
-      i łączy je z własną historią zapisanych playlist.
+      Gatunki są edytowalne, więc profil może zmieniać się razem z gustem, także po ekspedycji po szamański śpiew gardłowy.
+      Przed generowaniem aplikacja synchronizuje do 50 ostatnio odtwarzanych utworów ze Spotify i łączy je z własną historią playlist.
     </p>
 
     <div class="toolbar">
@@ -305,7 +398,7 @@ const trackBlockDays = document.getElementById("trackBlockDays");
 const artistCooldownHours = document.getElementById("artistCooldownHours");
 const discoveryLevel = document.getElementById("discoveryLevel");
 const discoveryLabel = document.getElementById("discoveryLabel");
-const avoidCyrillic = document.getElementById("avoidCyrillic");
+const avoidNonLatin = document.getElementById("avoidNonLatin");
 const avoidRemixes = document.getElementById("avoidRemixes");
 const generateButton = document.getElementById("generateButton");
 const clearHistoryButton = document.getElementById("clearHistoryButton");
@@ -453,14 +546,14 @@ async function getProfile(token) {
 async function showLoggedIn(token) {
   const profile = await getProfile(token);
 
-  statusBox.innerHTML = '<span class="ok">Połączono ze Spotify ✓</span>';
+  statusBox.innerHTML = '<span class="ok">Spotify połączone ✓</span>';
   profileDiv.textContent = "";
 
   const name = document.createElement("strong");
   name.textContent = profile.display_name || "Użytkownik Spotify";
 
-  const account = document.createElement("p");
-  account.textContent = `Konto: ${profile.product || "brak informacji"}`;
+  const account = document.createElement("span");
+  account.textContent = ` · ${profile.product || "brak informacji"}`;
 
   profileDiv.append(name, account);
 
@@ -908,9 +1001,23 @@ function selectedBlockedArtistNames(selected) {
   );
 }
 
+function containsNonLatinLetters(text) {
+  for (const char of text || "") {
+    if (/\p{Letter}/u.test(char) && !/\p{Script=Latin}/u.test(char)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function looksLikeUnwantedVariant(track) {
-  const text = `${track?.name || ""} ${track?.album?.name || ""}`;
-  if (avoidCyrillic.checked && /[\p{Script=Cyrillic}]/u.test(text)) return true;
+  const text = [
+    track?.name || "",
+    track?.album?.name || "",
+    ...(track?.artists || []).map(artist => artist?.name || "")
+  ].join(" ");
+
+  if (avoidNonLatin.checked && containsNonLatinLetters(text)) return true;
   if (
     avoidRemixes.checked &&
     /\b(remix|live|edit|mix|remaster(?:ed)?|acoustic|slowed|reverb|instrumental|reimagined|orchestra|version|variation(?:s)?)\b/i.test(text)
