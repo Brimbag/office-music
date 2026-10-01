@@ -91,6 +91,29 @@
       font-size: 14px;
       color: #555;
     }
+    .settings-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: end;
+      margin-top: 14px;
+    }
+    .settings-row label {
+      display: grid;
+      gap: 5px;
+      font-size: 14px;
+    }
+    .settings-row select {
+      padding: 7px 9px;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      background: white;
+    }
+    .history-summary {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #555;
+    }
   </style>
 </head>
 
@@ -117,23 +140,49 @@
     <h2>Kto dziś jest?</h2>
     <div id="people" class="people"></div>
 
-    <div style="margin-top:16px;">
+    <div class="settings-row">
       <label>
-        Długość playlisty:
+        Długość playlisty
         <select id="playlistLength">
           <option value="20">20 utworów</option>
           <option value="30" selected>30 utworów</option>
           <option value="40">40 utworów</option>
         </select>
       </label>
+
+      <label>
+        Nie powtarzaj utworu przez
+        <select id="trackBlockDays">
+          <option value="3">3 dni</option>
+          <option value="7">7 dni</option>
+          <option value="14" selected>14 dni</option>
+          <option value="30">30 dni</option>
+        </select>
+      </label>
+
+      <label>
+        Nie wracaj do wykonawcy przez
+        <select id="artistCooldownHours">
+          <option value="1">1 godzinę</option>
+          <option value="2" selected>2 godziny</option>
+          <option value="4">4 godziny</option>
+          <option value="8">8 godzin</option>
+          <option value="24">24 godziny</option>
+        </select>
+      </label>
     </div>
 
     <p class="small">
-      Założenie testowe: około 75% wspólnego mianownika i 25% indywidualnych wtrąceń.
-      Artyści wzorcowi są zapisywani tylko w tej przeglądarce.
+      Około 75% wspólnego mianownika i 25% indywidualnych wtrąceń.
+      Przed generowaniem aplikacja synchronizuje do 50 ostatnio odtwarzanych utworów ze Spotify
+      i łączy je z własną historią zapisanych playlist.
     </p>
 
-    <button id="generateButton">Generuj playlistę</button>
+    <div class="toolbar">
+      <button id="generateButton">Generuj playlistę</button>
+      <button id="clearHistoryButton" class="secondary">Wyczyść historię aplikacji</button>
+    </div>
+    <div id="historySummary" class="history-summary"></div>
     <div id="progress" class="progress"></div>
   </div>
 
@@ -191,7 +240,11 @@ const profileDiv = document.getElementById("profile");
 const mixerBox = document.getElementById("mixerBox");
 const peopleDiv = document.getElementById("people");
 const playlistLength = document.getElementById("playlistLength");
+const trackBlockDays = document.getElementById("trackBlockDays");
+const artistCooldownHours = document.getElementById("artistCooldownHours");
 const generateButton = document.getElementById("generateButton");
+const clearHistoryButton = document.getElementById("clearHistoryButton");
+const historySummary = document.getElementById("historySummary");
 const progressBox = document.getElementById("progress");
 const playlistBox = document.getElementById("playlistBox");
 const playlistResult = document.getElementById("playlistResult");
@@ -199,6 +252,10 @@ const playlistResult = document.getElementById("playlistResult");
 loginButton.addEventListener("click", login);
 logoutButton.addEventListener("click", logout);
 generateButton.addEventListener("click", generateOfficePlaylist);
+clearHistoryButton.addEventListener("click", clearAppHistory);
+
+const HISTORY_KEY = "office_music_history_v1";
+const HISTORY_MAX_AGE_DAYS = 90;
 
 function randomString(length = 64) {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
@@ -345,6 +402,7 @@ async function showLoggedIn(token) {
   logoutButton.style.display = "inline-block";
 
   renderProfiles();
+  renderHistorySummary();
 }
 
 function renderProfiles() {
@@ -407,6 +465,138 @@ function selectedProfiles() {
   }));
 }
 
+function loadHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+
+    const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    return parsed.filter(item => {
+      const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
+      return Number.isFinite(time) && time >= cutoff && item.trackId;
+    });
+  } catch (error) {
+    console.warn("Nie udało się odczytać historii:", error);
+    return [];
+  }
+}
+
+function saveHistory(history) {
+  const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const cleaned = history
+    .filter(item => {
+      const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
+      return Number.isFinite(time) && time >= cutoff && item.trackId;
+    })
+    .sort((a, b) => {
+      const aTime = new Date(a.playedAt || a.generatedAt || 0).getTime();
+      const bTime = new Date(b.playedAt || b.generatedAt || 0).getTime();
+      return bTime - aTime;
+    })
+    .slice(0, 2500);
+
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(cleaned));
+  renderHistorySummary();
+}
+
+function mergeHistoryEntries(entries) {
+  const existing = loadHistory();
+  const map = new Map();
+
+  for (const item of [...entries, ...existing]) {
+    const timestamp = item.playedAt || item.generatedAt;
+    const key = `${item.trackId}|${timestamp}|${item.source || "unknown"}`;
+    if (!map.has(key)) map.set(key, item);
+  }
+
+  saveHistory([...map.values()]);
+}
+
+async function syncSpotifyRecentHistory(token) {
+  const response = await fetch(
+    "https://api.spotify.com/v1/me/player/recently-played?limit=50",
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  if (!response.ok) {
+    console.warn(`Nie udało się pobrać historii Spotify: ${response.status}`);
+    return 0;
+  }
+
+  const data = await response.json();
+  const entries = (data.items || [])
+    .filter(item => item?.track?.id && item?.played_at)
+    .map(item => ({
+      trackId: item.track.id,
+      trackName: item.track.name || "",
+      artistIds: (item.track.artists || []).map(artist => artist.id).filter(Boolean),
+      artistNames: (item.track.artists || []).map(artist => artist.name).filter(Boolean),
+      playedAt: item.played_at,
+      source: "spotify"
+    }));
+
+  if (entries.length) mergeHistoryEntries(entries);
+  return entries.length;
+}
+
+function recordGeneratedTracks(tracks) {
+  const generatedAt = new Date().toISOString();
+  const entries = tracks.map(track => ({
+    trackId: track.id,
+    trackName: track.name || "",
+    artistIds: (track.artists || []).map(artist => artist.id).filter(Boolean),
+    artistNames: (track.artists || []).map(artist => artist.name).filter(Boolean),
+    generatedAt,
+    source: "generated"
+  }));
+
+  mergeHistoryEntries(entries);
+}
+
+function buildHistoryBlocklists() {
+  const history = loadHistory();
+  const now = Date.now();
+  const trackCutoff = now - Number(trackBlockDays.value) * 24 * 60 * 60 * 1000;
+  const artistCutoff = now - Number(artistCooldownHours.value) * 60 * 60 * 1000;
+
+  const blockedTracks = new Set();
+  const blockedArtists = new Set();
+
+  for (const item of history) {
+    const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
+    if (!Number.isFinite(time)) continue;
+
+    if (time >= trackCutoff) blockedTracks.add(item.trackId);
+
+    if (time >= artistCutoff) {
+      for (const artistId of item.artistIds || []) {
+        blockedArtists.add(artistId);
+      }
+    }
+  }
+
+  return { blockedTracks, blockedArtists };
+}
+
+function renderHistorySummary() {
+  if (!historySummary) return;
+
+  const history = loadHistory();
+  const spotifyCount = history.filter(item => item.source === "spotify").length;
+  const generatedCount = history.filter(item => item.source === "generated").length;
+
+  historySummary.textContent = history.length
+    ? `Historia lokalna: ${history.length} wpisów (${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji).`
+    : "Historia lokalna jest jeszcze pusta.";
+}
+
+function clearAppHistory() {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistorySummary();
+  progressBox.textContent =
+    "Historia aplikacji wyczyszczona. Przy następnym generowaniu ostatnie odtworzenia ze Spotify zostaną pobrane ponownie.";
+}
+
 function shuffle(array) {
   const copy = [...array];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -457,7 +647,15 @@ async function searchTracks(token, query, offset = 0) {
   return data.tracks?.items || [];
 }
 
-async function collectFromQueries(token, queries, wanted, usedTracks, usedArtists) {
+async function collectFromQueries(
+  token,
+  queries,
+  wanted,
+  usedTracks,
+  usedArtists,
+  blockedTracks,
+  blockedArtists
+) {
   const result = [];
   if (!queries.length || wanted <= 0) return result;
 
@@ -476,7 +674,9 @@ async function collectFromQueries(token, queries, wanted, usedTracks, usedArtist
       const primaryArtistId = track.artists?.[0]?.id || track.artists?.[0]?.name;
 
       if (usedTracks.has(track.id)) continue;
+      if (blockedTracks.has(track.id)) continue;
       if (primaryArtistId && usedArtists.has(primaryArtistId)) continue;
+      if (primaryArtistId && blockedArtists.has(primaryArtistId)) continue;
 
       usedTracks.add(track.id);
       if (primaryArtistId) usedArtists.add(primaryArtistId);
@@ -588,6 +788,11 @@ async function generateOfficePlaylist() {
     const selected = selectedProfiles();
     if (!selected.length) throw new Error("Wybierz co najmniej jedną osobę.");
 
+    progressBox.textContent = "Synchronizuję ostatnio odtwarzane utwory ze Spotify...";
+    await syncSpotifyRecentHistory(token);
+
+    const { blockedTracks, blockedArtists } = buildHistoryBlocklists();
+
     const total = Number(playlistLength.value);
     const commonTarget =
       selected.length === 1 ? 0 : Math.round(total * 0.75);
@@ -606,7 +811,9 @@ async function generateOfficePlaylist() {
         queriesForCommon(selected),
         commonTarget,
         usedTracks,
-        usedArtists
+        usedArtists,
+        blockedTracks,
+        blockedArtists
       );
       tracks.push(...common);
     }
@@ -625,7 +832,9 @@ async function generateOfficePlaylist() {
         queriesForProfile(profile),
         wanted,
         usedTracks,
-        usedArtists
+        usedArtists,
+        blockedTracks,
+        blockedArtists
       );
       tracks.push(...personal);
     }
@@ -644,7 +853,9 @@ async function generateOfficePlaylist() {
         fallbackQueries,
         total - tracks.length,
         usedTracks,
-        usedArtists
+        usedArtists,
+        blockedTracks,
+        blockedArtists
       );
       tracks.push(...filler);
     }
@@ -672,6 +883,7 @@ async function generateOfficePlaylist() {
       finalTracks.map(track => track.uri)
     );
 
+    recordGeneratedTracks(finalTracks);
     renderPlaylistResult(playlist, finalTracks, selected, commonTarget);
     progressBox.textContent = "";
 
@@ -698,7 +910,8 @@ function renderPlaylistResult(playlist, tracks, selected, commonTarget) {
     const model = document.createElement("p");
     model.className = "small";
     model.textContent =
-      `Cel wspólnej części: ok. ${commonTarget} utworów. Reszta to indywidualne wtrącenia.`;
+      `Cel wspólnej części: ok. ${commonTarget} utworów. Reszta to indywidualne wtrącenia. ` +
+      `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz.`;
     playlistResult.append(summary, model);
   } else {
     playlistResult.append(summary);
