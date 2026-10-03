@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v17</title>
+  <title>Office Music Mixer v18</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -234,6 +234,87 @@
       margin: 8px 0 0;
     }
 
+
+
+    .feedback-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .feedback-summary {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .result-list li {
+      margin: 7px 0;
+    }
+    .track-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .track-votes {
+      display: inline-flex;
+      gap: 4px;
+    }
+    .vote-btn {
+      padding: 4px 8px;
+      min-width: 34px;
+      background: var(--secondary);
+      color: var(--secondary-text);
+      border: 1px solid var(--border);
+      font-weight: 700;
+    }
+    .vote-btn.active-up {
+      background: #1f8a46;
+      color: #fff;
+      border-color: transparent;
+    }
+    .vote-btn.active-down {
+      background: #a83232;
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .rmf-panel {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .rmf-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .rmf-head h3 { margin: 0; }
+    .rmf-slots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin: 10px 0;
+    }
+    .rmf-slots label, .rmf-enabled {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      font-size: 13px;
+    }
+    .rmf-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #rmfStatus {
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+
     @media (max-width: 760px) {
       body { padding: 14px 12px 32px; }
       .connection-card { grid-template-columns: 1fr; }
@@ -272,7 +353,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v17</span></h1>
+        <h1>Office Music Mixer <span class="version">v18</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -366,6 +447,33 @@
       Last.fm dostarcza wykonawców i konkretne utwory dla gatunków oraz jest głównym źródłem faktycznie odtwarzanej historii. Spotify służy głównie do dopasowania URI, tworzenia playlist i jako fallback historii. Do blokad anty-powtórkowych używamy scrobbli Last.fm z ostatnich 14 dni.
     </p>
 
+
+
+    <div class="rmf-panel">
+      <div class="rmf-head">
+        <h3>Fakty RMF FM <span class="version">beta</span></h3>
+        <label class="rmf-enabled">
+          <input id="rmfEnabled" type="checkbox" checked>
+          Automatycznie dodawaj do kolejki
+        </label>
+      </div>
+      <div class="rmf-slots">
+        <span class="small">Godziny:</span>
+        <label><input class="rmf-slot" type="checkbox" value="10" checked> 10:00</label>
+        <label><input class="rmf-slot" type="checkbox" value="12" checked> 12:00</label>
+        <label><input class="rmf-slot" type="checkbox" value="14" checked> 14:00</label>
+        <label><input class="rmf-slot" type="checkbox" value="16" checked> 16:00</label>
+      </div>
+      <div class="rmf-actions">
+        <button id="rmfCheckButton" type="button" class="secondary">Sprawdź Fakty teraz</button>
+        <button id="rmfQueueButton" type="button" class="secondary">Dodaj najnowsze Fakty do kolejki</button>
+      </div>
+      <div id="rmfStatus" class="small">Fakty RMF: oczekiwanie na aktywne połączenie ze Spotify.</div>
+      <p class="small lastfm-note">
+        W wybranych godzinach aplikacja przez maks. 55 minut czeka na odcinek „HH:00 Fakty”. Gdy się pojawi, dodaje go jako następny element kolejki Spotify. Karta z aplikacją musi pozostać otwarta, a Spotify musi mieć aktywne odtwarzanie.
+      </p>
+    </div>
+
     <div class="toolbar">
       <button id="generateButton">Generuj playlistę</button>
       <button id="clearHistoryButton" class="secondary">Wyczyść historię aplikacji</button>
@@ -377,6 +485,10 @@
   <div class="box" id="playlistBox" style="display:none;">
     <strong>Wynik:</strong>
     <div id="playlistResult"></div>
+    <div class="feedback-toolbar">
+      <span id="feedbackSummary" class="feedback-summary"></span>
+      <button id="clearFeedbackButton" type="button" class="secondary">Wyczyść oceny</button>
+    </div>
   </div>
 
 <script>
@@ -456,10 +568,29 @@ const lastFmUserInput = document.getElementById("lastFmUser");
 const syncLastFmButton = document.getElementById("syncLastFmButton");
 const lastFmStatus = document.getElementById("lastFmStatus");
 
+const feedbackSummary = document.getElementById("feedbackSummary");
+const clearFeedbackButton = document.getElementById("clearFeedbackButton");
+const rmfEnabled = document.getElementById("rmfEnabled");
+const rmfSlotInputs = [...document.querySelectorAll(".rmf-slot")];
+const rmfCheckButton = document.getElementById("rmfCheckButton");
+const rmfQueueButton = document.getElementById("rmfQueueButton");
+const rmfStatus = document.getElementById("rmfStatus");
+
+
 loginButton.addEventListener("click", login);
 logoutButton.addEventListener("click", logout);
 generateButton.addEventListener("click", generateOfficePlaylist);
 clearHistoryButton.addEventListener("click", clearAppHistory);
+
+clearFeedbackButton.addEventListener("click", clearFeedback);
+rmfEnabled.addEventListener("change", () => { saveRmfSettings(); updateRmfStatus(); });
+for (const input of rmfSlotInputs) input.addEventListener("change", saveRmfSettings);
+rmfCheckButton.addEventListener("click", () => manualRmfCheck(false));
+rmfQueueButton.addEventListener("click", () => manualRmfCheck(true));
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) checkRmfWatcher().catch(console.error);
+});
+
 syncLastFmButton.addEventListener("click", async () => {
   try {
     syncLastFmButton.disabled = true;
@@ -495,6 +626,270 @@ let lastFmCallsThisSync = 0;
 
 const HISTORY_KEY = "office_music_history_v1";
 const HISTORY_MAX_AGE_DAYS = 90;
+
+const FEEDBACK_KEY = "office_music_feedback_v1";
+const RMF_SHOW_ID = "2BeZqsvzZUSldlZWvjeGe3";
+const RMF_SETTINGS_KEY = "office_rmf_settings_v1";
+const RMF_QUEUED_KEY = "office_rmf_queued_v1";
+const RMF_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const RMF_WINDOW_MINUTES = 55;
+let rmfWatcherTimer = null;
+let rmfLastApiCheckAt = 0;
+
+
+
+function loadFeedback() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FEEDBACK_KEY) || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveFeedback(data) {
+  localStorage.setItem(FEEDBACK_KEY, JSON.stringify(data));
+  renderFeedbackSummary();
+}
+
+function feedbackArtistTotals(data = loadFeedback()) {
+  const totals = new Map();
+  for (const entry of Object.values(data)) {
+    const value = Number(entry?.value || 0);
+    if (!value) continue;
+    for (const key of entry?.artists || []) {
+      totals.set(key, (totals.get(key) || 0) + value);
+    }
+  }
+  return totals;
+}
+
+function feedbackScore(track) {
+  const data = loadFeedback();
+  const signature = trackSignature(track);
+  const trackValue = Number(data[signature]?.value || 0);
+  let score = trackValue > 0 ? 30 : trackValue < 0 ? -80 : 0;
+  const artistTotals = feedbackArtistTotals(data);
+  for (const artist of track?.artists || []) {
+    const key = normalizeArtistName(artist?.name || "");
+    const artistValue = artistTotals.get(key) || 0;
+    if (artistValue > 0) score += Math.min(24, artistValue * 8);
+    if (artistValue < 0) score += Math.max(-45, artistValue * 15);
+  }
+  return score;
+}
+
+function setTrackFeedback(track, value) {
+  const signature = trackSignature(track);
+  if (!signature) return;
+  const data = loadFeedback();
+  const current = Number(data[signature]?.value || 0);
+  if (current === value) {
+    delete data[signature];
+  } else {
+    data[signature] = {
+      value,
+      artists: (track.artists || []).map(a => normalizeArtistName(a?.name || "")).filter(Boolean),
+      track: track.name || "",
+      updatedAt: new Date().toISOString()
+    };
+  }
+  saveFeedback(data);
+}
+
+function renderFeedbackSummary() {
+  if (!feedbackSummary) return;
+  const entries = Object.values(loadFeedback());
+  const ups = entries.filter(x => Number(x?.value) > 0).length;
+  const downs = entries.filter(x => Number(x?.value) < 0).length;
+  feedbackSummary.textContent = `Preferencje z feedbacku: ${ups} 👍 / ${downs} 👎`;
+}
+
+function clearFeedback() {
+  if (!confirm("Wyczyścić wszystkie lokalne oceny utworów?")) return;
+  localStorage.removeItem(FEEDBACK_KEY);
+  renderFeedbackSummary();
+  document.querySelectorAll(".vote-btn").forEach(btn => {
+    btn.classList.remove("active-up", "active-down");
+  });
+}
+
+function loadRmfSettings() {
+  try {
+    const data = JSON.parse(localStorage.getItem(RMF_SETTINGS_KEY) || "{}");
+    rmfEnabled.checked = data.enabled !== false;
+    const slots = Array.isArray(data.slots) ? data.slots.map(Number) : [10, 12, 14, 16];
+    for (const input of rmfSlotInputs) input.checked = slots.includes(Number(input.value));
+  } catch {
+    rmfEnabled.checked = true;
+  }
+}
+
+function saveRmfSettings() {
+  localStorage.setItem(RMF_SETTINGS_KEY, JSON.stringify({
+    enabled: rmfEnabled.checked,
+    slots: rmfSlotInputs.filter(x => x.checked).map(x => Number(x.value))
+  }));
+}
+
+function loadRmfQueued() {
+  try { return JSON.parse(localStorage.getItem(RMF_QUEUED_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+function saveRmfQueued(data) {
+  localStorage.setItem(RMF_QUEUED_KEY, JSON.stringify(data));
+}
+
+function warsawNowParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  }).formatToParts(date);
+  const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  return {
+    dateKey: `${obj.year}-${obj.month}-${obj.day}`,
+    hour: Number(obj.hour), minute: Number(obj.minute)
+  };
+}
+
+function selectedRmfSlots() {
+  return rmfSlotInputs.filter(x => x.checked).map(x => Number(x.value)).sort((a,b) => a-b);
+}
+
+function currentRmfSlot() {
+  const now = warsawNowParts();
+  const minutes = now.hour * 60 + now.minute;
+  for (const slot of selectedRmfSlots()) {
+    const start = slot * 60;
+    if (minutes >= start && minutes <= start + RMF_WINDOW_MINUTES) return { ...now, slot };
+  }
+  return null;
+}
+
+async function fetchRmfEpisodes(token) {
+  const response = await fetch(
+    `https://api.spotify.com/v1/shows/${RMF_SHOW_ID}/episodes?market=PL&limit=20&offset=0`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const data = await parseJsonSafely(response);
+  if (!response.ok) {
+    if (response.status === 429) throw new Error("Spotify ograniczyło zapytania podczas sprawdzania Faktów RMF.");
+    throw new Error(`Nie udało się pobrać Faktów RMF (${response.status}).`);
+  }
+  return data?.items || [];
+}
+
+function findRmfEpisodeForSlot(episodes, dateKey, slot) {
+  const expected = `${String(slot).padStart(2, "0")}:00 Fakty`.toLocaleLowerCase("pl-PL");
+  return episodes.find(ep =>
+    ep?.release_date === dateKey &&
+    (ep?.name || "").trim().toLocaleLowerCase("pl-PL") === expected
+  ) || null;
+}
+
+function latestRegularRmfEpisode(episodes, dateKey) {
+  return episodes.find(ep =>
+    ep?.release_date === dateKey &&
+    /^\d{2}:00 Fakty$/i.test((ep?.name || "").trim())
+  ) || null;
+}
+
+async function addEpisodeToQueue(token, episode) {
+  const response = await fetch(
+    `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(episode.uri)}`,
+    { method: "POST", headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (response.status === 204) return;
+  if (response.status === 404 || response.status === 403) {
+    throw new Error("Nie udało się dodać Faktów do kolejki. Uruchom odtwarzanie na aktywnym urządzeniu Spotify i spróbuj ponownie.");
+  }
+  if (response.status === 429) throw new Error("Spotify ograniczyło zapytania do kolejki. Spróbuję przy kolejnym sprawdzeniu.");
+  throw new Error(`Spotify nie przyjęło Faktów do kolejki (${response.status}).`);
+}
+
+function updateRmfStatus(text = "") {
+  if (!rmfStatus) return;
+  if (text) { rmfStatus.textContent = text; return; }
+  if (!rmfEnabled.checked) {
+    rmfStatus.textContent = "Fakty RMF: automatyczne dodawanie jest wyłączone.";
+    return;
+  }
+  const slot = currentRmfSlot();
+  if (slot) {
+    rmfStatus.textContent = `Fakty RMF: czekam na wydanie ${String(slot.slot).padStart(2,"0")}:00 (okno do ${String(slot.slot).padStart(2,"0")}:55).`;
+  } else {
+    const slots = selectedRmfSlots().map(h => `${String(h).padStart(2,"0")}:00`).join(", ");
+    rmfStatus.textContent = `Fakty RMF: monitoring aktywny. Zaplanowane godziny: ${slots || "brak"}.`;
+  }
+}
+
+async function checkRmfWatcher(force = false) {
+  if (!rmfEnabled?.checked) return;
+  const slot = currentRmfSlot();
+  if (!slot) { updateRmfStatus(); return; }
+  const key = `${slot.dateKey}-${slot.slot}`;
+  const queued = loadRmfQueued();
+  if (queued[key]) {
+    updateRmfStatus(`Fakty RMF ${String(slot.slot).padStart(2,"0")}:00 zostały już dziś dodane do kolejki.`);
+    return;
+  }
+  if (!force && Date.now() - rmfLastApiCheckAt < RMF_POLL_INTERVAL_MS) return;
+  rmfLastApiCheckAt = Date.now();
+  const token = await getValidAccessToken();
+  if (!token) return;
+  updateRmfStatus(`Fakty RMF: sprawdzam, czy pojawiło się wydanie ${String(slot.slot).padStart(2,"0")}:00…`);
+  const episodes = await fetchRmfEpisodes(token);
+  const episode = findRmfEpisodeForSlot(episodes, slot.dateKey, slot.slot);
+  if (!episode) {
+    updateRmfStatus(`Fakty RMF: wydanie ${String(slot.slot).padStart(2,"0")}:00 jeszcze się nie pojawiło. Sprawdzę ponownie za kilka minut.`);
+    return;
+  }
+  await addEpisodeToQueue(token, episode);
+  queued[key] = { uri: episode.uri, queuedAt: new Date().toISOString(), name: episode.name };
+  saveRmfQueued(queued);
+  const link = episode?.external_urls?.spotify || "";
+  rmfStatus.textContent = `Fakty RMF: ${episode.name} dodane jako następne w kolejce.${link ? "" : ""}`;
+}
+
+async function manualRmfCheck(addToQueue) {
+  try {
+    rmfCheckButton.disabled = true;
+    rmfQueueButton.disabled = true;
+    const token = await getValidAccessToken();
+    if (!token) throw new Error("Najpierw połącz aplikację ze Spotify.");
+    updateRmfStatus("Fakty RMF: sprawdzam najnowsze wydania…");
+    const episodes = await fetchRmfEpisodes(token);
+    const now = warsawNowParts();
+    const episode = latestRegularRmfEpisode(episodes, now.dateKey);
+    if (!episode) {
+      updateRmfStatus("Fakty RMF: nie znalazłem dziś jeszcze zwykłego wydania Faktów.");
+      return;
+    }
+    if (addToQueue) {
+      await addEpisodeToQueue(token, episode);
+      updateRmfStatus(`Fakty RMF: ${episode.name} dodane jako następne w kolejce.`);
+    } else {
+      updateRmfStatus(`Fakty RMF: najnowsze dostępne dziś wydanie to ${episode.name}.`);
+    }
+  } catch (err) {
+    console.error(err);
+    updateRmfStatus(`Fakty RMF: ${err.message}`);
+  } finally {
+    rmfCheckButton.disabled = false;
+    rmfQueueButton.disabled = false;
+  }
+}
+
+function startRmfWatcher() {
+  if (rmfWatcherTimer) clearInterval(rmfWatcherTimer);
+  updateRmfStatus();
+  checkRmfWatcher(true).catch(err => updateRmfStatus(`Fakty RMF: ${err.message}`));
+  rmfWatcherTimer = setInterval(() => {
+    checkRmfWatcher().catch(err => updateRmfStatus(`Fakty RMF: ${err.message}`));
+  }, 60 * 1000);
+}
 
 function randomString(length = 64) {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
@@ -644,6 +1039,7 @@ async function showLoggedIn(token) {
   lastFmUserInput.value = localStorage.getItem(LASTFM_USER_KEY) || "";
   renderLastFmStatus();
   renderHistorySummary();
+  startRmfWatcher();
 }
 
 function renderProfiles() {
@@ -1637,16 +2033,18 @@ async function collectFromQueries(
 
   const tryCandidates = (candidates, cap = Infinity) => {
     let added = 0;
-    let ordered = discovery >= 60 ? shuffle(candidates) : [...candidates];
-    // Świeżo wygenerowane, ale niepotwierdzone jako odtworzone utwory są miękko
-    // odsuwane na koniec zamiast twardo blokowane.
-    if (recentGeneratedSignatures?.size) {
-      ordered.sort((a, b) => {
-        const aPenalty = recentGeneratedSignatures.has(trackSignature(a)) ? 1 : 0;
-        const bPenalty = recentGeneratedSignatures.has(trackSignature(b)) ? 1 : 0;
-        return aPenalty - bPenalty;
-      });
-    }
+    let ordered = [...candidates];
+    // Feedback użytkownika wpływa wyłącznie na lokalny ranking kandydatów.
+    // Nie generuje dodatkowych zapytań do Spotify ani Last.fm.
+    const noise = discovery >= 70 ? 24 : discovery >= 40 ? 14 : 7;
+    ordered = ordered
+      .map(track => {
+        const generatedPenalty = recentGeneratedSignatures?.has(trackSignature(track)) ? 18 : 0;
+        const randomPart = Math.random() * noise;
+        return { track, rank: feedbackScore(track) - generatedPenalty + randomPart };
+      })
+      .sort((a, b) => b.rank - a.rank)
+      .map(item => item.track);
 
     for (const track of ordered) {
       if (result.length >= wanted || added >= cap) break;
@@ -2090,7 +2488,7 @@ function renderPlaylistResult(
     `Bartek jest głównym profilem: cel to ok. ${bartekTarget} z ${nominalTotal} utworów (75% po zaokrągleniu), ` +
     `a faktyczny rdzeń Bartka w tym wyniku to ${actualBartekCore}/${tracks.length} (${actualPct}%). ` +
     `Pozostała część może wychodzić poza jego gatunki i reprezentować pozostałych obecnych użytkowników. ` +
-    `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, utwór tylko wygenerowany przez aplikację 24 godz., wykonawca ${artistCooldownHours.value} godz. ` +
+    `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, utwór tylko wygenerowany przez aplikację jest przez 24 godz. miękko obniżany, wykonawca ${artistCooldownHours.value} godz. ` +
     `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany także po wykonawcy + tytule; ` +
     `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
@@ -2111,10 +2509,43 @@ function renderPlaylistResult(
   const list = document.createElement("ol");
   list.className = "result-list";
 
+  const feedback = loadFeedback();
   for (const track of tracks) {
     const li = document.createElement("li");
-    li.textContent =
-      `${track.artists.map(a => a.name).join(", ")} - ${track.name}`;
+    const row = document.createElement("div");
+    row.className = "track-row";
+
+    const label = document.createElement("span");
+    label.textContent = `${track.artists.map(a => a.name).join(", ")} - ${track.name}`;
+
+    const votes = document.createElement("span");
+    votes.className = "track-votes";
+    const signature = trackSignature(track);
+    const current = Number(feedback[signature]?.value || 0);
+
+    const up = document.createElement("button");
+    up.type = "button";
+    up.className = `vote-btn${current > 0 ? " active-up" : ""}`;
+    up.textContent = "👍";
+    up.title = "Podoba mi się. Premiuje ten utwór i lekko tego wykonawcę.";
+
+    const down = document.createElement("button");
+    down.type = "button";
+    down.className = `vote-btn${current < 0 ? " active-down" : ""}`;
+    down.textContent = "👎";
+    down.title = "Nie podoba mi się. Mocno obniża ten utwór i umiarkowanie wykonawcę.";
+
+    const refreshButtons = () => {
+      const value = Number(loadFeedback()[signature]?.value || 0);
+      up.classList.toggle("active-up", value > 0);
+      down.classList.toggle("active-down", value < 0);
+    };
+    up.addEventListener("click", () => { setTrackFeedback(track, 1); refreshButtons(); });
+    down.addEventListener("click", () => { setTrackFeedback(track, -1); refreshButtons(); });
+
+    votes.append(up, down);
+    row.append(label, votes);
+    li.appendChild(row);
     list.appendChild(li);
   }
 
@@ -2194,6 +2625,9 @@ async function init() {
   }
 }
 
+loadRmfSettings();
+renderFeedbackSummary();
+updateRmfStatus();
 init();
 </script>
 </body>
