@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v11</title>
+  <title>Office Music Mixer v12</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -254,7 +254,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v11</span></h1>
+        <h1>Office Music Mixer <span class="version">v12</span></h1>
       </div>
       <p class="connection-subtitle">Wspólna playlista dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -769,6 +769,11 @@ function mergeHistoryEntries(entries) {
 }
 
 async function syncSpotifyRecentHistory(token) {
+  const lastSync = Number(localStorage.getItem(RECENT_HISTORY_SYNC_KEY) || 0);
+  if (Date.now() - lastSync < RECENT_HISTORY_SYNC_TTL_MS) {
+    return 0;
+  }
+
   const response = await fetch(
     "https://api.spotify.com/v1/me/player/recently-played?limit=50",
     { headers: { Authorization: `Bearer ${token}` } }
@@ -793,6 +798,7 @@ async function syncSpotifyRecentHistory(token) {
     }));
 
   if (entries.length) mergeHistoryEntries(entries);
+  localStorage.setItem(RECENT_HISTORY_SYNC_KEY, String(Date.now()));
   return entries.length;
 }
 
@@ -831,7 +837,9 @@ function buildHistoryBlocklists() {
       if (signature) blockedTrackSignatures.add(signature);
     }
 
-    if (time >= artistCutoff) {
+    // Cooldown wykonawcy dotyczy tylko utworów faktycznie odtworzonych na Spotify.
+    // Sama obecność wykonawcy na wygenerowanej playliście nie blokuje jego innych utworów.
+    if (item.source === "spotify" && time >= artistCutoff) {
       for (const artistId of item.artistIds || []) {
         blockedArtists.add(artistId);
       }
@@ -848,9 +856,10 @@ function renderHistorySummary() {
   const spotifyCount = history.filter(item => item.source === "spotify").length;
   const generatedCount = history.filter(item => item.source === "generated").length;
 
+  const poolCount = candidatePoolSize();
   historySummary.textContent = history.length
-    ? `Historia lokalna: ${history.length} wpisów (${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji).`
-    : "Historia lokalna jest jeszcze pusta.";
+    ? `Historia lokalna: ${history.length} wpisów (${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji). Lokalna pula kandydatów: ${poolCount} utworów.`
+    : `Historia lokalna jest jeszcze pusta. Lokalna pula kandydatów: ${poolCount} utworów.`;
 }
 
 function clearAppHistory() {
@@ -892,6 +901,16 @@ const SEARCH_CACHE_PREFIX = "office_search_cache_v1:";
 const SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const SEARCH_REQUEST_GAP_MS = 700;
 const MAX_RATE_LIMIT_RETRIES = 3;
+
+// v12: lokalna pula kandydatów. Spotify Search w Development Mode zwraca maks. 10 wyników,
+// więc odkładamy wyniki z różnych stron i używamy ich ponownie przy kolejnych playlistach.
+const CANDIDATE_POOL_KEY = "office_candidate_pool_v1";
+const CANDIDATE_POOL_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const CANDIDATE_POOL_MAX_ITEMS = 1400;
+const MAX_NEW_SEARCHES_PER_GENERATION = 6;
+const RECENT_HISTORY_SYNC_KEY = "office_recent_history_sync_v1";
+const RECENT_HISTORY_SYNC_TTL_MS = 10 * 60 * 1000;
+let newSearchesThisGeneration = 0;
 let lastSearchRequestAt = 0;
 
 function sleep(ms) {
@@ -928,6 +947,96 @@ function writeSearchCache(query, offset, items) {
   }
 }
 
+function slimTrack(track) {
+  return {
+    id: track?.id || "",
+    uri: track?.uri || "",
+    name: track?.name || "",
+    artists: (track?.artists || []).map(a => ({ id: a?.id || "", name: a?.name || "" })),
+    album: { name: track?.album?.name || "" }
+  };
+}
+
+function loadCandidatePool() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CANDIDATE_POOL_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    const cutoff = Date.now() - CANDIDATE_POOL_MAX_AGE_MS;
+    return parsed.filter(item =>
+      item?.track?.id && item?.track?.uri &&
+      Number(item.savedAt || 0) >= cutoff &&
+      Array.isArray(item.queries)
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveCandidatePool(pool) {
+  try {
+    const cutoff = Date.now() - CANDIDATE_POOL_MAX_AGE_MS;
+    const cleaned = pool
+      .filter(item => item?.track?.id && Number(item.savedAt || 0) >= cutoff)
+      .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+      .slice(0, CANDIDATE_POOL_MAX_ITEMS);
+    localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify(cleaned));
+  } catch (err) {
+    console.warn("Nie udało się zapisać lokalnej puli kandydatów.", err);
+  }
+}
+
+function addToCandidatePool(query, items) {
+  if (!query || !Array.isArray(items) || !items.length) return;
+  const pool = loadCandidatePool();
+  const map = new Map(pool.map(item => [item.track.id, item]));
+  const now = Date.now();
+
+  for (const track of items) {
+    if (!track?.id || !track?.uri) continue;
+    const existing = map.get(track.id);
+    if (existing) {
+      existing.savedAt = now;
+      existing.track = slimTrack(track);
+      existing.queries = [...new Set([...(existing.queries || []), query])];
+    } else {
+      map.set(track.id, {
+        track: slimTrack(track),
+        queries: [query],
+        savedAt: now
+      });
+    }
+  }
+
+  saveCandidatePool([...map.values()]);
+  if (typeof historySummary !== "undefined" && historySummary) renderHistorySummary();
+}
+
+function candidatePoolForQueries(queries) {
+  const wanted = new Set(queries);
+  const byTrack = new Map();
+  for (const item of loadCandidatePool()) {
+    if ((item.queries || []).some(query => wanted.has(query))) {
+      byTrack.set(item.track.id, item.track);
+    }
+  }
+  return [...byTrack.values()];
+}
+
+function candidatePoolSize() {
+  return loadCandidatePool().length;
+}
+
+function hasFreshSearchCache(query, offset) {
+  return readSearchCache(query, offset) !== null;
+}
+
+function searchOffsetsForQuery(query) {
+  const offsets = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90];
+  const uncached = offsets.filter(offset => !hasFreshSearchCache(query, offset));
+  const cached = offsets.filter(offset => hasFreshSearchCache(query, offset));
+  return [...shuffle(uncached), ...shuffle(cached)];
+}
+
 async function waitForSearchSlot() {
   const elapsed = Date.now() - lastSearchRequestAt;
   if (elapsed < SEARCH_REQUEST_GAP_MS) {
@@ -946,7 +1055,15 @@ async function parseJsonSafely(response) {
 
 async function searchTracks(token, query, offset = 0) {
   const cached = readSearchCache(query, offset);
-  if (cached) return cached;
+  if (cached) {
+    addToCandidatePool(query, cached);
+    return cached;
+  }
+
+  if (newSearchesThisGeneration >= MAX_NEW_SEARCHES_PER_GENERATION) {
+    return [];
+  }
+  newSearchesThisGeneration++;
 
   const url = new URL("https://api.spotify.com/v1/search");
   url.search = new URLSearchParams({
@@ -968,6 +1085,7 @@ async function searchTracks(token, query, offset = 0) {
     if (response.ok) {
       const items = data?.tracks?.items || [];
       writeSearchCache(query, offset, items);
+      addToCandidatePool(query, items);
       return items;
     }
 
@@ -1084,30 +1202,18 @@ async function collectFromQueries(
 
   const { maxArtistPerPlaylist = 1 } = options;
   const uniqueQueries = [...new Set(queries)];
-  const shuffledQueries = shuffle(uniqueQueries);
   const discovery = Number(discoveryLevel.value);
   const perSearchCap = discovery >= 60 ? 3 : 2;
-  const queryBudget = Math.min(
-    shuffledQueries.length,
-    Math.max(4, Math.ceil(wanted / perSearchCap) + 3)
-  );
-  const maxPagesPerQuery = discovery >= 70 ? 2 : 1;
-  let attempts = 0;
-  const maxAttempts = queryBudget * maxPagesPerQuery;
 
-  while (result.length < wanted && attempts < maxAttempts) {
-    const queryIndex = attempts % queryBudget;
-    const page = Math.floor(attempts / queryBudget);
-    const query = shuffledQueries[queryIndex];
-    const offset = page * 10;
+  const tryCandidates = (candidates, cap = Infinity) => {
+    let added = 0;
+    const ordered = discovery >= 60 ? shuffle(candidates) : candidates;
 
-    const found = await searchTracks(token, query, offset);
-    const candidates = discovery >= 60 ? shuffle(found) : found;
-    let addedThisSearch = 0;
-
-    for (const track of candidates) {
+    for (const track of ordered) {
+      if (result.length >= wanted || added >= cap) break;
       if (!track?.id || !track?.uri) continue;
       if (looksLikeUnwantedVariant(track)) continue;
+
       const primaryArtistId = track.artists?.[0]?.id || track.artists?.[0]?.name;
       const trackArtistNames = (track.artists || []).map(a => normalizeArtistName(a.name));
       if (trackArtistNames.some(name => blockedArtistNames.has(name))) continue;
@@ -1124,12 +1230,39 @@ async function collectFromQueries(
         usedArtistCounts.set(primaryArtistId, (usedArtistCounts.get(primaryArtistId) || 0) + 1);
       }
       result.push(track);
-      addedThisSearch++;
+      added++;
+    }
+  };
 
-      if (result.length >= wanted || addedThisSearch >= perSearchCap) break;
+  // 1. Najpierw korzystamy z puli zbudowanej podczas wcześniejszych wyszukiwań.
+  // To nie zużywa quota Spotify.
+  tryCandidates(candidatePoolForQueries(uniqueQueries));
+  if (result.length >= wanted) return result;
+
+  // 2. Jeżeli lokalna pula jest za mała, pobieramy tylko kilka nowych stron.
+  // Offset jest zmieniany, żeby nie oglądać w kółko pierwszej dziesiątki wyników.
+  const queryOrder = shuffle(uniqueQueries);
+  const pagePlans = [];
+  for (const query of queryOrder) {
+    for (const offset of searchOffsetsForQuery(query).slice(0, 3)) {
+      pagePlans.push({ query, offset });
+    }
+  }
+
+  for (const { query, offset } of pagePlans) {
+    if (result.length >= wanted) break;
+    if (newSearchesThisGeneration >= MAX_NEW_SEARCHES_PER_GENERATION && !hasFreshSearchCache(query, offset)) {
+      break;
     }
 
-    attempts++;
+    const found = await searchTracks(token, query, offset);
+    tryCandidates(found, perSearchCap);
+  }
+
+  // 3. Nowo pobrane strony wzbogaciły pulę. Jeszcze raz próbujemy lokalnie,
+  // bo część kandydatów mogła nie wejść z powodu limitu per pojedyncze wyszukiwanie.
+  if (result.length < wanted) {
+    tryCandidates(candidatePoolForQueries(uniqueQueries));
   }
 
   return result;
@@ -1246,6 +1379,7 @@ function hasMusicProfile(profile) {
 async function generateOfficePlaylist() {
   try {
     generateButton.disabled = true;
+    newSearchesThisGeneration = 0;
     playlistBox.style.display = "none";
     playlistResult.textContent = "";
     progressBox.textContent = "Przygotowuję profile...";
@@ -1425,7 +1559,7 @@ function renderPlaylistResult(playlist, tracks, selected, commonTarget, ignoredP
       `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. ` +
       `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany także po wykonawcy + tytule; ` +
       `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
-      `Wyszukiwania są buforowane przez 24 h i wysyłane z ograniczoną częstotliwością.`;
+      `Wyszukiwania są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify.`;
     playlistResult.append(summary, model);
 
     if (ignoredProfiles.length) {
