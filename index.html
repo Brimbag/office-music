@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v12</title>
+  <title>Office Music Mixer v15</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -272,9 +272,9 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v14</span></h1>
+        <h1>Office Music Mixer <span class="version">v15</span></h1>
       </div>
-      <p class="connection-subtitle">Wspólna playlista dopasowana do osób obecnych w biurze.</p>
+      <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
         <span id="status">Niepołączony</span>
         <span id="profileBox" style="display:none;">Spotify: <span id="profile"></span></span>
@@ -360,7 +360,7 @@
     </div>
 
     <p class="small">
-      Około 75% wspólnego mianownika i 25% indywidualnych wtrąceń.
+      Bartek jest głównym profilem i zawsze bierze udział w miksie. Około 75% playlisty ma pasować do jego gatunków, a pozostałe 25% może wychodzić poza nie i reprezentować gusta pozostałych obecnych osób.
       Artyści wzorcowi mają większą wagę niż same gatunki, a wykonawca zablokowany przez dowolną obecną osobę nie trafi na playlistę.
       Gatunki są edytowalne, więc profil może zmieniać się razem z gustem, także po ekspedycji po szamański śpiew gardłowy.
       Last.fm poszerza bazę wykonawców dla gatunków, a Spotify służy głównie do finalnego wyszukiwania utworów, historii i tworzenia playlist. Świeże scrobble Last.fm liczymy dopiero od momentu wpisania nazwy użytkownika w tej wersji.
@@ -661,9 +661,13 @@ function renderProfiles() {
     checkbox.type = "checkbox";
     checkbox.dataset.profileId = id;
     checkbox.checked = true;
+    if (id === "bartek") {
+      checkbox.disabled = true;
+      checkbox.title = "Bartek jest głównym profilem i zawsze bierze udział w miksie.";
+    }
 
     const name = document.createElement("span");
-    name.textContent = profile.name;
+    name.textContent = id === "bartek" ? `${profile.name} · główny profil` : profile.name;
 
     mainLabel.append(checkbox, name);
 
@@ -1721,13 +1725,17 @@ async function generateOfficePlaylist() {
     if (!token) throw new Error("Brak aktywnej sesji Spotify.");
 
     const selected = selectedProfiles();
-    if (!selected.length) throw new Error("Wybierz co najmniej jedną osobę.");
+    const bartek = selected.find(profile => profile.id === "bartek");
+    if (!bartek) {
+      throw new Error("Profil Bartka musi być aktywny. Jest głównym profilem tej aplikacji.");
+    }
+    if (!hasMusicProfile(bartek)) {
+      throw new Error("Profil Bartka nie ma żadnych gatunków ani artystów wzorcowych.");
+    }
 
     const mixProfiles = selected.filter(hasMusicProfile);
-    if (!mixProfiles.length) {
-      throw new Error("Wybrane osoby nie mają jeszcze żadnych preferencji ani artystów wzorcowych.");
-    }
     const ignoredProfiles = selected.filter(profile => !hasMusicProfile(profile));
+    const otherProfiles = mixProfiles.filter(profile => profile.id !== "bartek");
 
     progressBox.textContent = "Odświeżam źródła Last.fm (z cache, jeśli są świeże)...";
     await syncLastFmSources(mixProfiles);
@@ -1747,45 +1755,66 @@ async function generateOfficePlaylist() {
     ]);
 
     const total = Number(playlistLength.value);
-    const commonTarget =
-      mixProfiles.length === 1 ? 0 : Math.round(total * 0.75);
-    const individualTarget = total - commonTarget;
+    const bartekTarget = Math.round(total * 0.75);
+    const outsideTarget = total - bartekTarget;
 
     const usedTracks = new Set();
     const usedTrackSignatures = new Set();
     const usedArtistCounts = new Map();
-    const tracks = [];
+    const bartekTracks = [];
+    const outsideTracks = [];
 
-    if (commonTarget > 0) {
-      const commonCats = commonCategories(mixProfiles);
+    progressBox.textContent =
+      `Buduję rdzeń Bartka (${bartekTarget}/${total} utworów)...`;
+
+    bartekTracks.push(...await collectFromQueries(
+      token,
+      queriesForProfile(bartek),
+      bartekTarget,
+      usedTracks,
+      usedTrackSignatures,
+      usedArtistCounts,
+      blockedTracks,
+      blockedTrackSignatures,
+      blockedArtists,
+      blockedArtistNames
+    ));
+
+    if (bartekTracks.length < bartekTarget) {
       progressBox.textContent =
-        `Szukam wspólnego mianownika (${commonTarget} utworów; ${commonCats.join(", ") || "wspólna pula"})...`;
+        `Rdzeń Bartka ma ${bartekTracks.length}/${bartekTarget}. Poszerzam pulę, nadal trzymając się jego profilu...`;
 
-      if (commonCats.length > 1) {
-        const orderedCats = shuffle(commonCats);
-        const base = Math.floor(commonTarget / orderedCats.length);
-        let remainder = commonTarget % orderedCats.length;
-        for (const category of orderedCats) {
-          const wanted = base + (remainder-- > 0 ? 1 : 0);
-          const bucket = await collectFromQueries(
-            token,
-            queriesForCommonCategory(mixProfiles, category),
-            wanted,
-            usedTracks,
-            usedTrackSignatures,
-            usedArtistCounts,
-            blockedTracks,
-            blockedTrackSignatures,
-            blockedArtists,
-            blockedArtistNames
-          );
-          tracks.push(...bucket);
-        }
-      } else {
-        const common = await collectFromQueries(
+      bartekTracks.push(...await collectFromQueries(
+        token,
+        queriesForProfile(bartek),
+        bartekTarget - bartekTracks.length,
+        usedTracks,
+        usedTrackSignatures,
+        usedArtistCounts,
+        blockedTracks,
+        blockedTrackSignatures,
+        blockedArtists,
+        blockedArtistNames,
+        { maxArtistPerPlaylist: 2 }
+      ));
+    }
+
+    progressBox.textContent =
+      `Dodaję część spoza rdzenia Bartka (${outsideTarget} utworów)...`;
+
+    if (outsideTarget > 0) {
+      const profilesForOutside = otherProfiles.length ? otherProfiles : [bartek];
+      const perPersonBase = Math.floor(outsideTarget / profilesForOutside.length);
+      let remainder = outsideTarget % profilesForOutside.length;
+
+      for (const profile of shuffle(profilesForOutside)) {
+        const wanted = perPersonBase + (remainder-- > 0 ? 1 : 0);
+        if (wanted <= 0) continue;
+
+        outsideTracks.push(...await collectFromQueries(
           token,
-          queriesForCommon(mixProfiles),
-          commonTarget,
+          queriesForProfile(profile),
+          wanted,
           usedTracks,
           usedTrackSignatures,
           usedArtistCounts,
@@ -1793,42 +1822,43 @@ async function generateOfficePlaylist() {
           blockedTrackSignatures,
           blockedArtists,
           blockedArtistNames
-        );
-        tracks.push(...common);
+        ));
       }
     }
 
-    progressBox.textContent = "Dodaję indywidualne wtrącenia...";
+    let tracks = [...bartekTracks, ...outsideTracks];
 
-    const perPersonBase = Math.floor(individualTarget / mixProfiles.length);
-    let remainder = individualTarget % mixProfiles.length;
+    // Najpierw domykamy wymagane 75% Bartka. Nie poświęcamy jego udziału tylko po to,
+    // żeby dobić do nominalnej długości playlisty.
+    if (bartekTracks.length < bartekTarget) {
+      progressBox.textContent =
+        `Rdzeń Bartka nadal ma ${bartekTracks.length}/${bartekTarget}. Próbuję domknąć wymagane 75%...`;
 
-    for (const profile of shuffle(mixProfiles)) {
-      const wanted = perPersonBase + (remainder-- > 0 ? 1 : 0);
-      if (wanted <= 0) continue;
-
-      const personal = await collectFromQueries(
+      const missingBartek = await collectFromQueries(
         token,
-        queriesForProfile(profile),
-        wanted,
+        queriesForProfile(bartek),
+        bartekTarget - bartekTracks.length,
         usedTracks,
         usedTrackSignatures,
         usedArtistCounts,
         blockedTracks,
         blockedTrackSignatures,
         blockedArtists,
-        blockedArtistNames
+        blockedArtistNames,
+        { maxArtistPerPlaylist: 2 }
       );
-      tracks.push(...personal);
+      bartekTracks.push(...missingBartek);
+      tracks = [...bartekTracks, ...outsideTracks];
     }
 
     if (tracks.length < total) {
       progressBox.textContent =
-        `Mam ${tracks.length}/${total}. Uzupełniam playlistę...`;
+        `Mam ${tracks.length}/${total}. Uzupełniam pozostałe miejsca z profili obecnych osób...`;
 
+      const fallbackProfiles = otherProfiles.length ? otherProfiles : mixProfiles;
       const fallbackQueries = [
-        ...queriesForCommon(mixProfiles),
-        ...selected.flatMap(queriesForProfile)
+        ...fallbackProfiles.flatMap(queriesForProfile),
+        ...queriesForProfile(bartek)
       ];
 
       const filler = await collectFromQueries(
@@ -1841,52 +1871,26 @@ async function generateOfficePlaylist() {
         blockedTracks,
         blockedTrackSignatures,
         blockedArtists,
-        blockedArtistNames
-      );
-      tracks.push(...filler);
-    }
-
-    if (tracks.length < total) {
-      progressBox.textContent =
-        `Mam ${tracks.length}/${total}. Ostatnie miejsca uzupełniam, dopuszczając maksymalnie drugi utwór tego samego wykonawcy...`;
-
-      const relaxedQueries = [
-        ...queriesForCommon(mixProfiles),
-        ...mixProfiles.flatMap(queriesForProfile)
-      ];
-
-      const relaxedFiller = await collectFromQueries(
-        token,
-        relaxedQueries,
-        total - tracks.length,
-        usedTracks,
-        usedTrackSignatures,
-        usedArtistCounts,
-        blockedTracks,
-        blockedTrackSignatures,
-        blockedArtists,
         blockedArtistNames,
         { maxArtistPerPlaylist: 2 }
       );
-      tracks.push(...relaxedFiller);
+      outsideTracks.push(...filler);
+      tracks = [...bartekTracks, ...outsideTracks];
     }
 
     if (!tracks.length) {
-      throw new Error(
-        "Spotify nie zwrócił żadnych utworów dla wybranych profili."
-      );
+      throw new Error("Spotify nie zwrócił żadnych utworów dla wybranych profili.");
     }
 
+    // Jeśli z powodu filtrów nie udało się osiągnąć 75% Bartka, nie udajemy, że się udało.
+    // Wynik pokaże faktyczny udział rdzenia Bartka.
     const finalTracks = shuffle(tracks).slice(0, total);
+    const actualBartekCore = Math.min(bartekTracks.length, finalTracks.length);
 
     progressBox.textContent =
       `Tworzę playlistę i zapisuję ${finalTracks.length} utworów...`;
 
-    const playlist = await createPlaylist(
-      token,
-      selected,
-      finalTracks.length
-    );
+    const playlist = await createPlaylist(token, selected, finalTracks.length);
 
     await addItemsToPlaylist(
       token,
@@ -1899,7 +1903,8 @@ async function generateOfficePlaylist() {
       playlist,
       finalTracks,
       selected,
-      commonTarget,
+      bartekTarget,
+      actualBartekCore,
       ignoredProfiles
     );
     progressBox.textContent = "";
@@ -1914,7 +1919,14 @@ async function generateOfficePlaylist() {
   }
 }
 
-function renderPlaylistResult(playlist, tracks, selected, commonTarget, ignoredProfiles = []) {
+function renderPlaylistResult(
+  playlist,
+  tracks,
+  selected,
+  bartekTarget,
+  actualBartekCore,
+  ignoredProfiles = []
+) {
   playlistResult.textContent = "";
 
   const summary = document.createElement("p");
@@ -1923,29 +1935,31 @@ function renderPlaylistResult(playlist, tracks, selected, commonTarget, ignoredP
       .map(p => p.name)
       .join(", ")}.`;
 
-  if (selected.length > 1) {
-    const model = document.createElement("p");
-    model.className = "small";
-    model.textContent =
-      `Cel wspólnej części: ok. ${commonTarget} utworów. Reszta to indywidualne wtrącenia. ` +
-      `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. ` +
-      `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany także po wykonawcy + tytule; ` +
-      `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
-      `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
-      `Last.fm dostarcza dodatkową bazę wykonawców dla gatunków i świeże scrobble (jeśli podano użytkownika); wyszukiwania Spotify są rozkładane na wielu różnych wykonawców/zapytania, a limit wykonawcy działa po nazwie także wtedy, gdy katalog Spotify ma kilka ID tej samej nazwy.`;
-    playlistResult.append(summary, model);
+  const model = document.createElement("p");
+  model.className = "small";
+  const actualPct = tracks.length
+    ? Math.round((actualBartekCore / tracks.length) * 100)
+    : 0;
+  model.textContent =
+    `Bartek jest głównym profilem: cel to ok. ${bartekTarget} utworów (${Math.round((bartekTarget / Math.max(1, tracks.length)) * 100)}% nominalnego celu), ` +
+    `a faktyczny rdzeń Bartka w tym wyniku to ${actualBartekCore}/${tracks.length} (${actualPct}%). ` +
+    `Pozostała część może wychodzić poza jego gatunki i reprezentować pozostałych obecnych użytkowników. ` +
+    `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. ` +
+    `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany także po wykonawcy + tytule; ` +
+    `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
+    `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
+    `Last.fm poszerza bazę wykonawców i pomaga rozbudowywać pulę kandydatów.`;
 
-    if (ignoredProfiles.length) {
-      const warning = document.createElement("p");
-      warning.className = "small";
-      warning.textContent =
-        `Bez wpływu na dobór muzyki (profil jeszcze pusty): ${ignoredProfiles
-          .map(profile => profile.name)
-          .join(", ")}.`;
-      playlistResult.append(warning);
-    }
-  } else {
-    playlistResult.append(summary);
+  playlistResult.append(summary, model);
+
+  if (ignoredProfiles.length) {
+    const warning = document.createElement("p");
+    warning.className = "small";
+    warning.textContent =
+      `Bez wpływu na dobór muzyki (profil jeszcze pusty): ${ignoredProfiles
+        .map(profile => profile.name)
+        .join(", ")}.`;
+    playlistResult.append(warning);
   }
 
   const list = document.createElement("ol");
