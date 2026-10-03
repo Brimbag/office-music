@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v20</title>
+  <title>Office Music Mixer v21</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -365,7 +365,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v20</span></h1>
+        <h1>Office Music Mixer <span class="version">v21</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -1889,6 +1889,30 @@ function saveCandidatePool(pool) {
   }
 }
 
+function extractQuotedQueryValue(query, field) {
+  const re = new RegExp(`${field}:\\"([^\\"]+)\\"`, "i");
+  const match = String(query || "").match(re);
+  return match ? match[1] : "";
+}
+
+function queryMatchesTrack(query, track) {
+  const exactArtist = extractQuotedQueryValue(query, "artist");
+  if (exactArtist) {
+    const wanted = normalizeArtistName(exactArtist);
+    const actual = (track?.artists || []).map(a => normalizeArtistName(a?.name || ""));
+    if (!actual.includes(wanted)) return false;
+  }
+
+  const exactTrack = extractQuotedQueryValue(query, "track");
+  if (exactTrack) {
+    const wantedTitle = normalizeForSignature(exactTrack);
+    const actualTitle = normalizeForSignature(track?.name || "");
+    if (wantedTitle && actualTitle !== wantedTitle) return false;
+  }
+
+  return true;
+}
+
 function addToCandidatePool(query, items) {
   if (!query || !Array.isArray(items) || !items.length) return;
   const pool = loadCandidatePool();
@@ -1897,6 +1921,7 @@ function addToCandidatePool(query, items) {
 
   for (const track of items) {
     if (!track?.id || !track?.uri) continue;
+    if (!queryMatchesTrack(query, track)) continue;
     const existing = map.get(track.id);
     if (existing) {
       existing.savedAt = now;
@@ -1919,9 +1944,10 @@ function candidatePoolForQueries(queries) {
   const wanted = new Set(queries);
   const byTrack = new Map();
   for (const item of loadCandidatePool()) {
-    if ((item.queries || []).some(query => wanted.has(query))) {
-      byTrack.set(item.track.id, item.track);
-    }
+    const validMatch = (item.queries || []).some(query =>
+      wanted.has(query) && queryMatchesTrack(query, item.track)
+    );
+    if (validMatch) byTrack.set(item.track.id, item.track);
   }
   return [...byTrack.values()];
 }
@@ -1960,8 +1986,9 @@ async function parseJsonSafely(response) {
 async function searchTracks(token, query, offset = 0) {
   const cached = readSearchCache(query, offset);
   if (cached) {
-    addToCandidatePool(query, cached);
-    return cached;
+    const validCached = cached.filter(track => queryMatchesTrack(query, track));
+    addToCandidatePool(query, validCached);
+    return validCached;
   }
 
   if (newSearchesThisGeneration >= MAX_NEW_SEARCHES_PER_GENERATION) {
@@ -1987,7 +2014,7 @@ async function searchTracks(token, query, offset = 0) {
     const data = await parseJsonSafely(response);
 
     if (response.ok) {
-      const items = data?.tracks?.items || [];
+      const items = (data?.tracks?.items || []).filter(track => queryMatchesTrack(query, track));
       writeSearchCache(query, offset, items);
       addToCandidatePool(query, items);
       return items;
@@ -2138,7 +2165,7 @@ function trackDiagnostic(track) {
   if (queries.length) sourceBits.push(`Spotify: ${queries.join(" | ")}`);
   if (lf.exact) sourceBits.push("Last.fm: utwór w bazie");
   else if (lf.maxTags || lf.sourceCount) sourceBits.push("Last.fm: wykonawca w bazie");
-  if (lf.recentCount) sourceBits.push("Last.fm: świeży odsłuch");
+  if (lf.recentCount) sourceBits.push("Last.fm: wykonawca świeżo słuchany");
   if (fb > 0) sourceBits.push(`feedback +${Math.round(fb)}`);
   if (fb < 0) sourceBits.push(`feedback ${Math.round(fb)}`);
   return sourceBits.length ? sourceBits.join(" · ") : "źródło: lokalna pula Spotify";
@@ -2554,10 +2581,27 @@ async function generateOfficePlaylist() {
       throw new Error("Spotify nie zwrócił żadnych utworów dla wybranych profili.");
     }
 
-    // Jeśli z powodu filtrów nie udało się osiągnąć 75% Bartka, nie udajemy, że się udało.
-    // Wynik pokaże faktyczny udział rdzenia Bartka.
-    const finalTracks = shuffle(tracks).slice(0, total);
-    const actualBartekCore = Math.min(bartekTracks.length, finalTracks.length);
+    // Składamy wynik warstwowo, żeby losowe przycięcie listy nie zjadało rdzenia Bartka.
+    // Jeśli mamy co najmniej bartekTarget kandydatów Bartka, dokładnie tyle rezerwujemy.
+    const chosenBartek = shuffle(bartekTracks).slice(0, Math.min(bartekTarget, bartekTracks.length));
+    const remainingSlots = Math.max(0, total - chosenBartek.length);
+    const chosenOutside = shuffle(outsideTracks).slice(0, remainingSlots);
+    let finalTracks = [...chosenBartek, ...chosenOutside];
+
+    // Jeśli poza rdzeniem nadal brakuje miejsc, można je uzupełnić nadwyżką Bartka.
+    // Dzięki temu nie obniżamy 75%, ale też nie kończymy krótszą playlistą bez potrzeby.
+    if (finalTracks.length < total) {
+      const chosenIds = new Set(finalTracks.map(track => track.id));
+      const extraBartek = shuffle(bartekTracks)
+        .filter(track => !chosenIds.has(track.id))
+        .slice(0, total - finalTracks.length);
+      finalTracks.push(...extraBartek);
+    }
+
+    finalTracks = shuffle(finalTracks).slice(0, total);
+    const finalIds = new Set(finalTracks.map(track => track.id));
+    const actualBartekCore = chosenBartek.filter(track => finalIds.has(track.id)).length +
+      Math.max(0, finalTracks.length - chosenBartek.length - chosenOutside.length);
 
     progressBox.textContent =
       `Tworzę playlistę i zapisuję ${finalTracks.length} utworów...`;
@@ -2622,7 +2666,7 @@ function renderPlaylistResult(
     `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
     `Last.fm z ostatnich 14 dni jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists. ` +
-    `Feedback 👍/👎 silnie wpływa lokalnie na ranking, wykonawcy zablokowani przyciskiem 🚫 są całkowicie pomijani, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
+    `Feedback 👍/👎 silnie wpływa lokalnie na ranking, wykonawcy zablokowani przyciskiem 🚫 są całkowicie pomijani, zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
 
   playlistResult.append(summary, model);
 
