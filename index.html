@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v21</title>
+  <title>Office Music Mixer v22</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -365,7 +365,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v21</span></h1>
+        <h1>Office Music Mixer <span class="version">v22</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -2187,7 +2187,7 @@ async function collectFromQueries(
   const result = [];
   if (!queries.length || wanted <= 0) return result;
 
-  const { maxArtistPerPlaylist = 1 } = options;
+  const { maxArtistPerPlaylist = 1, recognizabilityOverride = null } = options;
   const uniqueQueries = [...new Set(queries)];
   const discovery = Number(discoveryLevel.value);
   const perSearchCap = discovery >= 60 ? 3 : 2;
@@ -2210,7 +2210,7 @@ async function collectFromQueries(
       if (result.length >= wanted || added >= cap) break;
       if (!track?.id || !track?.uri) continue;
       if (looksLikeUnwantedVariant(track)) continue;
-      if (!recognizabilityPass(track)) continue;
+      if (recognizabilityOverride === "low" ? false : !recognizabilityPass(track)) continue;
 
       const artistIds = (track.artists || [])
         .map(a => a?.id || "")
@@ -2463,6 +2463,8 @@ async function generateOfficePlaylist() {
     const bartekTracks = [];
     const outsideTracks = [];
 
+    // v22: najpierw naprawdę rezerwujemy rdzeń Bartka. Dopiero po zakończeniu
+    // wszystkich prób jego uzupełnienia wpuszczamy pozostałe profile.
     progressBox.textContent =
       `Buduję rdzeń Bartka (${bartekTarget}/${total} utworów)...`;
 
@@ -2481,7 +2483,7 @@ async function generateOfficePlaylist() {
 
     if (bartekTracks.length < bartekTarget) {
       progressBox.textContent =
-        `Rdzeń Bartka ma ${bartekTracks.length}/${bartekTarget}. Poszerzam pulę, nadal trzymając się jego profilu...`;
+        `Rdzeń Bartka ma ${bartekTracks.length}/${bartekTarget}. Poszerzam pulę w jego profilu...`;
 
       bartekTracks.push(...await collectFromQueries(
         token,
@@ -2494,17 +2496,46 @@ async function generateOfficePlaylist() {
         blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-          { maxArtistPerPlaylist: 2 }
+        { maxArtistPerPlaylist: 2 }
       ));
     }
 
-    progressBox.textContent =
-      `Dodaję część spoza rdzenia Bartka (${outsideTarget} utworów)...`;
+    // Jeśli średni/wysoki filtr rozpoznawalności nadal zostawia mniej niż 75%,
+    // ostatni fallback korzysta tylko z zapytań po konkretnym artyście/utworze
+    // z profilu Bartka i źródeł Last.fm. Nie rozluźniamy ogólnych genre searchy,
+    // bo to właśnie nimi najłatwiej wpuścić katalogowe dziwadła.
+    if (bartekTracks.length < bartekTarget) {
+      const bartekTrustedQueries = queriesForProfile(bartek).filter(query =>
+        query.startsWith('artist:"') || query.startsWith('track:"')
+      );
+      progressBox.textContent =
+        `Rdzeń Bartka ma ${bartekTracks.length}/${bartekTarget}. Domykam go z konkretnych wykonawców i utworów...`;
 
-    if (outsideTarget > 0) {
+      bartekTracks.push(...await collectFromQueries(
+        token,
+        bartekTrustedQueries,
+        bartekTarget - bartekTracks.length,
+        usedTracks,
+        usedTrackSignatures,
+        usedArtistCounts,
+        blockedTracks,
+        blockedTrackSignatures,
+        blockedArtists,
+        blockedArtistNames,
+        { maxArtistPerPlaylist: 2, recognizabilityOverride: "low" }
+      ));
+    }
+
+    // Dopiero teraz pozostałe profile dostają maksymalnie wolne miejsca.
+    const reservedBartek = Math.min(bartekTarget, bartekTracks.length);
+    const slotsForOthers = Math.max(0, total - reservedBartek);
+    progressBox.textContent =
+      `Rdzeń Bartka: ${reservedBartek}/${bartekTarget}. Dodaję maks. ${slotsForOthers} utworów pozostałych osób...`;
+
+    if (slotsForOthers > 0) {
       const profilesForOutside = otherProfiles.length ? otherProfiles : [bartek];
-      const perPersonBase = Math.floor(outsideTarget / profilesForOutside.length);
-      let remainder = outsideTarget % profilesForOutside.length;
+      const perPersonBase = Math.floor(slotsForOthers / profilesForOutside.length);
+      let remainder = slotsForOthers % profilesForOutside.length;
 
       for (const profile of shuffle(profilesForOutside)) {
         const wanted = perPersonBase + (remainder-- > 0 ? 1 : 0);
@@ -2520,45 +2551,22 @@ async function generateOfficePlaylist() {
           blockedTracks,
           blockedTrackSignatures,
           blockedArtists,
-          blockedArtistNames,
-            ));
+          blockedArtistNames
+        ));
       }
     }
 
     let tracks = [...bartekTracks, ...outsideTracks];
 
-    // Najpierw domykamy wymagane 75% Bartka. Nie poświęcamy jego udziału tylko po to,
-    // żeby dobić do nominalnej długości playlisty.
-    if (bartekTracks.length < bartekTarget) {
-      progressBox.textContent =
-        `Rdzeń Bartka nadal ma ${bartekTracks.length}/${bartekTarget}. Próbuję domknąć wymagane 75%...`;
-
-      const missingBartek = await collectFromQueries(
-        token,
-        queriesForProfile(bartek),
-        bartekTarget - bartekTracks.length,
-        usedTracks,
-        usedTrackSignatures,
-        usedArtistCounts,
-        blockedTracks,
-        blockedTrackSignatures,
-        blockedArtists,
-        blockedArtistNames,
-          { maxArtistPerPlaylist: 2 }
-      );
-      bartekTracks.push(...missingBartek);
-      tracks = [...bartekTracks, ...outsideTracks];
-    }
-
+    // Jeśli inne profile nie zapełniły swoich miejsc, najpierw próbujemy nimi,
+    // a dopiero na końcu dokładamy nadwyżkę z Bartka. Nigdy nie zabieramy już
+    // zarezerwowanych miejsc z jego rdzenia.
     if (tracks.length < total) {
       progressBox.textContent =
-        `Mam ${tracks.length}/${total}. Uzupełniam pozostałe miejsca z profili obecnych osób...`;
+        `Mam ${tracks.length}/${total}. Uzupełniam wolne miejsca bez naruszania rdzenia Bartka...`;
 
       const fallbackProfiles = otherProfiles.length ? otherProfiles : mixProfiles;
-      const fallbackQueries = [
-        ...fallbackProfiles.flatMap(queriesForProfile),
-        ...queriesForProfile(bartek)
-      ];
+      const fallbackQueries = fallbackProfiles.flatMap(queriesForProfile);
 
       const filler = await collectFromQueries(
         token,
@@ -2571,9 +2579,27 @@ async function generateOfficePlaylist() {
         blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-          { maxArtistPerPlaylist: 2 }
+        { maxArtistPerPlaylist: 2 }
       );
       outsideTracks.push(...filler);
+      tracks = [...bartekTracks, ...outsideTracks];
+    }
+
+    if (tracks.length < total) {
+      const extraBartek = await collectFromQueries(
+        token,
+        queriesForProfile(bartek),
+        total - tracks.length,
+        usedTracks,
+        usedTrackSignatures,
+        usedArtistCounts,
+        blockedTracks,
+        blockedTrackSignatures,
+        blockedArtists,
+        blockedArtistNames,
+        { maxArtistPerPlaylist: 2 }
+      );
+      bartekTracks.push(...extraBartek);
       tracks = [...bartekTracks, ...outsideTracks];
     }
 
@@ -2581,15 +2607,13 @@ async function generateOfficePlaylist() {
       throw new Error("Spotify nie zwrócił żadnych utworów dla wybranych profili.");
     }
 
-    // Składamy wynik warstwowo, żeby losowe przycięcie listy nie zjadało rdzenia Bartka.
-    // Jeśli mamy co najmniej bartekTarget kandydatów Bartka, dokładnie tyle rezerwujemy.
+    // v22: finalny skład jest warstwowy. Rdzeń Bartka ma pierwszeństwo,
+    // a pozostałe profile mogą wykorzystać wyłącznie miejsca, które po nim zostały.
     const chosenBartek = shuffle(bartekTracks).slice(0, Math.min(bartekTarget, bartekTracks.length));
     const remainingSlots = Math.max(0, total - chosenBartek.length);
     const chosenOutside = shuffle(outsideTracks).slice(0, remainingSlots);
     let finalTracks = [...chosenBartek, ...chosenOutside];
 
-    // Jeśli poza rdzeniem nadal brakuje miejsc, można je uzupełnić nadwyżką Bartka.
-    // Dzięki temu nie obniżamy 75%, ale też nie kończymy krótszą playlistą bez potrzeby.
     if (finalTracks.length < total) {
       const chosenIds = new Set(finalTracks.map(track => track.id));
       const extraBartek = shuffle(bartekTracks)
@@ -2599,9 +2623,8 @@ async function generateOfficePlaylist() {
     }
 
     finalTracks = shuffle(finalTracks).slice(0, total);
-    const finalIds = new Set(finalTracks.map(track => track.id));
-    const actualBartekCore = chosenBartek.filter(track => finalIds.has(track.id)).length +
-      Math.max(0, finalTracks.length - chosenBartek.length - chosenOutside.length);
+    const chosenBartekIds = new Set(chosenBartek.map(track => track.id));
+    const actualBartekCore = finalTracks.filter(track => chosenBartekIds.has(track.id)).length;
 
     progressBox.textContent =
       `Tworzę playlistę i zapisuję ${finalTracks.length} utworów...`;
