@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v10</title>
+  <title>Office Music Mixer v11</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -254,7 +254,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v10</span></h1>
+        <h1>Office Music Mixer <span class="version">v11</span></h1>
       </div>
       <p class="connection-subtitle">Wspólna playlista dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -382,6 +382,15 @@ const categoryQueries = {
   pop: ["genre:pop", "genre:\"pop rock\""],
   metal: ["genre:metal", "genre:\"hard rock\""],
   punk: ["genre:punk", "genre:\"punk rock\""],
+  grunge: ["genre:grunge"],
+  poetic: []
+};
+
+const commonCategoryQueries = {
+  rock: ['genre:"classic rock"', 'genre:"alternative rock"', 'genre:"pop rock"'],
+  pop: ["genre:pop", 'genre:"pop rock"'],
+  metal: ["genre:metal"],
+  punk: ['genre:"punk rock"'],
   grunge: ["genre:grunge"],
   poetic: []
 };
@@ -778,6 +787,7 @@ async function syncSpotifyRecentHistory(token) {
       trackName: item.track.name || "",
       artistIds: (item.track.artists || []).map(artist => artist.id).filter(Boolean),
       artistNames: (item.track.artists || []).map(artist => artist.name).filter(Boolean),
+      trackSignature: trackSignature(item.track),
       playedAt: item.played_at,
       source: "spotify"
     }));
@@ -793,6 +803,7 @@ function recordGeneratedTracks(tracks) {
     trackName: track.name || "",
     artistIds: (track.artists || []).map(artist => artist.id).filter(Boolean),
     artistNames: (track.artists || []).map(artist => artist.name).filter(Boolean),
+    trackSignature: trackSignature(track),
     generatedAt,
     source: "generated"
   }));
@@ -807,13 +818,18 @@ function buildHistoryBlocklists() {
   const artistCutoff = now - Number(artistCooldownHours.value) * 60 * 60 * 1000;
 
   const blockedTracks = new Set();
+  const blockedTrackSignatures = new Set();
   const blockedArtists = new Set();
 
   for (const item of history) {
     const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
     if (!Number.isFinite(time)) continue;
 
-    if (time >= trackCutoff) blockedTracks.add(item.trackId);
+    if (time >= trackCutoff) {
+      blockedTracks.add(item.trackId);
+      const signature = item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames);
+      if (signature) blockedTrackSignatures.add(signature);
+    }
 
     if (time >= artistCutoff) {
       for (const artistId of item.artistIds || []) {
@@ -822,7 +838,7 @@ function buildHistoryBlocklists() {
     }
   }
 
-  return { blockedTracks, blockedArtists };
+  return { blockedTracks, blockedTrackSignatures, blockedArtists };
 }
 
 function renderHistorySummary() {
@@ -992,6 +1008,32 @@ function normalizeArtistName(name) {
   return (name || "").trim().toLocaleLowerCase("pl-PL");
 }
 
+function normalizeForSignature(value) {
+  return (value || "")
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLocaleLowerCase("pl-PL")
+    .replace(/\b(feat(?:uring)?|ft)\.?\s+.*$/i, "")
+    .replace(/\s*[\[(](?:remaster(?:ed)?|live|edit|mix|version|acoustic|slowed|reverb|instrumental|reimagined|orchestra|variation(?:s)?)[^\])]*[\])]/gi, "")
+    .replace(/\s+-\s+(?:remaster(?:ed)?|live|edit|mix|version|acoustic|slowed|reverb|instrumental|reimagined|orchestra|variation(?:s)?).*$/i, "")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function trackSignatureFromParts(trackName, artistNames = []) {
+  const primaryArtist = normalizeForSignature(artistNames[0] || "");
+  const title = normalizeForSignature(trackName || "");
+  return primaryArtist && title ? `${primaryArtist}|${title}` : "";
+}
+
+function trackSignature(track) {
+  return trackSignatureFromParts(
+    track?.name || "",
+    (track?.artists || []).map(artist => artist?.name || "")
+  );
+}
+
 function selectedBlockedArtistNames(selected) {
   return new Set(
     selected
@@ -1030,8 +1072,9 @@ async function collectFromQueries(
   queries,
   wanted,
   usedTracks,
-  usedArtists,
+  usedArtistCounts,
   blockedTracks,
+  blockedTrackSignatures,
   blockedArtists,
   blockedArtistNames,
   options = {}
@@ -1039,7 +1082,7 @@ async function collectFromQueries(
   const result = [];
   if (!queries.length || wanted <= 0) return result;
 
-  const { allowArtistRepeat = false, ignoreArtistCooldown = false } = options;
+  const { maxArtistPerPlaylist = 1 } = options;
   const uniqueQueries = [...new Set(queries)];
   const shuffledQueries = shuffle(uniqueQueries);
   const discovery = Number(discoveryLevel.value);
@@ -1069,13 +1112,17 @@ async function collectFromQueries(
       const trackArtistNames = (track.artists || []).map(a => normalizeArtistName(a.name));
       if (trackArtistNames.some(name => blockedArtistNames.has(name))) continue;
 
+      const signature = trackSignature(track);
       if (usedTracks.has(track.id)) continue;
       if (blockedTracks.has(track.id)) continue;
-      if (!allowArtistRepeat && primaryArtistId && usedArtists.has(primaryArtistId)) continue;
-      if (!ignoreArtistCooldown && primaryArtistId && blockedArtists.has(primaryArtistId)) continue;
+      if (signature && blockedTrackSignatures.has(signature)) continue;
+      if (primaryArtistId && blockedArtists.has(primaryArtistId)) continue;
+      if (primaryArtistId && (usedArtistCounts.get(primaryArtistId) || 0) >= maxArtistPerPlaylist) continue;
 
       usedTracks.add(track.id);
-      if (primaryArtistId) usedArtists.add(primaryArtistId);
+      if (primaryArtistId) {
+        usedArtistCounts.set(primaryArtistId, (usedArtistCounts.get(primaryArtistId) || 0) + 1);
+      }
       result.push(track);
       addedThisSearch++;
 
@@ -1106,7 +1153,7 @@ function exactCommonGenreQueries(selected) {
 
 function queriesForCommon(selected) {
   const categories = commonCategories(selected);
-  const categoryBased = categories.flatMap(category => categoryQueries[category] || []);
+  const categoryBased = categories.flatMap(category => commonCategoryQueries[category] || []);
   const exactGenres = exactCommonGenreQueries(selected);
 
   const artistVotes = new Map();
@@ -1218,7 +1265,7 @@ async function generateOfficePlaylist() {
     progressBox.textContent = "Synchronizuję ostatnio odtwarzane utwory ze Spotify...";
     await syncSpotifyRecentHistory(token);
 
-    const { blockedTracks, blockedArtists } = buildHistoryBlocklists();
+    const { blockedTracks, blockedTrackSignatures, blockedArtists } = buildHistoryBlocklists();
     const blockedArtistNames = selectedBlockedArtistNames(selected);
 
     const total = Number(playlistLength.value);
@@ -1227,7 +1274,7 @@ async function generateOfficePlaylist() {
     const individualTarget = total - commonTarget;
 
     const usedTracks = new Set();
-    const usedArtists = new Set();
+    const usedArtistCounts = new Map();
     const tracks = [];
 
     if (commonTarget > 0) {
@@ -1239,8 +1286,9 @@ async function generateOfficePlaylist() {
         queriesForCommon(mixProfiles),
         commonTarget,
         usedTracks,
-        usedArtists,
+        usedArtistCounts,
         blockedTracks,
+        blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames
       );
@@ -1261,8 +1309,9 @@ async function generateOfficePlaylist() {
         queriesForProfile(profile),
         wanted,
         usedTracks,
-        usedArtists,
+        usedArtistCounts,
         blockedTracks,
+        blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames
       );
@@ -1283,8 +1332,9 @@ async function generateOfficePlaylist() {
         fallbackQueries,
         total - tracks.length,
         usedTracks,
-        usedArtists,
+        usedArtistCounts,
         blockedTracks,
+        blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames
       );
@@ -1293,7 +1343,7 @@ async function generateOfficePlaylist() {
 
     if (tracks.length < total) {
       progressBox.textContent =
-        `Mam ${tracks.length}/${total}. Ostatnie miejsca uzupełniam z łagodniejszym limitem wykonawców...`;
+        `Mam ${tracks.length}/${total}. Ostatnie miejsca uzupełniam, dopuszczając maksymalnie drugi utwór tego samego wykonawcy...`;
 
       const relaxedQueries = [
         ...queriesForCommon(mixProfiles),
@@ -1305,11 +1355,12 @@ async function generateOfficePlaylist() {
         relaxedQueries,
         total - tracks.length,
         usedTracks,
-        usedArtists,
+        usedArtistCounts,
         blockedTracks,
+        blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-        { allowArtistRepeat: true, ignoreArtistCooldown: true }
+        { maxArtistPerPlaylist: 2 }
       );
       tracks.push(...relaxedFiller);
     }
@@ -1372,7 +1423,9 @@ function renderPlaylistResult(playlist, tracks, selected, commonTarget, ignoredP
     model.textContent =
       `Cel wspólnej części: ok. ${commonTarget} utworów. Reszta to indywidualne wtrącenia. ` +
       `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. ` +
-      `Odkrycia: ${discoveryLevel.value}%. Wyszukiwania są buforowane przez 24 h i wysyłane z ograniczoną częstotliwością.`;
+      `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany także po wykonawcy + tytule; ` +
+      `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
+      `Wyszukiwania są buforowane przez 24 h i wysyłane z ograniczoną częstotliwością.`;
     playlistResult.append(summary, model);
 
     if (ignoredProfiles.length) {
