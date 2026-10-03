@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v18</title>
+  <title>Office Music Mixer v19</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -278,6 +278,12 @@
       color: #fff;
       border-color: transparent;
     }
+    .vote-btn.active-block {
+      background: #7a1f1f;
+      color: #fff;
+      border-color: transparent;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
+    }
 
     .rmf-panel {
       margin-top: 16px;
@@ -353,7 +359,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v18</span></h1>
+        <h1>Office Music Mixer <span class="version">v19</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -488,7 +494,9 @@
     <div class="feedback-toolbar">
       <span id="feedbackSummary" class="feedback-summary"></span>
       <button id="clearFeedbackButton" type="button" class="secondary">Wyczyść oceny</button>
+      <button id="clearBlockedFeedbackButton" type="button" class="secondary">Wyczyść blokady wykonawców</button>
     </div>
+    <div class="small">👍 premiuje utwór i wykonawcę, 👎 mocno obniża ich ranking, a 🚫 blokuje głównego wykonawcę w kolejnych playlistach.</div>
   </div>
 
 <script>
@@ -570,6 +578,7 @@ const lastFmStatus = document.getElementById("lastFmStatus");
 
 const feedbackSummary = document.getElementById("feedbackSummary");
 const clearFeedbackButton = document.getElementById("clearFeedbackButton");
+const clearBlockedFeedbackButton = document.getElementById("clearBlockedFeedbackButton");
 const rmfEnabled = document.getElementById("rmfEnabled");
 const rmfSlotInputs = [...document.querySelectorAll(".rmf-slot")];
 const rmfCheckButton = document.getElementById("rmfCheckButton");
@@ -583,6 +592,7 @@ generateButton.addEventListener("click", generateOfficePlaylist);
 clearHistoryButton.addEventListener("click", clearAppHistory);
 
 clearFeedbackButton.addEventListener("click", clearFeedback);
+clearBlockedFeedbackButton.addEventListener("click", clearFeedbackArtistBlocks);
 rmfEnabled.addEventListener("change", () => { saveRmfSettings(); updateRmfStatus(); });
 for (const input of rmfSlotInputs) input.addEventListener("change", saveRmfSettings);
 rmfCheckButton.addEventListener("click", () => manualRmfCheck(false));
@@ -628,6 +638,7 @@ const HISTORY_KEY = "office_music_history_v1";
 const HISTORY_MAX_AGE_DAYS = 90;
 
 const FEEDBACK_KEY = "office_music_feedback_v1";
+const FEEDBACK_BLOCKED_ARTISTS_KEY = "office_music_feedback_blocked_artists_v1";
 const RMF_SHOW_ID = "2BeZqsvzZUSldlZWvjeGe3";
 const RMF_SETTINGS_KEY = "office_rmf_settings_v1";
 const RMF_QUEUED_KEY = "office_rmf_queued_v1";
@@ -652,14 +663,44 @@ function saveFeedback(data) {
   renderFeedbackSummary();
 }
 
-function feedbackArtistTotals(data = loadFeedback()) {
-  const totals = new Map();
+function loadFeedbackBlockedArtists() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FEEDBACK_BLOCKED_ARTISTS_KEY) || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveFeedbackBlockedArtists(data) {
+  localStorage.setItem(FEEDBACK_BLOCKED_ARTISTS_KEY, JSON.stringify(data));
+  renderFeedbackSummary();
+}
+
+function feedbackBlockedArtistNames() {
+  return new Set(Object.keys(loadFeedbackBlockedArtists()));
+}
+
+function feedbackArtistStats(data = loadFeedback()) {
+  const stats = new Map();
   for (const entry of Object.values(data)) {
     const value = Number(entry?.value || 0);
     if (!value) continue;
     for (const key of entry?.artists || []) {
-      totals.set(key, (totals.get(key) || 0) + value);
+      if (!stats.has(key)) stats.set(key, { ups: 0, downs: 0, balance: 0 });
+      const row = stats.get(key);
+      if (value > 0) row.ups += 1;
+      if (value < 0) row.downs += 1;
+      row.balance += value;
     }
+  }
+  return stats;
+}
+
+function feedbackArtistTotals(data = loadFeedback()) {
+  const totals = new Map();
+  for (const [key, row] of feedbackArtistStats(data)) {
+    totals.set(key, row.balance);
   }
   return totals;
 }
@@ -668,13 +709,25 @@ function feedbackScore(track) {
   const data = loadFeedback();
   const signature = trackSignature(track);
   const trackValue = Number(data[signature]?.value || 0);
-  let score = trackValue > 0 ? 30 : trackValue < 0 ? -80 : 0;
-  const artistTotals = feedbackArtistTotals(data);
+
+  // Łapka w dół ma być wyraźnym sygnałem: pojedynczy utwór spada bardzo mocno.
+  let score = trackValue > 0 ? 38 : trackValue < 0 ? -150 : 0;
+  const artistStats = feedbackArtistStats(data);
+  const hardBlocked = feedbackBlockedArtistNames();
+
   for (const artist of track?.artists || []) {
     const key = normalizeArtistName(artist?.name || "");
-    const artistValue = artistTotals.get(key) || 0;
-    if (artistValue > 0) score += Math.min(24, artistValue * 8);
-    if (artistValue < 0) score += Math.max(-45, artistValue * 15);
+    if (!key) continue;
+    if (hardBlocked.has(key)) return -100000;
+
+    const row = artistStats.get(key) || { ups: 0, downs: 0, balance: 0 };
+    if (row.balance > 0) score += Math.min(32, row.balance * 8);
+    if (row.balance < 0) score += Math.max(-90, row.balance * 24);
+
+    // Dwie lub więcej różnych łapek w dół bez żadnej łapki w górę oznaczają,
+    // że wykonawca prawdopodobnie jest nietrafiony. Nie blokujemy go automatycznie,
+    // ale mocno spychamy w dół rankingu.
+    if (row.downs >= 2 && row.ups === 0) score -= 70 + (row.downs - 2) * 20;
   }
   return score;
 }
@@ -697,21 +750,47 @@ function setTrackFeedback(track, value) {
   saveFeedback(data);
 }
 
+function togglePrimaryArtistBlock(track) {
+  const primary = track?.artists?.[0];
+  const key = normalizeArtistName(primary?.name || "");
+  if (!key) return false;
+  const data = loadFeedbackBlockedArtists();
+  if (data[key]) {
+    delete data[key];
+  } else {
+    data[key] = {
+      name: primary.name || key,
+      blockedAt: new Date().toISOString(),
+      source: "playlist_feedback"
+    };
+  }
+  saveFeedbackBlockedArtists(data);
+  return Boolean(data[key]);
+}
+
 function renderFeedbackSummary() {
   if (!feedbackSummary) return;
   const entries = Object.values(loadFeedback());
   const ups = entries.filter(x => Number(x?.value) > 0).length;
   const downs = entries.filter(x => Number(x?.value) < 0).length;
-  feedbackSummary.textContent = `Preferencje z feedbacku: ${ups} 👍 / ${downs} 👎`;
+  const blocked = Object.keys(loadFeedbackBlockedArtists()).length;
+  feedbackSummary.textContent = `Preferencje z feedbacku: ${ups} 👍 / ${downs} 👎 / ${blocked} 🚫 wykonawców`;
 }
 
 function clearFeedback() {
-  if (!confirm("Wyczyścić wszystkie lokalne oceny utworów?")) return;
+  if (!confirm("Wyczyścić wszystkie lokalne oceny utworów? Blokady wykonawców zostaną zachowane.")) return;
   localStorage.removeItem(FEEDBACK_KEY);
   renderFeedbackSummary();
   document.querySelectorAll(".vote-btn").forEach(btn => {
     btn.classList.remove("active-up", "active-down");
   });
+}
+
+function clearFeedbackArtistBlocks() {
+  if (!confirm("Wyczyścić wszystkie blokady wykonawców dodane przyciskiem 🚫?")) return;
+  localStorage.removeItem(FEEDBACK_BLOCKED_ARTISTS_KEY);
+  renderFeedbackSummary();
+  document.querySelectorAll(".vote-btn").forEach(btn => btn.classList.remove("active-block"));
 }
 
 function loadRmfSettings() {
@@ -801,7 +880,7 @@ async function addEpisodeToQueue(token, episode) {
     `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(episode.uri)}`,
     { method: "POST", headers: { Authorization: `Bearer ${token}` } }
   );
-  if (response.status === 204) return;
+  if (response.ok) return;
   if (response.status === 404 || response.status === 403) {
     throw new Error("Nie udało się dodać Faktów do kolejki. Uruchom odtwarzanie na aktywnym urządzeniu Spotify i spróbuj ponownie.");
   }
@@ -2289,7 +2368,8 @@ async function generateOfficePlaylist() {
     } = buildHistoryBlocklists();
     const blockedArtistNames = new Set([
       ...selectedBlockedArtistNames(selected),
-      ...blockedArtistNamesFromHistory
+      ...blockedArtistNamesFromHistory,
+      ...feedbackBlockedArtistNames()
     ]);
 
     const total = Number(playlistLength.value);
@@ -2492,7 +2572,8 @@ function renderPlaylistResult(
     `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany także po wykonawcy + tytule; ` +
     `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
-    `Last.fm z ostatnich 14 dni jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists.`;
+    `Last.fm z ostatnich 14 dni jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists. ` +
+    `Feedback 👍/👎 wpływa lokalnie na ranking, a wykonawcy zablokowani przyciskiem 🚫 są całkowicie pomijani.`;
 
   playlistResult.append(summary, model);
 
@@ -2533,17 +2614,28 @@ function renderPlaylistResult(
     down.type = "button";
     down.className = `vote-btn${current < 0 ? " active-down" : ""}`;
     down.textContent = "👎";
-    down.title = "Nie podoba mi się. Mocno obniża ten utwór i umiarkowanie wykonawcę.";
+    down.title = "Nie podoba mi się. Bardzo mocno obniża ten utwór i obniża wykonawcę.";
+
+    const block = document.createElement("button");
+    block.type = "button";
+    block.textContent = "🚫";
+    const primaryArtistName = track?.artists?.[0]?.name || "wykonawca";
+    block.title = `Zablokuj/odblokuj głównego wykonawcę: ${primaryArtistName}`;
 
     const refreshButtons = () => {
       const value = Number(loadFeedback()[signature]?.value || 0);
       up.classList.toggle("active-up", value > 0);
       down.classList.toggle("active-down", value < 0);
+      const primaryKey = normalizeArtistName(track?.artists?.[0]?.name || "");
+      const blocked = Boolean(loadFeedbackBlockedArtists()[primaryKey]);
+      block.className = `vote-btn${blocked ? " active-block" : ""}`;
     };
     up.addEventListener("click", () => { setTrackFeedback(track, 1); refreshButtons(); });
     down.addEventListener("click", () => { setTrackFeedback(track, -1); refreshButtons(); });
+    block.addEventListener("click", () => { togglePrimaryArtistBlock(track); refreshButtons(); });
+    refreshButtons();
 
-    votes.append(up, down);
+    votes.append(up, down, block);
     row.append(label, votes);
     li.appendChild(row);
     list.appendChild(li);
