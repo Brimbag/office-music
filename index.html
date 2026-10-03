@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v23</title>
+  <title>Office Music Mixer v24</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -365,7 +365,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v23</span></h1>
+        <h1>Office Music Mixer <span class="version">v24</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -480,6 +480,7 @@
       </div>
       <div class="rmf-slots">
         <span class="small">Godziny:</span>
+        <label><input class="rmf-slot" type="checkbox" value="9" checked> 09:00</label>
         <label><input class="rmf-slot" type="checkbox" value="10" checked> 10:00</label>
         <label><input class="rmf-slot" type="checkbox" value="12" checked> 12:00</label>
         <label><input class="rmf-slot" type="checkbox" value="14" checked> 14:00</label>
@@ -657,7 +658,8 @@ const FEEDBACK_KEY = "office_music_feedback_v1";
 const FEEDBACK_BLOCKED_ARTISTS_KEY = "office_music_feedback_blocked_artists_v1";
 const SEED_ARTIST_ROTATION_KEY = "office_seed_artist_rotation_v1";
 const RMF_SHOW_ID = "2BeZqsvzZUSldlZWvjeGe3";
-const RMF_SETTINGS_KEY = "office_rmf_settings_v1";
+const RMF_SETTINGS_KEY = "office_rmf_settings_v2";
+const RMF_SETTINGS_LEGACY_KEY = "office_rmf_settings_v1";
 const RMF_QUEUED_KEY = "office_rmf_queued_v1";
 const RMF_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const RMF_WINDOW_MINUTES = 55;
@@ -914,12 +916,19 @@ function clearFeedbackArtistBlocks() {
 
 function loadRmfSettings() {
   try {
-    const data = JSON.parse(localStorage.getItem(RMF_SETTINGS_KEY) || "{}");
+    const currentRaw = localStorage.getItem(RMF_SETTINGS_KEY);
+    const legacyRaw = localStorage.getItem(RMF_SETTINGS_LEGACY_KEY);
+    const data = JSON.parse(currentRaw || legacyRaw || "{}");
     rmfEnabled.checked = data.enabled !== false;
-    const slots = Array.isArray(data.slots) ? data.slots.map(Number) : [10, 12, 14, 16];
+    let slots = Array.isArray(data.slots) ? data.slots.map(Number) : [9, 10, 12, 14, 16];
+    // v24: przy migracji starych ustawień dokładamy nowe wydanie 09:00,
+    // ale późniejsze ręczne odznaczenie 09:00 jest już respektowane przez klucz v2.
+    if (!currentRaw && legacyRaw && !slots.includes(9)) slots = [9, ...slots];
     for (const input of rmfSlotInputs) input.checked = slots.includes(Number(input.value));
+    if (!currentRaw) saveRmfSettings();
   } catch {
     rmfEnabled.checked = true;
+    for (const input of rmfSlotInputs) input.checked = [9, 10, 12, 14, 16].includes(Number(input.value));
   }
 }
 
@@ -2159,7 +2168,13 @@ async function searchTracks(token, query, offset = 0) {
 }
 
 function normalizeArtistName(name) {
-  return (name || "").trim().toLocaleLowerCase("pl-PL");
+  return (name || "")
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLocaleLowerCase("pl-PL")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeForSignature(value) {
@@ -2560,7 +2575,7 @@ async function generateOfficePlaylist() {
     progressBox.textContent = "Synchronizuję historię odtworzeń (Last.fm jako źródło główne, Spotify jako fallback)...";
     await syncSpotifyRecentHistory(token);
 
-    // v23: maksymalnie 2 z 6 nowych wyszukiwań rezerwujemy na ręcznie wpisanych
+    // v24: maksymalnie 2 z 6 nowych wyszukiwań rezerwujemy na ręcznie wpisanych
     // artystów wzorcowych. Najwyższy priorytet ma Bartek, a w ramach profilu
     // wykonawcy dawno niewylosowani lub nigdy niewylosowani.
     progressBox.textContent = "Odświeżam pulę artystów wzorcowych...";
@@ -2588,7 +2603,7 @@ async function generateOfficePlaylist() {
     const bartekTracks = [];
     const outsideTracks = [];
 
-    // v23: najpierw naprawdę rezerwujemy rdzeń Bartka. Dopiero po zakończeniu
+    // v24: najpierw naprawdę rezerwujemy rdzeń Bartka. Dopiero po zakończeniu
     // wszystkich prób jego uzupełnienia wpuszczamy pozostałe profile.
     progressBox.textContent =
       `Buduję rdzeń Bartka (${bartekTarget}/${total} utworów)...`;
@@ -2741,7 +2756,7 @@ async function generateOfficePlaylist() {
       throw new Error("Spotify nie zwrócił żadnych utworów dla wybranych profili.");
     }
 
-    // v23: finalny skład jest warstwowy. Rdzeń Bartka ma pierwszeństwo,
+    // v24: finalny skład jest warstwowy. Rdzeń Bartka ma pierwszeństwo,
     // a pozostałe profile mogą wykorzystać wyłącznie miejsca, które po nim zostały.
     const chosenBartek = shuffle(bartekTracks).slice(0, Math.min(bartekTarget, bartekTracks.length));
     const remainingSlots = Math.max(0, total - chosenBartek.length);
@@ -2793,6 +2808,25 @@ async function generateOfficePlaylist() {
   }
 }
 
+function seedArtistDiagnosticText(selectedProfilesList, tracks) {
+  const rows = [];
+  const seen = new Set();
+  for (const profile of selectedProfilesList || []) {
+    for (const artist of profile.artists || []) {
+      const key = normalizeArtistName(artist);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const query = `artist:"${artist}"`;
+      const poolCount = candidatePoolForQueries([query]).length;
+      const selectedCount = (tracks || []).filter(track =>
+        (track.artists || []).some(a => normalizeArtistName(a?.name || "") === key)
+      ).length;
+      rows.push(`${artist}: pula ${poolCount}, wynik ${selectedCount ? `tak (${selectedCount})` : "nie"}`);
+    }
+  }
+  return rows.join(" · ");
+}
+
 function renderPlaylistResult(
   playlist,
   tracks,
@@ -2827,6 +2861,14 @@ function renderPlaylistResult(
     `Feedback 👍/👎 silnie wpływa lokalnie na ranking: 👎 konkretnego utworu całkowicie go wyklucza, a 🚫 blokuje wykonawcę. Ręcznie wpisani artyści wzorcowi mają premię rankingową i do 2 z 6 nowych wyszukiwań Spotify jest rezerwowanych na ich pulę; dawno niewylosowani dostają dodatkowy priorytet. Zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
 
   playlistResult.append(summary, model);
+
+  const seedDiagText = seedArtistDiagnosticText(selected, tracks);
+  if (seedDiagText) {
+    const seedDiag = document.createElement("p");
+    seedDiag.className = "small";
+    seedDiag.textContent = `Diagnostyka artystów wzorcowych: ${seedDiagText}`;
+    playlistResult.append(seedDiag);
+  }
 
   if (ignoredProfiles.length) {
     const warning = document.createElement("p");
