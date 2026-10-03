@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v19</title>
+  <title>Office Music Mixer v20</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -174,7 +174,7 @@
     }
     .settings-row {
       display: grid;
-      grid-template-columns: repeat(4, minmax(145px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
       gap: 12px;
       align-items: end;
     }
@@ -255,6 +255,12 @@
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 10px;
       align-items: center;
+    }
+    .track-meta {
+      display: block;
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--muted);
     }
     .track-votes {
       display: inline-flex;
@@ -359,7 +365,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v19</span></h1>
+        <h1>Office Music Mixer <span class="version">v20</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -431,6 +437,15 @@
           <input id="discoveryLevel" type="range" min="0" max="100" value="30" step="10">
           <span id="discoveryLabel">30% odkryć</span>
         </label>
+
+        <label>
+          Minimalna rozpoznawalność
+          <select id="recognizabilityLevel">
+            <option value="low">Niska</option>
+            <option value="medium" selected>Średnia</option>
+            <option value="high">Wysoka</option>
+          </select>
+        </label>
       </div>
 
       <div class="settings-checks">
@@ -449,7 +464,7 @@
     <p class="small">
       Bartek jest głównym profilem i zawsze bierze udział w miksie. Około 75% playlisty ma pasować do jego gatunków, a pozostałe 25% może wychodzić poza nie i reprezentować gusta pozostałych obecnych osób.
       Artyści wzorcowi mają większą wagę niż same gatunki, a wykonawca zablokowany przez dowolną obecną osobę nie trafi na playlistę.
-      Gatunki są edytowalne, więc profil może zmieniać się razem z gustem, także po ekspedycji po szamański śpiew gardłowy.
+      Gatunki są edytowalne, więc profil może zmieniać się razem z gustem, także po ekspedycji po szamański śpiew gardłowy. Filtr rozpoznawalności ogranicza kandydatów słabo potwierdzonych w lokalnej bazie Last.fm.
       Last.fm dostarcza wykonawców i konkretne utwory dla gatunków oraz jest głównym źródłem faktycznie odtwarzanej historii. Spotify służy głównie do dopasowania URI, tworzenia playlist i jako fallback historii. Do blokad anty-powtórkowych używamy scrobbli Last.fm z ostatnich 14 dni.
     </p>
 
@@ -496,7 +511,7 @@
       <button id="clearFeedbackButton" type="button" class="secondary">Wyczyść oceny</button>
       <button id="clearBlockedFeedbackButton" type="button" class="secondary">Wyczyść blokady wykonawców</button>
     </div>
-    <div class="small">👍 premiuje utwór i wykonawcę, 👎 mocno obniża ich ranking, a 🚫 blokuje głównego wykonawcę w kolejnych playlistach.</div>
+    <div class="small">👍 premiuje utwór i wykonawcę, 👎 mocno obniża ich ranking, 🚫 blokuje głównego wykonawcę, a ▶ YT otwiera małe okno wyszukiwania YouTube. Samo pojawienie się utworu na wcześniejszej wygenerowanej playliście nie wpływa na kolejne losowanie.</div>
   </div>
 
 <script>
@@ -564,6 +579,7 @@ const trackBlockDays = document.getElementById("trackBlockDays");
 const artistCooldownHours = document.getElementById("artistCooldownHours");
 const discoveryLevel = document.getElementById("discoveryLevel");
 const discoveryLabel = document.getElementById("discoveryLabel");
+const recognizabilityLevel = document.getElementById("recognizabilityLevel");
 const avoidNonLatin = document.getElementById("avoidNonLatin");
 const avoidRemixes = document.getElementById("avoidRemixes");
 const generateButton = document.getElementById("generateButton");
@@ -710,8 +726,8 @@ function feedbackScore(track) {
   const signature = trackSignature(track);
   const trackValue = Number(data[signature]?.value || 0);
 
-  // Łapka w dół ma być wyraźnym sygnałem: pojedynczy utwór spada bardzo mocno.
-  let score = trackValue > 0 ? 38 : trackValue < 0 ? -150 : 0;
+  // Feedback jest celowo silny: ma z czasem korygować katalogowe rekomendacje.
+  let score = trackValue > 0 ? 90 : trackValue < 0 ? -320 : 0;
   const artistStats = feedbackArtistStats(data);
   const hardBlocked = feedbackBlockedArtistNames();
 
@@ -721,13 +737,11 @@ function feedbackScore(track) {
     if (hardBlocked.has(key)) return -100000;
 
     const row = artistStats.get(key) || { ups: 0, downs: 0, balance: 0 };
-    if (row.balance > 0) score += Math.min(32, row.balance * 8);
-    if (row.balance < 0) score += Math.max(-90, row.balance * 24);
+    if (row.balance > 0) score += Math.min(90, row.balance * 18);
+    if (row.balance < 0) score += Math.max(-220, row.balance * 55);
 
-    // Dwie lub więcej różnych łapek w dół bez żadnej łapki w górę oznaczają,
-    // że wykonawca prawdopodobnie jest nietrafiony. Nie blokujemy go automatycznie,
-    // ale mocno spychamy w dół rankingu.
-    if (row.downs >= 2 && row.ups === 0) score -= 70 + (row.downs - 2) * 20;
+    if (row.downs >= 2 && row.ups === 0) score -= 140 + (row.downs - 2) * 45;
+    if (row.ups >= 2 && row.downs === 0) score += 30 + (row.ups - 2) * 12;
   }
   return score;
 }
@@ -1704,41 +1718,28 @@ function buildHistoryBlocklists() {
   const history = loadHistory();
   const now = Date.now();
   const trackCutoff = now - Number(trackBlockDays.value) * 24 * 60 * 60 * 1000;
-  const generatedSoftCutoff = now - 24 * 60 * 60 * 1000;
   const artistCutoff = now - Number(artistCooldownHours.value) * 60 * 60 * 1000;
 
   const blockedTracks = new Set();
   const blockedTrackSignatures = new Set();
   const blockedArtists = new Set();
   const blockedArtistNamesFromHistory = new Set();
-  const recentGeneratedSignatures = new Set();
 
   for (const item of history) {
     const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
     if (!Number.isFinite(time)) continue;
 
     const playedSource = item.source === "spotify" || item.source === "lastfm";
-    const generatedSource = item.source === "generated";
     const signature = item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames);
 
-    // Twarda blokada 14 dni dotyczy tylko utworów faktycznie odtworzonych.
+    // Do blokad liczą się wyłącznie faktyczne odsłuchania.
     if (playedSource && time >= trackCutoff) {
       if (item.trackId) blockedTracks.add(item.trackId);
       if (signature) blockedTrackSignatures.add(signature);
     }
 
-    // Utwory tylko wygenerowane przez aplikację nie są blokowane. Przez 24 h dostają
-    // jedynie niższy priorytet, dzięki czemu nie zjadają całej puli podczas testów.
-    if (generatedSource && time >= generatedSoftCutoff && signature) {
-      recentGeneratedSignatures.add(signature);
-    }
-
-    // Last.fm jest głównym źródłem faktycznych odsłuchań, Spotify pozostaje fallbackiem.
-    // Wygenerowanie utworu do playlisty nie uruchamia cooldownu wykonawcy.
     if (playedSource && time >= artistCutoff) {
-      for (const artistId of item.artistIds || []) {
-        blockedArtists.add(artistId);
-      }
+      for (const artistId of item.artistIds || []) blockedArtists.add(artistId);
       for (const artistName of item.artistNames || []) {
         const key = normalizeArtistName(artistName);
         if (key) blockedArtistNamesFromHistory.add(key);
@@ -1746,7 +1747,7 @@ function buildHistoryBlocklists() {
     }
   }
 
-  return { blockedTracks, blockedTrackSignatures, blockedArtists, blockedArtistNamesFromHistory, recentGeneratedSignatures };
+  return { blockedTracks, blockedTrackSignatures, blockedArtists, blockedArtistNamesFromHistory };
 }
 
 function renderHistorySummary() {
@@ -2088,6 +2089,61 @@ function looksLikeUnwantedVariant(track) {
   return false;
 }
 
+function lastFmEvidenceForTrack(track) {
+  const signature = trackSignature(track);
+  const exact = loadLastFmTrackPool().find(item =>
+    trackSignatureFromParts(item.track, [item.artist]) === signature
+  );
+
+  const artistPool = loadLastFmArtistPool();
+  const artistRows = (track?.artists || []).map(a => {
+    const key = normalizeArtistName(a?.name || "");
+    return artistPool.find(item => normalizeArtistName(item.artist) === key) || null;
+  }).filter(Boolean);
+
+  const maxTags = artistRows.reduce((m, row) => Math.max(m, (row.tags || []).length), 0);
+  const recentCount = artistRows.reduce((m, row) => Math.max(m, Number(row.recentCount || 0)), 0);
+  const sources = new Set(artistRows.flatMap(row => row.sources || []));
+  const positiveFeedback = Number(loadFeedback()[signature]?.value || 0) > 0;
+
+  return { exact: Boolean(exact), maxTags, recentCount, sourceCount: sources.size, positiveFeedback };
+}
+
+function recognizabilityPass(track) {
+  const level = recognizabilityLevel?.value || "medium";
+  if (level === "low") return true;
+  const e = lastFmEvidenceForTrack(track);
+  if (e.positiveFeedback) return true;
+  if (level === "medium") return e.exact || e.maxTags >= 1 || e.recentCount > 0 || e.sourceCount >= 1;
+  return e.exact || e.recentCount > 0 || e.maxTags >= 2 || e.sourceCount >= 2;
+}
+
+function recognizabilityScore(track) {
+  const e = lastFmEvidenceForTrack(track);
+  let score = 0;
+  if (e.exact) score += 28;
+  score += Math.min(18, e.maxTags * 5);
+  if (e.recentCount > 0) score += 20;
+  if (e.sourceCount >= 2) score += 8;
+  if (e.positiveFeedback) score += 30;
+  return score;
+}
+
+function trackDiagnostic(track) {
+  const poolItem = loadCandidatePool().find(item => item?.track?.id === track?.id);
+  const queries = (poolItem?.queries || []).slice(0, 3);
+  const lf = lastFmEvidenceForTrack(track);
+  const fb = feedbackScore(track);
+  const sourceBits = [];
+  if (queries.length) sourceBits.push(`Spotify: ${queries.join(" | ")}`);
+  if (lf.exact) sourceBits.push("Last.fm: utwór w bazie");
+  else if (lf.maxTags || lf.sourceCount) sourceBits.push("Last.fm: wykonawca w bazie");
+  if (lf.recentCount) sourceBits.push("Last.fm: świeży odsłuch");
+  if (fb > 0) sourceBits.push(`feedback +${Math.round(fb)}`);
+  if (fb < 0) sourceBits.push(`feedback ${Math.round(fb)}`);
+  return sourceBits.length ? sourceBits.join(" · ") : "źródło: lokalna pula Spotify";
+}
+
 async function collectFromQueries(
   token,
   queries,
@@ -2099,7 +2155,6 @@ async function collectFromQueries(
   blockedTrackSignatures,
   blockedArtists,
   blockedArtistNames,
-  recentGeneratedSignatures,
   options = {}
 ) {
   const result = [];
@@ -2118,9 +2173,8 @@ async function collectFromQueries(
     const noise = discovery >= 70 ? 24 : discovery >= 40 ? 14 : 7;
     ordered = ordered
       .map(track => {
-        const generatedPenalty = recentGeneratedSignatures?.has(trackSignature(track)) ? 18 : 0;
         const randomPart = Math.random() * noise;
-        return { track, rank: feedbackScore(track) - generatedPenalty + randomPart };
+        return { track, rank: feedbackScore(track) + recognizabilityScore(track) + randomPart };
       })
       .sort((a, b) => b.rank - a.rank)
       .map(item => item.track);
@@ -2129,6 +2183,7 @@ async function collectFromQueries(
       if (result.length >= wanted || added >= cap) break;
       if (!track?.id || !track?.uri) continue;
       if (looksLikeUnwantedVariant(track)) continue;
+      if (!recognizabilityPass(track)) continue;
 
       const artistIds = (track.artists || [])
         .map(a => a?.id || "")
@@ -2363,8 +2418,7 @@ async function generateOfficePlaylist() {
       blockedTracks,
       blockedTrackSignatures,
       blockedArtists,
-      blockedArtistNamesFromHistory,
-      recentGeneratedSignatures
+      blockedArtistNamesFromHistory
     } = buildHistoryBlocklists();
     const blockedArtistNames = new Set([
       ...selectedBlockedArtistNames(selected),
@@ -2395,8 +2449,7 @@ async function generateOfficePlaylist() {
       blockedTracks,
       blockedTrackSignatures,
       blockedArtists,
-      blockedArtistNames,
-      recentGeneratedSignatures
+      blockedArtistNames
     ));
 
     if (bartekTracks.length < bartekTarget) {
@@ -2414,8 +2467,7 @@ async function generateOfficePlaylist() {
         blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-        recentGeneratedSignatures,
-        { maxArtistPerPlaylist: 2 }
+          { maxArtistPerPlaylist: 2 }
       ));
     }
 
@@ -2442,8 +2494,7 @@ async function generateOfficePlaylist() {
           blockedTrackSignatures,
           blockedArtists,
           blockedArtistNames,
-          recentGeneratedSignatures
-        ));
+            ));
       }
     }
 
@@ -2466,8 +2517,7 @@ async function generateOfficePlaylist() {
         blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-        recentGeneratedSignatures,
-        { maxArtistPerPlaylist: 2 }
+          { maxArtistPerPlaylist: 2 }
       );
       bartekTracks.push(...missingBartek);
       tracks = [...bartekTracks, ...outsideTracks];
@@ -2494,8 +2544,7 @@ async function generateOfficePlaylist() {
         blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-        recentGeneratedSignatures,
-        { maxArtistPerPlaylist: 2 }
+          { maxArtistPerPlaylist: 2 }
       );
       outsideTracks.push(...filler);
       tracks = [...bartekTracks, ...outsideTracks];
@@ -2568,12 +2617,12 @@ function renderPlaylistResult(
     `Bartek jest głównym profilem: cel to ok. ${bartekTarget} z ${nominalTotal} utworów (75% po zaokrągleniu), ` +
     `a faktyczny rdzeń Bartka w tym wyniku to ${actualBartekCore}/${tracks.length} (${actualPct}%). ` +
     `Pozostała część może wychodzić poza jego gatunki i reprezentować pozostałych obecnych użytkowników. ` +
-    `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, utwór tylko wygenerowany przez aplikację jest przez 24 godz. miękko obniżany, wykonawca ${artistCooldownHours.value} godz. ` +
+    `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie wcześniejszej playlisty nie blokuje ani nie obniża utworu. ` +
     `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany także po wykonawcy + tytule; ` +
     `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
     `Last.fm z ostatnich 14 dni jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists. ` +
-    `Feedback 👍/👎 wpływa lokalnie na ranking, a wykonawcy zablokowani przyciskiem 🚫 są całkowicie pomijani.`;
+    `Feedback 👍/👎 silnie wpływa lokalnie na ranking, wykonawcy zablokowani przyciskiem 🚫 są całkowicie pomijani, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
 
   playlistResult.append(summary, model);
 
@@ -2597,7 +2646,12 @@ function renderPlaylistResult(
     row.className = "track-row";
 
     const label = document.createElement("span");
-    label.textContent = `${track.artists.map(a => a.name).join(", ")} - ${track.name}`;
+    const titleLine = document.createElement("span");
+    titleLine.textContent = `${track.artists.map(a => a.name).join(", ")} - ${track.name}`;
+    const meta = document.createElement("span");
+    meta.className = "track-meta";
+    meta.textContent = trackDiagnostic(track);
+    label.append(titleLine, meta);
 
     const votes = document.createElement("span");
     votes.className = "track-votes";
@@ -2622,6 +2676,16 @@ function renderPlaylistResult(
     const primaryArtistName = track?.artists?.[0]?.name || "wykonawca";
     block.title = `Zablokuj/odblokuj głównego wykonawcę: ${primaryArtistName}`;
 
+    const yt = document.createElement("button");
+    yt.type = "button";
+    yt.textContent = "▶ YT";
+    yt.title = "Otwórz wyszukiwanie utworu w małym oknie YouTube";
+    yt.addEventListener("click", () => {
+      const q = `${track.artists.map(a => a.name).join(" ")} ${track.name}`;
+      const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+      window.open(url, "officeMusicYouTube", "popup=yes,width=900,height=650,resizable=yes,scrollbars=yes");
+    });
+
     const refreshButtons = () => {
       const value = Number(loadFeedback()[signature]?.value || 0);
       up.classList.toggle("active-up", value > 0);
@@ -2635,7 +2699,7 @@ function renderPlaylistResult(
     block.addEventListener("click", () => { togglePrimaryArtistBlock(track); refreshButtons(); });
     refreshButtons();
 
-    votes.append(up, down, block);
+    votes.append(up, down, block, yt);
     row.append(label, votes);
     li.appendChild(row);
     list.appendChild(li);
