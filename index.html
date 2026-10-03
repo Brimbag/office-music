@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v15</title>
+  <title>Office Music Mixer v16</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -272,7 +272,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v15</span></h1>
+        <h1>Office Music Mixer <span class="version">v16</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -363,7 +363,7 @@
       Bartek jest głównym profilem i zawsze bierze udział w miksie. Około 75% playlisty ma pasować do jego gatunków, a pozostałe 25% może wychodzić poza nie i reprezentować gusta pozostałych obecnych osób.
       Artyści wzorcowi mają większą wagę niż same gatunki, a wykonawca zablokowany przez dowolną obecną osobę nie trafi na playlistę.
       Gatunki są edytowalne, więc profil może zmieniać się razem z gustem, także po ekspedycji po szamański śpiew gardłowy.
-      Last.fm poszerza bazę wykonawców dla gatunków, a Spotify służy głównie do finalnego wyszukiwania utworów, historii i tworzenia playlist. Świeże scrobble Last.fm liczymy dopiero od momentu wpisania nazwy użytkownika w tej wersji.
+      Last.fm dostarcza wykonawców i konkretne utwory dla gatunków oraz jest głównym źródłem faktycznie odtwarzanej historii. Spotify służy głównie do dopasowania URI, tworzenia playlist i jako fallback historii. Świeże scrobble Last.fm liczymy od momentu wpisania nazwy użytkownika.
     </p>
 
     <div class="toolbar">
@@ -490,8 +490,10 @@ const LASTFM_CACHE_PREFIX = "office_lastfm_cache_v1:";
 const LASTFM_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LASTFM_RECENT_CACHE_TTL_MS = 10 * 60 * 1000;
 const LASTFM_ARTIST_POOL_KEY = "office_lastfm_artist_pool_v1";
+const LASTFM_TRACK_POOL_KEY = "office_lastfm_track_pool_v1";
 const LASTFM_ARTIST_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
-const LASTFM_MAX_TAG_CALLS_PER_SYNC = 10;
+const LASTFM_TRACK_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
+const LASTFM_MAX_TAG_CALLS_PER_SYNC = 16;
 let lastFmCallsThisSync = 0;
 
 const HISTORY_KEY = "office_music_history_v1";
@@ -905,6 +907,70 @@ function addLastFmArtists(items, { tags = [], source = "tag", recentCounts = nul
   renderHistorySummary();
 }
 
+function loadLastFmTrackPool() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LASTFM_TRACK_POOL_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    const cutoff = Date.now() - LASTFM_TRACK_POOL_MAX_AGE_MS;
+    return parsed.filter(item => item?.track && item?.artist && Number(item.savedAt || 0) >= cutoff);
+  } catch {
+    return [];
+  }
+}
+
+function saveLastFmTrackPool(pool) {
+  try {
+    const cutoff = Date.now() - LASTFM_TRACK_POOL_MAX_AGE_MS;
+    const cleaned = pool
+      .filter(item => item?.track && item?.artist && Number(item.savedAt || 0) >= cutoff)
+      .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+      .slice(0, 3000);
+    localStorage.setItem(LASTFM_TRACK_POOL_KEY, JSON.stringify(cleaned));
+  } catch (err) {
+    console.warn("Nie udało się zapisać puli utworów Last.fm.", err);
+  }
+}
+
+function addLastFmTracks(items, { tags = [], source = "tag" } = {}) {
+  if (!Array.isArray(items) || !items.length) return;
+  const pool = loadLastFmTrackPool();
+  const map = new Map(pool.map(item => [
+    `${normalizeArtistName(item.artist)}|${normalizeForSignature(item.track)}`,
+    item
+  ]));
+  const now = Date.now();
+
+  for (const raw of items) {
+    const track = raw?.name || raw?.track || "";
+    const artist = raw?.artist?.name || raw?.artist?.["#text"] || raw?.artist || "";
+    if (!track || !artist) continue;
+    const key = `${normalizeArtistName(artist)}|${normalizeForSignature(track)}`;
+    if (!key || key === "|") continue;
+    const current = map.get(key) || { track, artist, tags: [], sources: [], savedAt: now };
+    current.track = track;
+    current.artist = artist;
+    current.tags = [...new Set([...(current.tags || []), ...tags.map(normalizeGenreName).filter(Boolean)])];
+    current.sources = [...new Set([...(current.sources || []), source])];
+    current.savedAt = now;
+    map.set(key, current);
+  }
+
+  saveLastFmTrackPool([...map.values()]);
+  renderHistorySummary();
+}
+
+function lastFmTrackPoolSize() {
+  return loadLastFmTrackPool().length;
+}
+
+function lastFmTracksForTags(tags, limit = 30) {
+  const wanted = new Set((tags || []).map(normalizeGenreName).filter(Boolean));
+  const candidates = loadLastFmTrackPool().filter(item =>
+    (item.tags || []).some(tag => wanted.has(normalizeGenreName(tag)))
+  );
+  return shuffle(candidates).slice(0, limit);
+}
+
 function lastFmArtistPoolSize() {
   return loadLastFmArtistPool().length;
 }
@@ -947,7 +1013,8 @@ function renderLastFmStatus(extra = "") {
   const user = localStorage.getItem(LASTFM_USER_KEY) || "";
   const since = freshLastFmSince();
   const pool = lastFmArtistPoolSize();
-  const parts = [`Baza Last.fm: ${pool} wykonawców`];
+  const trackPool = lastFmTrackPoolSize();
+  const parts = [`Baza Last.fm: ${pool} wykonawców, ${trackPool} utworów`];
   if (user) {
     parts.push(`konto: ${user}`);
     if (since) parts.push(`świeże scrobble od ${new Date(since).toLocaleString("pl-PL")}`);
@@ -975,7 +1042,17 @@ async function syncLastFmSources(selected, { forceStatus = false } = {}) {
       const artists = data?.topartists?.artist || [];
       addLastFmArtists(artists, { tags: [tag], source: "tag" });
     } catch (err) {
-      console.warn(`Last.fm tag ${tag}:`, err);
+      console.warn(`Last.fm top artists ${tag}:`, err);
+    }
+
+    if (lastFmCallsThisSync >= LASTFM_MAX_TAG_CALLS_PER_SYNC) continue;
+    lastFmCallsThisSync++;
+    try {
+      const data = await lastFmRequest("tag.getTopTracks", { tag, limit: 50, page: 1 });
+      const tracks = data?.tracks?.track || [];
+      addLastFmTracks(tracks, { tags: [tag], source: "tag" });
+    } catch (err) {
+      console.warn(`Last.fm top tracks ${tag}:`, err);
     }
   }
 
@@ -997,13 +1074,34 @@ async function syncLastFmSources(selected, { forceStatus = false } = {}) {
       const tracks = data?.recenttracks?.track || [];
       const counts = new Map();
       const names = new Map();
+      const historyEntries = [];
+      const recentPoolItems = [];
       for (const track of tracks) {
         const name = track?.artist?.["#text"] || track?.artist?.name || "";
+        const title = track?.name || "";
         const key = normalizeArtistName(name);
         if (!key) continue;
         counts.set(key, (counts.get(key) || 0) + 1);
         names.set(key, name);
+
+        const uts = Number(track?.date?.uts || 0);
+        // Wpis bez date oznacza zwykle "now playing". Nie blokujemy go jeszcze jako odsłuchanego.
+        if (title && uts > 0) {
+          const playedAt = new Date(uts * 1000).toISOString();
+          historyEntries.push({
+            trackId: "",
+            trackName: title,
+            artistIds: [],
+            artistNames: [name],
+            trackSignature: trackSignatureFromParts(title, [name]),
+            playedAt,
+            source: "lastfm"
+          });
+          recentPoolItems.push({ name: title, artist: { name } });
+        }
       }
+      if (historyEntries.length) mergeHistoryEntries(historyEntries);
+      if (recentPoolItems.length) addLastFmTracks(recentPoolItems, { source: "recent" });
       const recentArtists = [...counts.entries()]
         .sort((a, b) => b[1] - a[1])
         .slice(0, 40)
@@ -1026,7 +1124,7 @@ function loadHistory() {
     const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
     return parsed.filter(item => {
       const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
-      return Number.isFinite(time) && time >= cutoff && item.trackId;
+      return Number.isFinite(time) && time >= cutoff && (item.trackId || item.trackSignature);
     });
   } catch (error) {
     console.warn("Nie udało się odczytać historii:", error);
@@ -1039,7 +1137,7 @@ function saveHistory(history) {
   const cleaned = history
     .filter(item => {
       const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
-      return Number.isFinite(time) && time >= cutoff && item.trackId;
+      return Number.isFinite(time) && time >= cutoff && (item.trackId || item.trackSignature);
     })
     .sort((a, b) => {
       const aTime = new Date(a.playedAt || a.generatedAt || 0).getTime();
@@ -1058,7 +1156,7 @@ function mergeHistoryEntries(entries) {
 
   for (const item of [...entries, ...existing]) {
     const timestamp = item.playedAt || item.generatedAt;
-    const key = `${item.trackId}|${timestamp}|${item.source || "unknown"}`;
+    const key = `${item.trackId || item.trackSignature || "unknown"}|${timestamp}|${item.source || "unknown"}`;
     if (!map.has(key)) map.set(key, item);
   }
 
@@ -1118,6 +1216,7 @@ function buildHistoryBlocklists() {
   const history = loadHistory();
   const now = Date.now();
   const trackCutoff = now - Number(trackBlockDays.value) * 24 * 60 * 60 * 1000;
+  const generatedCutoff = now - 24 * 60 * 60 * 1000;
   const artistCutoff = now - Number(artistCooldownHours.value) * 60 * 60 * 1000;
 
   const blockedTracks = new Set();
@@ -1129,15 +1228,21 @@ function buildHistoryBlocklists() {
     const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
     if (!Number.isFinite(time)) continue;
 
-    if (time >= trackCutoff) {
-      blockedTracks.add(item.trackId);
+    const playedSource = item.source === "spotify" || item.source === "lastfm";
+    const generatedSource = item.source === "generated";
+    const shouldBlockTrack =
+      (playedSource && time >= trackCutoff) ||
+      (generatedSource && time >= generatedCutoff);
+
+    if (shouldBlockTrack) {
+      if (item.trackId) blockedTracks.add(item.trackId);
       const signature = item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames);
       if (signature) blockedTrackSignatures.add(signature);
     }
 
-    // Cooldown wykonawcy dotyczy tylko utworów faktycznie odtworzonych na Spotify.
-    // Sama obecność wykonawcy na wygenerowanej playliście nie blokuje jego innych utworów.
-    if (item.source === "spotify" && time >= artistCutoff) {
+    // Last.fm jest głównym źródłem faktycznych odsłuchań, Spotify pozostaje fallbackiem.
+    // Wygenerowanie utworu do playlisty nie uruchamia cooldownu wykonawcy.
+    if (playedSource && time >= artistCutoff) {
       for (const artistId of item.artistIds || []) {
         blockedArtists.add(artistId);
       }
@@ -1156,13 +1261,15 @@ function renderHistorySummary() {
 
   const history = loadHistory();
   const spotifyCount = history.filter(item => item.source === "spotify").length;
+  const lastFmCount = history.filter(item => item.source === "lastfm").length;
   const generatedCount = history.filter(item => item.source === "generated").length;
 
   const poolCount = candidatePoolSize();
   const lastFmPoolCount = lastFmArtistPoolSize();
+  const lastFmTrackCount = lastFmTrackPoolSize();
   historySummary.textContent = history.length
-    ? `Historia lokalna: ${history.length} wpisów (${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji). Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców.`
-    : `Historia lokalna jest jeszcze pusta. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców.`;
+    ? `Historia lokalna: ${history.length} wpisów (${lastFmCount} z Last.fm, ${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji). Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`
+    : `Historia lokalna jest jeszcze pusta. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`;
 }
 
 function clearAppHistory() {
@@ -1651,8 +1758,12 @@ function queriesForProfile(profile) {
     { includeRecent: profile.id === "bartek" }
   );
   const lastFmQueries = lastFmArtists.map(artist => `artist:"${artist}"`);
+  const lastFmTrackQueries = lastFmTracksForTags(
+    [...(profile.genres || []), ...(profile.categories || []).flatMap(commonCategoryLastFmTags)],
+    36
+  ).map(item => `track:"${item.track}" artist:"${item.artist}"`);
 
-  return [...artistQueries, ...lastFmQueries, ...directGenreQueries, ...categoryBased];
+  return [...artistQueries, ...lastFmTrackQueries, ...lastFmQueries, ...directGenreQueries, ...categoryBased];
 }
 
 async function createPlaylist(token, selected, total) {
@@ -1740,7 +1851,7 @@ async function generateOfficePlaylist() {
     progressBox.textContent = "Odświeżam źródła Last.fm (z cache, jeśli są świeże)...";
     await syncLastFmSources(mixProfiles);
 
-    progressBox.textContent = "Synchronizuję ostatnio odtwarzane utwory ze Spotify...";
+    progressBox.textContent = "Synchronizuję historię odtworzeń (Last.fm jako źródło główne, Spotify jako fallback)...";
     await syncSpotifyRecentHistory(token);
 
     const {
@@ -1940,15 +2051,16 @@ function renderPlaylistResult(
   const actualPct = tracks.length
     ? Math.round((actualBartekCore / tracks.length) * 100)
     : 0;
+  const nominalTotal = Number(playlistLength.value) || tracks.length;
   model.textContent =
-    `Bartek jest głównym profilem: cel to ok. ${bartekTarget} utworów (${Math.round((bartekTarget / Math.max(1, tracks.length)) * 100)}% nominalnego celu), ` +
+    `Bartek jest głównym profilem: cel to ok. ${bartekTarget} z ${nominalTotal} utworów (75% po zaokrągleniu), ` +
     `a faktyczny rdzeń Bartka w tym wyniku to ${actualBartekCore}/${tracks.length} (${actualPct}%). ` +
     `Pozostała część może wychodzić poza jego gatunki i reprezentować pozostałych obecnych użytkowników. ` +
-    `Blokada powtórek: utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. ` +
+    `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, utwór tylko wygenerowany przez aplikację 24 godz., wykonawca ${artistCooldownHours.value} godz. ` +
     `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany także po wykonawcy + tytule; ` +
     `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
-    `Last.fm poszerza bazę wykonawców i pomaga rozbudowywać pulę kandydatów.`;
+    `Last.fm jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists.`;
 
   playlistResult.append(summary, model);
 
