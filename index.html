@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v22</title>
+  <title>Office Music Mixer v23</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -365,7 +365,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v22</span></h1>
+        <h1>Office Music Mixer <span class="version">v23</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -655,6 +655,7 @@ const HISTORY_MAX_AGE_DAYS = 90;
 
 const FEEDBACK_KEY = "office_music_feedback_v1";
 const FEEDBACK_BLOCKED_ARTISTS_KEY = "office_music_feedback_blocked_artists_v1";
+const SEED_ARTIST_ROTATION_KEY = "office_seed_artist_rotation_v1";
 const RMF_SHOW_ID = "2BeZqsvzZUSldlZWvjeGe3";
 const RMF_SETTINGS_KEY = "office_rmf_settings_v1";
 const RMF_QUEUED_KEY = "office_rmf_queued_v1";
@@ -744,6 +745,110 @@ function feedbackScore(track) {
     if (row.ups >= 2 && row.downs === 0) score += 30 + (row.ups - 2) * 12;
   }
   return score;
+}
+
+function trackFeedbackValue(track) {
+  const signature = trackSignature(track);
+  if (!signature) return 0;
+  return Number(loadFeedback()[signature]?.value || 0);
+}
+
+function loadSeedArtistRotation() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SEED_ARTIST_ROTATION_KEY) || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSeedArtistRotation(data) {
+  localStorage.setItem(SEED_ARTIST_ROTATION_KEY, JSON.stringify(data || {}));
+}
+
+function seedArtistAgeBonus(artistName, rotation = loadSeedArtistRotation()) {
+  const key = normalizeArtistName(artistName || "");
+  if (!key) return 0;
+  const last = Number(rotation[key]?.lastSelectedAt || 0);
+  if (!last) return 36;
+  const days = Math.max(0, (Date.now() - last) / 86400000);
+  return Math.min(30, days * 6);
+}
+
+function preferredArtistBonus(track, preferredArtistNames = []) {
+  if (!preferredArtistNames?.length) return 0;
+  const preferred = new Map(
+    preferredArtistNames
+      .map(name => [normalizeArtistName(name), name])
+      .filter(([key]) => Boolean(key))
+  );
+  const rotation = loadSeedArtistRotation();
+  let bonus = 0;
+  for (const artist of track?.artists || []) {
+    const key = normalizeArtistName(artist?.name || "");
+    if (!preferred.has(key)) continue;
+    bonus = Math.max(bonus, 70 + seedArtistAgeBonus(preferred.get(key), rotation));
+  }
+  return bonus;
+}
+
+function recordSeedArtistSelections(tracks, selectedProfilesList) {
+  const rotation = loadSeedArtistRotation();
+  const now = Date.now();
+  const selectedSeedNames = new Map();
+  for (const profile of selectedProfilesList || []) {
+    for (const artist of profile.artists || []) {
+      const key = normalizeArtistName(artist);
+      if (key) selectedSeedNames.set(key, artist);
+    }
+  }
+  for (const track of tracks || []) {
+    for (const artist of track?.artists || []) {
+      const key = normalizeArtistName(artist?.name || "");
+      if (!selectedSeedNames.has(key)) continue;
+      const current = rotation[key] || {};
+      rotation[key] = {
+        artist: selectedSeedNames.get(key),
+        lastSelectedAt: now,
+        selectedCount: Number(current.selectedCount || 0) + 1
+      };
+    }
+  }
+  saveSeedArtistRotation(rotation);
+}
+
+async function primeManualSeedArtists(token, selectedProfilesList, maxNewSearches = 2) {
+  const rotation = loadSeedArtistRotation();
+  const rows = [];
+  for (const profile of selectedProfilesList || []) {
+    for (const artist of profile.artists || []) {
+      const key = normalizeArtistName(artist);
+      if (!key) continue;
+      rows.push({
+        profileId: profile.id,
+        artist,
+        key,
+        query: `artist:"${artist}"`,
+        ageBonus: seedArtistAgeBonus(artist, rotation)
+      });
+    }
+  }
+  const unique = [...new Map(rows.map(row => [row.key, row])).values()];
+  unique.sort((a, b) => {
+    const aMain = a.profileId === "bartek" ? 1 : 0;
+    const bMain = b.profileId === "bartek" ? 1 : 0;
+    if (aMain !== bMain) return bMain - aMain;
+    return b.ageBonus - a.ageBonus;
+  });
+
+  const startSearches = newSearchesThisGeneration;
+  for (const row of unique) {
+    if (newSearchesThisGeneration - startSearches >= maxNewSearches) break;
+    if (candidatePoolForQueries([row.query]).length >= 3) continue;
+    const offsets = searchOffsetsForQuery(row.query);
+    const offset = offsets[0] ?? 0;
+    await searchTracks(token, row.query, offset);
+  }
 }
 
 function setTrackFeedback(track, value) {
@@ -2187,7 +2292,11 @@ async function collectFromQueries(
   const result = [];
   if (!queries.length || wanted <= 0) return result;
 
-  const { maxArtistPerPlaylist = 1, recognizabilityOverride = null } = options;
+  const {
+    maxArtistPerPlaylist = 1,
+    recognizabilityOverride = null,
+    preferredArtistNames = []
+  } = options;
   const uniqueQueries = [...new Set(queries)];
   const discovery = Number(discoveryLevel.value);
   const perSearchCap = discovery >= 60 ? 3 : 2;
@@ -2201,7 +2310,14 @@ async function collectFromQueries(
     ordered = ordered
       .map(track => {
         const randomPart = Math.random() * noise;
-        return { track, rank: feedbackScore(track) + recognizabilityScore(track) + randomPart };
+        return {
+          track,
+          rank:
+            feedbackScore(track) +
+            recognizabilityScore(track) +
+            preferredArtistBonus(track, preferredArtistNames) +
+            randomPart
+        };
       })
       .sort((a, b) => b.rank - a.rank)
       .map(item => item.track);
@@ -2209,6 +2325,9 @@ async function collectFromQueries(
     for (const track of ordered) {
       if (result.length >= wanted || added >= cap) break;
       if (!track?.id || !track?.uri) continue;
+      // v23: 👎 dla konkretnego utworu jest twardym wykluczeniem.
+      // Kara artysty nadal działa miękko na jego pozostałe utwory.
+      if (trackFeedbackValue(track) < 0) continue;
       if (looksLikeUnwantedVariant(track)) continue;
       if (recognizabilityOverride === "low" ? false : !recognizabilityPass(track)) continue;
 
@@ -2441,6 +2560,12 @@ async function generateOfficePlaylist() {
     progressBox.textContent = "Synchronizuję historię odtworzeń (Last.fm jako źródło główne, Spotify jako fallback)...";
     await syncSpotifyRecentHistory(token);
 
+    // v23: maksymalnie 2 z 6 nowych wyszukiwań rezerwujemy na ręcznie wpisanych
+    // artystów wzorcowych. Najwyższy priorytet ma Bartek, a w ramach profilu
+    // wykonawcy dawno niewylosowani lub nigdy niewylosowani.
+    progressBox.textContent = "Odświeżam pulę artystów wzorcowych...";
+    await primeManualSeedArtists(token, mixProfiles, 2);
+
     const {
       blockedTracks,
       blockedTrackSignatures,
@@ -2463,7 +2588,7 @@ async function generateOfficePlaylist() {
     const bartekTracks = [];
     const outsideTracks = [];
 
-    // v22: najpierw naprawdę rezerwujemy rdzeń Bartka. Dopiero po zakończeniu
+    // v23: najpierw naprawdę rezerwujemy rdzeń Bartka. Dopiero po zakończeniu
     // wszystkich prób jego uzupełnienia wpuszczamy pozostałe profile.
     progressBox.textContent =
       `Buduję rdzeń Bartka (${bartekTarget}/${total} utworów)...`;
@@ -2478,7 +2603,8 @@ async function generateOfficePlaylist() {
       blockedTracks,
       blockedTrackSignatures,
       blockedArtists,
-      blockedArtistNames
+      blockedArtistNames,
+      { preferredArtistNames: bartek.artists || [] }
     ));
 
     if (bartekTracks.length < bartekTarget) {
@@ -2496,7 +2622,7 @@ async function generateOfficePlaylist() {
         blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-        { maxArtistPerPlaylist: 2 }
+        { maxArtistPerPlaylist: 2, preferredArtistNames: bartek.artists || [] }
       ));
     }
 
@@ -2522,7 +2648,11 @@ async function generateOfficePlaylist() {
         blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-        { maxArtistPerPlaylist: 2, recognizabilityOverride: "low" }
+        {
+          maxArtistPerPlaylist: 2,
+          recognizabilityOverride: "low",
+          preferredArtistNames: bartek.artists || []
+        }
       ));
     }
 
@@ -2551,7 +2681,8 @@ async function generateOfficePlaylist() {
           blockedTracks,
           blockedTrackSignatures,
           blockedArtists,
-          blockedArtistNames
+          blockedArtistNames,
+          { preferredArtistNames: profile.artists || [] }
         ));
       }
     }
@@ -2579,7 +2710,10 @@ async function generateOfficePlaylist() {
         blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-        { maxArtistPerPlaylist: 2 }
+        {
+          maxArtistPerPlaylist: 2,
+          preferredArtistNames: fallbackProfiles.flatMap(profile => profile.artists || [])
+        }
       );
       outsideTracks.push(...filler);
       tracks = [...bartekTracks, ...outsideTracks];
@@ -2597,7 +2731,7 @@ async function generateOfficePlaylist() {
         blockedTrackSignatures,
         blockedArtists,
         blockedArtistNames,
-        { maxArtistPerPlaylist: 2 }
+        { maxArtistPerPlaylist: 2, preferredArtistNames: bartek.artists || [] }
       );
       bartekTracks.push(...extraBartek);
       tracks = [...bartekTracks, ...outsideTracks];
@@ -2607,7 +2741,7 @@ async function generateOfficePlaylist() {
       throw new Error("Spotify nie zwrócił żadnych utworów dla wybranych profili.");
     }
 
-    // v22: finalny skład jest warstwowy. Rdzeń Bartka ma pierwszeństwo,
+    // v23: finalny skład jest warstwowy. Rdzeń Bartka ma pierwszeństwo,
     // a pozostałe profile mogą wykorzystać wyłącznie miejsca, które po nim zostały.
     const chosenBartek = shuffle(bartekTracks).slice(0, Math.min(bartekTarget, bartekTracks.length));
     const remainingSlots = Math.max(0, total - chosenBartek.length);
@@ -2638,6 +2772,7 @@ async function generateOfficePlaylist() {
     );
 
     recordGeneratedTracks(finalTracks);
+    recordSeedArtistSelections(finalTracks, selected);
     renderPlaylistResult(
       playlist,
       finalTracks,
@@ -2689,7 +2824,7 @@ function renderPlaylistResult(
     `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
     `Last.fm z ostatnich 14 dni jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists. ` +
-    `Feedback 👍/👎 silnie wpływa lokalnie na ranking, wykonawcy zablokowani przyciskiem 🚫 są całkowicie pomijani, zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
+    `Feedback 👍/👎 silnie wpływa lokalnie na ranking: 👎 konkretnego utworu całkowicie go wyklucza, a 🚫 blokuje wykonawcę. Ręcznie wpisani artyści wzorcowi mają premię rankingową i do 2 z 6 nowych wyszukiwań Spotify jest rezerwowanych na ich pulę; dawno niewylosowani dostają dodatkowy priorytet. Zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
 
   playlistResult.append(summary, model);
 
