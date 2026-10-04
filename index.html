@@ -365,7 +365,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v25 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v26 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -406,10 +406,10 @@
           Długość playlisty
           <select id="playlistLength">
             <option value="30">30 utworów</option>
-            <option value="60">60 utworów</option>
+            <option value="60" selected>60 utworów (~4 h)</option>
             <option value="90">90 utworów</option>
             <option value="120">120 utworów</option>
-            <option value="150" selected>150 utworów (~9 h)</option>
+            <option value="150">150 utworów (~9 h)</option>
           </select>
         </label>
 
@@ -501,7 +501,11 @@
     <div class="toolbar">
       <button id="generateButton">Generuj playlistę</button>
       <button id="clearHistoryButton" class="secondary">Wyczyść historię aplikacji</button>
+      <button id="exportStateButton" type="button" class="secondary">Eksportuj bazę</button>
+      <button id="importStateButton" type="button" class="secondary">Importuj bazę</button>
+      <input id="importStateFile" type="file" accept="application/json,.json" style="display:none;">
     </div>
+    <div class="small lastfm-note">Eksport obejmuje lokalną bazę, cache, historię, feedback, blokady, profile i ustawienia RMF. Tokeny logowania Spotify nie są eksportowane.</div>
     <div id="historySummary" class="history-summary"></div>
     <div id="progress" class="progress"></div>
   </div>
@@ -587,6 +591,9 @@ const avoidNonLatin = document.getElementById("avoidNonLatin");
 const avoidRemixes = document.getElementById("avoidRemixes");
 const generateButton = document.getElementById("generateButton");
 const clearHistoryButton = document.getElementById("clearHistoryButton");
+const exportStateButton = document.getElementById("exportStateButton");
+const importStateButton = document.getElementById("importStateButton");
+const importStateFile = document.getElementById("importStateFile");
 const historySummary = document.getElementById("historySummary");
 const progressBox = document.getElementById("progress");
 const playlistBox = document.getElementById("playlistBox");
@@ -609,6 +616,9 @@ loginButton.addEventListener("click", login);
 logoutButton.addEventListener("click", logout);
 generateButton.addEventListener("click", generateOfficePlaylist);
 clearHistoryButton.addEventListener("click", clearAppHistory);
+exportStateButton.addEventListener("click", exportLocalState);
+importStateButton.addEventListener("click", () => importStateFile.click());
+importStateFile.addEventListener("change", importLocalStateFromFile);
 
 clearFeedbackButton.addEventListener("click", clearFeedback);
 clearBlockedFeedbackButton.addEventListener("click", clearFeedbackArtistBlocks);
@@ -667,6 +677,95 @@ const RMF_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const RMF_WINDOW_MINUTES = 55;
 let rmfWatcherTimer = null;
 let rmfLastApiCheckAt = 0;
+
+const APP_STORAGE_PREFIX = "office_";
+const STATE_EXPORT_FORMAT = "office-music-state";
+const STATE_EXPORT_VERSION = 1;
+
+function exportedStorageState() {
+  const storage = {};
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(APP_STORAGE_PREFIX)) continue;
+    storage[key] = localStorage.getItem(key);
+  }
+  return storage;
+}
+
+function exportLocalState() {
+  try {
+    const payload = {
+      format: STATE_EXPORT_FORMAT,
+      version: STATE_EXPORT_VERSION,
+      exportedAt: new Date().toISOString(),
+      source: "Office Music Mixer v26",
+      storage: exportedStorageState()
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `office-music-backup-${date}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    progressBox.textContent = `Wyeksportowano ${Object.keys(payload.storage).length} wpisów lokalnej bazy.`;
+  } catch (err) {
+    console.error(err);
+    progressBox.textContent = `Eksport bazy nie powiódł się: ${err.message}`;
+  }
+}
+
+async function importLocalStateFromFile(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    if (
+      payload?.format !== STATE_EXPORT_FORMAT ||
+      Number(payload?.version) !== STATE_EXPORT_VERSION ||
+      !payload?.storage ||
+      typeof payload.storage !== "object" ||
+      Array.isArray(payload.storage)
+    ) {
+      throw new Error("To nie jest prawidłowy plik kopii Office Music Mixer.");
+    }
+
+    const entries = Object.entries(payload.storage).filter(
+      ([key, value]) => key.startsWith(APP_STORAGE_PREFIX) && typeof value === "string"
+    );
+    if (!entries.length) {
+      throw new Error("Plik nie zawiera lokalnej bazy Office Music Mixer.");
+    }
+
+    const confirmed = window.confirm(
+      `Import zastąpi obecną lokalną bazę danymi z pliku (${entries.length} wpisów). Logowanie Spotify pozostanie bez zmian. Kontynuować?`
+    );
+    if (!confirmed) return;
+
+    const appKeys = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(APP_STORAGE_PREFIX)) appKeys.push(key);
+    }
+    for (const key of appKeys) localStorage.removeItem(key);
+    for (const [key, value] of entries) localStorage.setItem(key, value);
+
+    window.alert(`Zaimportowano ${entries.length} wpisów. Strona zostanie odświeżona.`);
+    window.location.reload();
+  } catch (err) {
+    console.error(err);
+    window.alert(`Nie udało się zaimportować bazy: ${err.message}`);
+  }
+}
 
 
 
