@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v25</title>
+  <title>Office Music Mixer v27</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
       color-scheme: light dark;
@@ -365,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v26 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v27 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -698,7 +699,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v26",
+      source: "Office Music Mixer v27",
       storage: exportedStorageState()
     };
 
@@ -1951,6 +1952,9 @@ function buildHistoryBlocklists() {
     if (playedSource && time >= trackCutoff) {
       if (item.trackId) blockedTracks.add(item.trackId);
       if (signature) blockedTrackSignatures.add(signature);
+      for (const duplicateSignature of historyDuplicateSignatures(item)) {
+        blockedTrackSignatures.add(duplicateSignature);
+      }
     }
 
     if (playedSource && time >= artistCutoff) {
@@ -2030,6 +2034,7 @@ const MAX_NEW_SEARCHES_PER_GENERATION = 6;
 const RECENT_HISTORY_SYNC_KEY = "office_recent_history_sync_v1";
 const RECENT_HISTORY_SYNC_TTL_MS = 10 * 60 * 1000;
 let newSearchesThisGeneration = 0;
+let queriesAttemptedThisGeneration = new Set();
 let lastSearchRequestAt = 0;
 
 function sleep(ms) {
@@ -2199,6 +2204,7 @@ async function parseJsonSafely(response) {
 }
 
 async function searchTracks(token, query, offset = 0) {
+  queriesAttemptedThisGeneration.add(query);
   const cached = readSearchCache(query, offset);
   if (cached) {
     const validCached = cached.filter(track => queryMatchesTrack(query, track));
@@ -2302,6 +2308,27 @@ function trackSignature(track) {
     track?.name || "",
     (track?.artists || []).map(artist => artist?.name || "")
   );
+}
+
+// v27: do deduplikacji playlisty i historii patrzymy na tytuł oraz każdego
+// wymienionego wykonawcę. Dzięki temu np. CCR i „Outliers, John Fogerty, CCR”
+// z tym samym tytułem są traktowane jako to samo nagranie.
+function trackDuplicateSignatures(track) {
+  const title = normalizeForSignature(track?.name || "");
+  if (!title) return [];
+  return [...new Set((track?.artists || [])
+    .map(artist => normalizeForSignature(artist?.name || ""))
+    .filter(Boolean)
+    .map(artist => `${artist}|${title}`))];
+}
+
+function historyDuplicateSignatures(item) {
+  const title = normalizeForSignature(item?.trackName || "");
+  if (!title) return [];
+  return [...new Set((item?.artistNames || [])
+    .map(name => normalizeForSignature(name || ""))
+    .filter(Boolean)
+    .map(artist => `${artist}|${title}`))];
 }
 
 function selectedBlockedArtistNames(selected) {
@@ -2459,15 +2486,21 @@ async function collectFromQueries(
       if (artistNameKeys.some(name => blockedArtistNames.has(name))) continue;
 
       const signature = trackSignature(track);
+      const duplicateSignatures = trackDuplicateSignatures(track);
       if (usedTracks.has(track.id)) continue;
       if (signature && usedTrackSignatures.has(signature)) continue;
+      if (duplicateSignatures.some(key => usedTrackSignatures.has(key))) continue;
       if (blockedTracks.has(track.id)) continue;
       if (signature && blockedTrackSignatures.has(signature)) continue;
+      if (duplicateSignatures.some(key => blockedTrackSignatures.has(key))) continue;
       if (artistIds.some(key => blockedArtists.has(key))) continue;
       if (artistNameKeys.some(key => (usedArtistCounts.get(key) || 0) >= maxArtistPerPlaylist)) continue;
 
       usedTracks.add(track.id);
       if (signature) usedTrackSignatures.add(signature);
+      for (const duplicateSignature of duplicateSignatures) {
+        usedTrackSignatures.add(duplicateSignature);
+      }
       for (const key of artistNameKeys) {
         usedArtistCounts.set(key, (usedArtistCounts.get(key) || 0) + 1);
       }
@@ -2653,10 +2686,54 @@ function hasMusicProfile(profile) {
   return (profile.genres || []).length > 0 || (profile.artists || []).length > 0;
 }
 
+function trackArtistKeys(track) {
+  return new Set((track?.artists || [])
+    .map(artist => normalizeArtistName(artist?.name || ""))
+    .filter(Boolean));
+}
+
+function tracksShareArtist(a, b) {
+  if (!a || !b) return false;
+  const aKeys = trackArtistKeys(a);
+  return [...trackArtistKeys(b)].some(key => aKeys.has(key));
+}
+
+// v27: układamy kolejność tak, by dwa utwory ze wspólnym wykonawcą
+// nie stały obok siebie. Jeśli matematycznie się nie da, dopiero wtedy odpuszczamy.
+function arrangeWithoutAdjacentArtist(tracks) {
+  const remaining = shuffle(tracks);
+  const arranged = [];
+
+  while (remaining.length) {
+    const previous = arranged[arranged.length - 1];
+    let choices = remaining
+      .map((track, index) => ({ track, index }))
+      .filter(row => !tracksShareArtist(previous, row.track));
+
+    if (!choices.length) choices = remaining.map((track, index) => ({ track, index }));
+
+    // Preferujemy teraz wykonawcę, którego trudniej będzie rozmieścić później.
+    choices.sort((a, b) => {
+      const countFor = row => remaining.filter(other => tracksShareArtist(row.track, other)).length;
+      return countFor(b) - countFor(a);
+    });
+    const bestCount = remaining.filter(other => tracksShareArtist(choices[0].track, other)).length;
+    const best = choices.filter(row =>
+      remaining.filter(other => tracksShareArtist(row.track, other)).length === bestCount
+    );
+    const picked = best[Math.floor(Math.random() * best.length)];
+    arranged.push(picked.track);
+    remaining.splice(picked.index, 1);
+  }
+
+  return arranged;
+}
+
 async function generateOfficePlaylist() {
   try {
     generateButton.disabled = true;
     newSearchesThisGeneration = 0;
+    queriesAttemptedThisGeneration = new Set();
     playlistBox.style.display = "none";
     playlistResult.textContent = "";
     progressBox.textContent = "Przygotowuję profile...";
@@ -2779,10 +2856,9 @@ async function generateOfficePlaylist() {
       ));
     }
 
-    // v25: ostatnia próba domknięcia rdzenia odbywa się jeszcze PRZED
-    // wpuszczeniem pozostałych profili. Korzystamy z całej lokalnej puli Bartka
-    // i rozluźniamy wyłącznie filtr rozpoznawalności. Blokady użytkowników,
-    // historia odsłuchów, 👎 i limit wykonawcy nadal obowiązują.
+    // v27: ostatnia próba domknięcia rdzenia nadal korzysta z lokalnej puli Bartka,
+    // ale NIE rozluźnia już filtra rozpoznawalności dla ogólnych genre searchy.
+    // Lepiej zwrócić nieco krótszą playlistę niż dobijać licznik katalogowym przypadkiem.
     if (bartekTracks.length < bartekTarget) {
       progressBox.textContent =
         `Rdzeń Bartka ma ${bartekTracks.length}/${bartekTarget}. Ostatnia próba z lokalnej puli...`;
@@ -2800,7 +2876,6 @@ async function generateOfficePlaylist() {
         blockedArtistNames,
         {
           maxArtistPerPlaylist: 2,
-          recognizabilityOverride: "low",
           preferredArtistNames: bartek.artists || []
         }
       ));
@@ -2903,7 +2978,7 @@ async function generateOfficePlaylist() {
     const chosenOutside = shuffle(outsideTracks).slice(0, remainingSlots);
     let finalTracks = [...chosenBartek, ...chosenOutside];
 
-    finalTracks = shuffle(finalTracks).slice(0, total);
+    finalTracks = arrangeWithoutAdjacentArtist(finalTracks).slice(0, total);
     const chosenBartekIds = new Set(chosenBartek.map(track => track.id));
     const actualBartekCore = finalTracks.filter(track => chosenBartekIds.has(track.id)).length;
 
@@ -2953,7 +3028,8 @@ function seedArtistDiagnosticText(selectedProfilesList, tracks) {
       const selectedCount = (tracks || []).filter(track =>
         (track.artists || []).some(a => normalizeArtistName(a?.name || "") === key)
       ).length;
-      rows.push(`${artist}: pula ${poolCount}, wynik ${selectedCount ? `tak (${selectedCount})` : "nie"}`);
+      const searched = queriesAttemptedThisGeneration.has(query) ? "tak" : "nie";
+      rows.push(`${artist}: pula ${poolCount}, szukano: ${searched}, wynik ${selectedCount ? `tak (${selectedCount})` : "nie"}`);
     }
   }
   return rows.join(" · ");
@@ -2986,8 +3062,8 @@ function renderPlaylistResult(
     `a faktyczny rdzeń Bartka w tym wyniku to ${actualBartekCore}/${tracks.length} (${actualPct}%). ` +
     `Pozostała część może wychodzić poza jego gatunki i reprezentować pozostałych obecnych użytkowników. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie wcześniejszej playlisty nie blokuje ani nie obniża utworu. ` +
-    `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany także po wykonawcy + tytule; ` +
-    `wykonawca z historii nie wraca przed końcem cooldownu, a na jednej playliście może pojawić się maks. 2 razy awaryjnie. ` +
+    `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany po tytule i każdym z przypisanych wykonawców, także przy różnych credits; ` +
+    `wykonawca z historii nie wraca przed końcem cooldownu, na jednej playliście może pojawić się maks. 2 razy awaryjnie i nie powinien wystąpić dwa razy z rzędu. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
     `Last.fm z ostatnich 14 dni jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists. ` +
     `Feedback 👍/👎 silnie wpływa lokalnie na ranking: 👎 konkretnego utworu całkowicie go wyklucza, a 🚫 blokuje wykonawcę. Ręcznie wpisani artyści wzorcowi mają premię rankingową i do 2 z 6 nowych wyszukiwań Spotify jest rezerwowanych na ich pulę; dawno niewylosowani dostają dodatkowy priorytet. Zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
