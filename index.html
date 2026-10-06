@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v29</title>
+  <title>Office Music Mixer v30</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v29 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v30 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -874,7 +874,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v29",
+      source: "Office Music Mixer v30",
       storage: exportedStorageState()
     };
 
@@ -2094,16 +2094,33 @@ async function syncLastFmSources(selected, { forceStatus = false } = {}) {
   renderLastFmStatus(`odświeżono ${tags.length} tagów`);
 }
 
+function compactPlayedHistoryItem(item) {
+  return {
+    trackId: item.trackId || "",
+    trackName: item.trackName || "",
+    artistIds: Array.isArray(item.artistIds) ? item.artistIds.filter(Boolean) : [],
+    artistNames: Array.isArray(item.artistNames) ? item.artistNames.filter(Boolean) : [],
+    trackSignature: item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames),
+    playedAt: item.playedAt || "",
+    source: item.source || ""
+  };
+}
+
+function isActualPlayHistoryItem(item, cutoff = 0) {
+  if (!item || !["spotify", "lastfm"].includes(item.source)) return false;
+  const time = new Date(item.playedAt || 0).getTime();
+  return Number.isFinite(time) && time >= cutoff && (item.trackId || item.trackSignature);
+}
+
 function loadHistory() {
   try {
     const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
     if (!Array.isArray(parsed)) return [];
 
     const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
-    return parsed.filter(item => {
-      const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
-      return Number.isFinite(time) && time >= cutoff && (item.trackId || item.trackSignature);
-    });
+    return parsed
+      .filter(item => isActualPlayHistoryItem(item, cutoff))
+      .map(compactPlayedHistoryItem);
   } catch (error) {
     console.warn("Nie udało się odczytać historii:", error);
     return [];
@@ -2113,19 +2130,58 @@ function loadHistory() {
 function saveHistory(history) {
   const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
   const cleaned = history
-    .filter(item => {
-      const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
-      return Number.isFinite(time) && time >= cutoff && (item.trackId || item.trackSignature);
-    })
-    .sort((a, b) => {
-      const aTime = new Date(a.playedAt || a.generatedAt || 0).getTime();
-      const bTime = new Date(b.playedAt || b.generatedAt || 0).getTime();
-      return bTime - aTime;
-    })
-    .slice(0, 2500);
+    .filter(item => isActualPlayHistoryItem(item, cutoff))
+    .map(compactPlayedHistoryItem)
+    .sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
 
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(cleaned));
+  // Historia ma przechowywać wyłącznie faktyczne odsłuchania. W razie presji
+  // na localStorage zachowujemy najnowsze wpisy zamiast wywracać generowanie.
+  const limits = [1500, 1200, 900, 700, 500, 300, 150];
+  let lastError = null;
+  for (const limit of limits) {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(cleaned.slice(0, limit)));
+      renderHistorySummary();
+      return;
+    } catch (err) {
+      lastError = err;
+      if (err?.name !== "QuotaExceededError") throw err;
+    }
+  }
+  console.warn("Brak miejsca na zapis historii nawet po awaryjnym przycięciu.", lastError);
   renderHistorySummary();
+}
+
+function migrateHistoryStorage() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    const before = parsed.length;
+    const actual = parsed.filter(item => ["spotify", "lastfm"].includes(item?.source));
+    if (actual.length !== before || parsed.some(item => item?.generatedAt)) {
+      saveHistory(actual);
+      console.info(`Historia v30: usunięto ${before - actual.length} wpisów wygenerowanych playlist.`);
+    }
+  } catch (err) {
+    console.warn("Migracja historii v30 nie powiodła się:", err);
+  }
+}
+
+function purgeExpiredCaches() {
+  const now = Date.now();
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (!key || (!key.startsWith(SEARCH_CACHE_PREFIX) && !key.startsWith(LASTFM_CACHE_PREFIX))) continue;
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || "null");
+      const ttl = key.startsWith(SEARCH_CACHE_PREFIX) ? SEARCH_CACHE_TTL_MS : LASTFM_CACHE_TTL_MS;
+      if (!value?.savedAt || now - Number(value.savedAt) > ttl) localStorage.removeItem(key);
+    } catch {
+      localStorage.removeItem(key);
+    }
+  }
 }
 
 function mergeHistoryEntries(entries) {
@@ -2175,21 +2231,6 @@ async function syncSpotifyRecentHistory(token) {
   return entries.length;
 }
 
-function recordGeneratedTracks(tracks) {
-  const generatedAt = new Date().toISOString();
-  const entries = tracks.map(track => ({
-    trackId: track.id,
-    trackName: track.name || "",
-    artistIds: (track.artists || []).map(artist => artist.id).filter(Boolean),
-    artistNames: (track.artists || []).map(artist => artist.name).filter(Boolean),
-    trackSignature: trackSignature(track),
-    generatedAt,
-    source: "generated"
-  }));
-
-  mergeHistoryEntries(entries);
-}
-
 function buildHistoryBlocklists() {
   const history = loadHistory();
   const now = Date.now();
@@ -2202,7 +2243,7 @@ function buildHistoryBlocklists() {
   const blockedArtistNamesFromHistory = new Set();
 
   for (const item of history) {
-    const time = new Date(item.playedAt || item.generatedAt || 0).getTime();
+    const time = new Date(item.playedAt || 0).getTime();
     if (!Number.isFinite(time)) continue;
 
     const playedSource = item.source === "spotify" || item.source === "lastfm";
@@ -3430,7 +3471,6 @@ async function generateOfficePlaylist() {
       finalTracks.map(track => track.uri)
     );
 
-    recordGeneratedTracks(finalTracks);
     recordSeedArtistSelections(finalTracks, selected);
     renderPlaylistResult(
       playlist,
@@ -3472,6 +3512,25 @@ function seedArtistDiagnosticText(selectedProfilesList, tracks) {
     }
   }
   return rows.join(" · ");
+}
+
+function tasteGenreDiagnosticText(selectedProfilesList) {
+  const rows = [];
+  for (const profile of selectedProfilesList || []) {
+    if (!profile.taste?.hasSurvey) continue;
+    const liked = [...new Set((profile.taste.likedGenres || []).map(normalizeGenreName).filter(Boolean))];
+    if (!liked.length) continue;
+    const details = liked
+      .map(genre => {
+        const query = `genre:"${genre}"`;
+        const poolCount = candidatePoolForQueries([query]).length;
+        const searched = queriesAttemptedThisGeneration.has(query) ? "tak" : "nie";
+        return { genre, poolCount, searched };
+      })
+      .sort((a, b) => Number(b.searched === "tak") - Number(a.searched === "tak") || a.poolCount - b.poolCount || a.genre.localeCompare(b.genre, "pl"));
+    rows.push(`${profile.name}: ${details.map(item => `${item.genre}: pula ${item.poolCount}, szukano: ${item.searched}`).join(" · ")}`);
+  }
+  return rows.join(" | ");
 }
 
 function renderPlaylistResult(
@@ -3524,6 +3583,14 @@ function renderPlaylistResult(
       return `${profile.name} ❤️ ${liked}, 🙂 ${ok}, 🚫 ${no}; +${added} gatunków do aktywnego discovery`;
     }).join(" · ") + ".";
     playlistResult.append(tasteDiag);
+  }
+
+  const genreDiagText = tasteGenreDiagnosticText(selected);
+  if (genreDiagText) {
+    const genreDiag = document.createElement("p");
+    genreDiag.className = "small";
+    genreDiag.textContent = `Diagnostyka gatunków ❤️: ${genreDiagText}`;
+    playlistResult.append(genreDiag);
   }
 
   const seedDiagText = seedArtistDiagnosticText(selected, tracks);
@@ -3626,12 +3693,17 @@ function renderPlaylistResult(
   }
 
   const link = document.createElement("a");
-  link.href = playlist.external_urls.spotify;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  link.textContent = "Otwórz playlistę w Spotify";
+  link.href = playlist.uri || `spotify:playlist:${playlist.id}`;
+  link.textContent = "Otwórz playlistę w aplikacji Spotify";
 
-  playlistResult.append(list, link);
+  const webLink = document.createElement("a");
+  webLink.href = playlist.external_urls.spotify;
+  webLink.target = "_blank";
+  webLink.rel = "noopener noreferrer";
+  webLink.textContent = "Spotify WWW";
+  webLink.style.marginLeft = "12px";
+
+  playlistResult.append(list, link, webLink);
   playlistBox.style.display = "block";
 }
 
@@ -3701,6 +3773,8 @@ async function init() {
   }
 }
 
+migrateHistoryStorage();
+purgeExpiredCaches();
 loadRmfSettings();
 renderFeedbackSummary();
 updateRmfStatus();
