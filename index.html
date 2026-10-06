@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v28</title>
+  <title>Office Music Mixer v29</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v28 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v29 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -383,7 +383,7 @@
   <div class="box" id="mixerBox" style="display:none;">
     <h2>Kto dziś jest w biurze?</h2>
     <div id="people" class="people"></div>
-    <p class="small"><a href="taste.html">🎵 Ankieta gustu</a> · osobna podstrona do budowania dokładniejszych profili muzycznych. Wyniki są zapisywane lokalnie; generator jeszcze ich nie wykorzystuje.</p>
+    <p class="small"><a href="taste.html">🎵 Ankieta gustu</a> · osobna podstrona do budowania dokładniejszych profili muzycznych. Wyniki są zapisywane lokalnie; generator wykorzystuje ❤️ jako aktywne discovery, 🙂 jako wspólny mianownik, a 🚫 wyłącza daną gałąź z discovery.</p>
 
     <div class="settings-panel lastfm-panel">
       <div class="settings-row lastfm-row">
@@ -559,6 +559,165 @@ const profiles = {
   }
 };
 
+const TASTE_STORAGE_KEY = "office_taste_profile_v1";
+const TASTE_GENRE_DEFS = {
+  "rock": { label: "Rock", parent: null },
+  "classic-rock": { label: "Classic Rock", parent: "rock" },
+  "hard-rock": { label: "Hard Rock", parent: "rock" },
+  "alternative-rock": { label: "Alternative Rock", parent: "rock" },
+  "indie-rock": { label: "Indie Rock", parent: "rock" },
+  "grunge": { label: "Grunge", parent: "rock" },
+  "britpop": { label: "Britpop", parent: "rock" },
+  "garage-rock": { label: "Garage Rock", parent: "rock" },
+  "psychedelic-rock": { label: "Psychedelic Rock", parent: "rock" },
+  "progressive-rock": { label: "Progressive Rock", parent: "rock" },
+  "southern-rock": { label: "Southern Rock", parent: "rock" },
+  "glam-rock": { label: "Glam Rock", parent: "rock" },
+  "post-rock": { label: "Post-Rock", parent: "rock" },
+  "shoegaze": { label: "Shoegaze", parent: "rock" },
+  "new-wave-post-punk": { label: "New Wave / Post-Punk", parent: "rock" },
+  "gothic-rock": { label: "Gothic Rock", parent: "rock" },
+  "metal": { label: "Metal", parent: null },
+  "heavy-metal": { label: "Heavy Metal", parent: "metal" },
+  "thrash-metal": { label: "Thrash Metal", parent: "metal" },
+  "groove-metal": { label: "Groove Metal", parent: "metal" },
+  "alternative-metal": { label: "Alternative Metal", parent: "metal" },
+  "nu-metal": { label: "Nu Metal", parent: "metal" },
+  "progressive-metal": { label: "Progressive Metal", parent: "metal" },
+  "power-metal": { label: "Power Metal", parent: "metal" },
+  "doom-metal": { label: "Doom Metal", parent: "metal" },
+  "stoner-metal": { label: "Stoner Metal", parent: "metal" },
+  "death-metal": { label: "Death Metal", parent: "metal" },
+  "black-metal": { label: "Black Metal", parent: "metal" },
+  "symphonic-metal": { label: "Symphonic Metal", parent: "metal" },
+  "folk-metal": { label: "Folk Metal", parent: "metal" },
+  "industrial-metal": { label: "Industrial Metal", parent: "metal" },
+  "metalcore": { label: "Metalcore", parent: "metal" },
+  "funk-metal": { label: "Funk Metal", parent: "metal" },
+  "punk": { label: "Punk", parent: null },
+  "punk-rock": { label: "Punk Rock", parent: "punk" },
+  "pop-punk": { label: "Pop Punk", parent: "punk" },
+  "hardcore-punk": { label: "Hardcore Punk", parent: "punk" },
+  "skate-punk": { label: "Skate Punk", parent: "punk" },
+  "post-hardcore": { label: "Post-Hardcore", parent: "punk" },
+  "emo": { label: "Emo", parent: "punk" },
+  "ska-punk": { label: "Ska Punk", parent: "punk" },
+  "folk-punk": { label: "Folk Punk", parent: "punk" },
+  "psychobilly": { label: "Psychobilly", parent: "punk" },
+  "pop": { label: "Pop", parent: null },
+  "mainstream-pop": { label: "Mainstream Pop", parent: "pop" },
+  "pop-rock": { label: "Pop Rock", parent: "pop" },
+  "dance-pop": { label: "Dance Pop", parent: "pop" },
+  "synthpop": { label: "Synthpop", parent: "pop" },
+  "indie-pop": { label: "Indie Pop", parent: "pop" },
+  "dream-pop": { label: "Dream Pop", parent: "pop" },
+  "electropop": { label: "Electropop", parent: "pop" },
+  "art-pop": { label: "Art Pop", parent: "pop" },
+  "europop": { label: "Europop", parent: "pop" },
+  "k-pop": { label: "K-Pop", parent: "pop" },
+  "j-pop": { label: "J-Pop", parent: "pop" },
+  "hiphop": { label: "Hip-hop / Rap", parent: null },
+  "old-school-hiphop": { label: "Old School Hip-Hop", parent: "hiphop" },
+  "boom-bap": { label: "Boom Bap", parent: "hiphop" },
+  "alternative-hiphop": { label: "Alternative Hip-Hop", parent: "hiphop" },
+  "conscious-hiphop": { label: "Conscious Hip-Hop", parent: "hiphop" },
+  "gangsta-rap": { label: "Gangsta Rap", parent: "hiphop" },
+  "trap": { label: "Trap", parent: "hiphop" },
+  "drill": { label: "Drill", parent: "hiphop" },
+  "cloud-rap": { label: "Cloud Rap", parent: "hiphop" },
+  "pop-rap": { label: "Pop Rap", parent: "hiphop" },
+  "rap-rock-metal": { label: "Rap Rock / Rap Metal", parent: "hiphop" },
+  "electronic": { label: "Electronic / Dance", parent: null },
+  "house": { label: "House", parent: "electronic" },
+  "deep-house": { label: "Deep House", parent: "electronic" },
+  "progressive-house": { label: "Progressive House", parent: "electronic" },
+  "techno": { label: "Techno", parent: "electronic" },
+  "trance": { label: "Trance", parent: "electronic" },
+  "drum-bass": { label: "Drum & Bass", parent: "electronic" },
+  "jungle": { label: "Jungle", parent: "electronic" },
+  "dubstep": { label: "Dubstep", parent: "electronic" },
+  "ambient": { label: "Ambient", parent: "electronic" },
+  "idm": { label: "IDM / Experimental Electronic", parent: "electronic" },
+  "synthwave": { label: "Synthwave", parent: "electronic" },
+  "industrial-ebm": { label: "Industrial / EBM", parent: "electronic" },
+  "eurodance": { label: "Eurodance", parent: "electronic" },
+  "disco-nu-disco": { label: "Disco / Nu-Disco", parent: "electronic" },
+  "trip-hop": { label: "Trip-Hop", parent: "electronic" },
+  "rnb": { label: "R&B / Soul / Funk", parent: null },
+  "soul": { label: "Soul", parent: "rnb" },
+  "contemporary-rnb": { label: "Contemporary R&B", parent: "rnb" },
+  "neo-soul": { label: "Neo-Soul", parent: "rnb" },
+  "funk": { label: "Funk", parent: "rnb" },
+  "disco": { label: "Disco", parent: "rnb" },
+  "motown": { label: "Motown", parent: "rnb" },
+  "quiet-storm": { label: "Quiet Storm", parent: "rnb" },
+  "funk-rock": { label: "Funk Rock", parent: "rnb" },
+  "jazz": { label: "Jazz", parent: null },
+  "swing": { label: "Traditional / Swing", parent: "jazz" },
+  "bebop": { label: "Bebop", parent: "jazz" },
+  "cool-jazz": { label: "Cool Jazz", parent: "jazz" },
+  "hard-bop": { label: "Hard Bop", parent: "jazz" },
+  "fusion": { label: "Fusion", parent: "jazz" },
+  "smooth-jazz": { label: "Smooth Jazz", parent: "jazz" },
+  "vocal-jazz": { label: "Vocal Jazz", parent: "jazz" },
+  "free-jazz": { label: "Free Jazz", parent: "jazz" },
+  "acid-jazz": { label: "Acid Jazz", parent: "jazz" },
+  "blues": { label: "Blues", parent: null },
+  "delta-blues": { label: "Delta Blues", parent: "blues" },
+  "chicago-blues": { label: "Chicago Blues", parent: "blues" },
+  "electric-blues": { label: "Electric Blues", parent: "blues" },
+  "blues-rock": { label: "Blues Rock", parent: "blues" },
+  "country-blues": { label: "Country Blues", parent: "blues" },
+  "soul-blues": { label: "Soul Blues", parent: "blues" },
+  "folk": { label: "Folk / Singer-Songwriter", parent: null },
+  "folk": { label: "Folk", parent: "folk" },
+  "folk-rock": { label: "Folk Rock", parent: "folk" },
+  "contemporary-folk": { label: "Contemporary Folk", parent: "folk" },
+  "singer-songwriter": { label: "Singer-Songwriter", parent: "folk" },
+  "indie-folk": { label: "Indie Folk", parent: "folk" },
+  "celtic-folk": { label: "Celtic Folk", parent: "folk" },
+  "poetic-song": { label: "Piosenka poetycka", parent: "folk" },
+  "world-folk": { label: "World Folk", parent: "folk" },
+  "country": { label: "Country / Americana", parent: null },
+  "traditional-country": { label: "Traditional Country", parent: "country" },
+  "contemporary-country": { label: "Contemporary Country", parent: "country" },
+  "country-rock": { label: "Country Rock", parent: "country" },
+  "americana": { label: "Americana", parent: "country" },
+  "alt-country": { label: "Alternative Country", parent: "country" },
+  "bluegrass": { label: "Bluegrass", parent: "country" },
+  "outlaw-country": { label: "Outlaw Country", parent: "country" },
+  "reggae": { label: "Reggae / Ska / Caribbean", parent: null },
+  "reggae": { label: "Reggae", parent: "reggae" },
+  "roots-reggae": { label: "Roots Reggae", parent: "reggae" },
+  "dub": { label: "Dub", parent: "reggae" },
+  "ska": { label: "Ska", parent: "reggae" },
+  "rocksteady": { label: "Rocksteady", parent: "reggae" },
+  "dancehall": { label: "Dancehall", parent: "reggae" },
+  "reggae-rock": { label: "Reggae Rock", parent: "reggae" },
+  "world": { label: "World / Latin", parent: null },
+  "latin-pop": { label: "Latin Pop", parent: "world" },
+  "salsa": { label: "Salsa", parent: "world" },
+  "reggaeton": { label: "Reggaeton", parent: "world" },
+  "flamenco": { label: "Flamenco", parent: "world" },
+  "tango": { label: "Tango", parent: "world" },
+  "afrobeat": { label: "Afrobeat", parent: "world" },
+  "afrobeats": { label: "Afrobeats", parent: "world" },
+  "balkan": { label: "Balkan", parent: "world" },
+  "middle-eastern": { label: "Middle Eastern", parent: "world" },
+  "indian": { label: "Indian", parent: "world" },
+  "east-asian-traditional": { label: "East Asian Traditional", parent: "world" },
+  "throat-singing": { label: "Mongolian / Tuvan Throat Singing", parent: "world" },
+  "classical": { label: "Classical / Soundtrack / Instrumental", parent: null },
+  "classical": { label: "Classical", parent: "classical" },
+  "contemporary-classical": { label: "Contemporary Classical", parent: "classical" },
+  "minimalism": { label: "Minimalism", parent: "classical" },
+  "film-score": { label: "Film Score", parent: "classical" },
+  "game-soundtrack": { label: "Game Soundtrack", parent: "classical" },
+  "piano-instrumental": { label: "Piano / Instrumental", parent: "classical" },
+  "new-age": { label: "New Age", parent: "classical" },
+  "ambient-instrumental": { label: "Ambient Instrumental", parent: "classical" }
+};
+
 const categoryQueries = {
   rock: ["genre:rock", "genre:\"classic rock\"", "genre:\"alternative rock\""],
   pop: ["genre:pop", "genre:\"pop rock\""],
@@ -664,7 +823,21 @@ const LASTFM_TRACK_POOL_KEY = "office_lastfm_track_pool_v1";
 const LASTFM_ARTIST_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 const LASTFM_TRACK_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 const LASTFM_MAX_TAG_CALLS_PER_SYNC = 16;
+const LASTFM_TAG_ROTATION_KEY = "office_lastfm_tag_rotation_v1";
 let lastFmCallsThisSync = 0;
+
+function rotatingLastFmTags(tags) {
+  const unique = [...new Set((tags || []).map(normalizeGenreName).filter(Boolean))];
+  if (!unique.length) return [];
+  const maxTags = Math.max(1, Math.floor(LASTFM_MAX_TAG_CALLS_PER_SYNC / 2));
+  let cursor = Number(localStorage.getItem(LASTFM_TAG_ROTATION_KEY) || 0);
+  if (!Number.isFinite(cursor) || cursor < 0) cursor = 0;
+  cursor %= unique.length;
+  const ordered = [...unique.slice(cursor), ...unique.slice(0, cursor)];
+  const chosen = ordered.slice(0, maxTags);
+  localStorage.setItem(LASTFM_TAG_ROTATION_KEY, String((cursor + chosen.length) % unique.length));
+  return chosen;
+}
 
 const HISTORY_KEY = "office_music_history_v1";
 const HISTORY_MAX_AGE_DAYS = 90;
@@ -701,7 +874,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v28",
+      source: "Office Music Mixer v29",
       storage: exportedStorageState()
     };
 
@@ -1455,20 +1628,14 @@ function normalizeGenreName(name) {
 function genreCategories(genres) {
   const categories = new Set();
 
-  for (const rawGenre of genres) {
+  for (const rawGenre of genres || []) {
     const genre = normalizeGenreName(rawGenre);
     if (!genre) continue;
 
-    if (["rock", "classic rock", "hard rock", "alternative rock", "indie rock", "pop rock"].includes(genre)) {
-      categories.add("rock");
-    }
-    if (["pop", "pop rock", "indie pop", "synthpop"].includes(genre)) {
-      categories.add("pop");
-    }
-    if (["metal", "heavy metal", "hard rock"].includes(genre)) {
-      categories.add("metal");
-    }
-    if (["punk", "punk rock", "pop punk"].includes(genre)) {
+    if (genre.includes("rock")) categories.add("rock");
+    if (genre.includes("pop")) categories.add("pop");
+    if (genre.includes("metal")) categories.add("metal");
+    if (genre.includes("punk")) {
       categories.add("punk");
       categories.add("rock");
     }
@@ -1476,19 +1643,51 @@ function genreCategories(genres) {
       categories.add("grunge");
       categories.add("rock");
     }
-    if (["piosenka poetycka", "poezja śpiewana"].includes(genre)) {
-      categories.add("poetic");
-    }
+    if (["hard rock"].includes(genre)) categories.add("metal");
+    if (["piosenka poetycka", "poezja śpiewana"].includes(genre)) categories.add("poetic");
   }
 
   return [...categories];
 }
 
-function splitCommaList(value) {
-  return (value || "")
-    .split(",")
-    .map(x => x.trim())
-    .filter(Boolean);
+function loadTasteProfileDb() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TASTE_STORAGE_KEY) || "null");
+    if (!parsed || parsed.version !== 1 || !parsed.people || typeof parsed.people !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function tasteStateForPerson(personName) {
+  const db = loadTasteProfileDb();
+  const ratings = db?.people?.[personName]?.genres || {};
+  const likedGenres = [];
+  const okGenres = [];
+  const blockedGenres = [];
+  const blockedIds = new Set();
+
+  // 🚫 na rodzinie wyłącza całą gałąź z discovery, nawet jeśli w starych
+  // danych zostały wcześniejsze oceny dzieci.
+  for (const [id, def] of Object.entries(TASTE_GENRE_DEFS)) {
+    if (def.parent === null && ratings[id] === "no") blockedIds.add(id);
+  }
+
+  for (const [id, def] of Object.entries(TASTE_GENRE_DEFS)) {
+    const parentBlocked = def.parent && blockedIds.has(def.parent);
+    const rating = parentBlocked ? "no" : ratings[id];
+    if (rating === "like") likedGenres.push(def.label);
+    else if (rating === "ok") okGenres.push(def.label);
+    else if (rating === "no") blockedGenres.push(def.label);
+  }
+
+  return {
+    hasSurvey: Object.keys(ratings).length > 0,
+    likedGenres: [...new Set(likedGenres)],
+    okGenres: [...new Set(okGenres)],
+    blockedGenres: [...new Set(blockedGenres)]
+  };
 }
 
 function selectedProfiles() {
@@ -1501,7 +1700,7 @@ function selectedProfiles() {
     const seedInput = document.querySelector(`input[data-seed-profile-id="${id}"]`);
     const blockedInput = document.querySelector(`input[data-blocked-profile-id="${id}"]`);
 
-    const genres = splitCommaList(
+    const manualGenres = splitCommaList(
       genreInput?.value ?? localStorage.getItem(`office_genres_${id}`) ?? profiles[id].genres.join(", ")
     );
     const artists = splitCommaList(
@@ -1511,19 +1710,47 @@ function selectedProfiles() {
       blockedInput?.value ?? localStorage.getItem(`office_blocked_${id}`) ?? (id === "edyta" ? "Slipknot" : "")
     );
 
-    localStorage.setItem(`office_genres_${id}`, genres.join(", "));
+    localStorage.setItem(`office_genres_${id}`, manualGenres.join(", "));
     localStorage.setItem(`office_seed_${id}`, artists.join(", "));
     localStorage.setItem(`office_blocked_${id}`, blockedArtists.join(", "));
+
+    const taste = tasteStateForPerson(profiles[id].name);
+    const blockedTaste = new Set(taste.blockedGenres.map(normalizeGenreName));
+    const mergedGenres = [...new Set([...manualGenres, ...taste.likedGenres])]
+      .filter(genre => !blockedTaste.has(normalizeGenreName(genre)));
 
     return {
       id,
       ...profiles[id],
-      genres,
-      categories: genreCategories(genres),
+      genres: mergedGenres,
+      manualGenres,
+      categories: genreCategories(mergedGenres),
       artists,
-      blockedArtists
+      blockedArtists,
+      taste
     };
   });
+}
+
+function tasteCommonGenreQueries(selected) {
+  if (!selected?.length) return [];
+  const votes = new Map();
+  const blocked = new Set();
+
+  for (const profile of selected) {
+    for (const genre of profile.taste?.blockedGenres || []) blocked.add(normalizeGenreName(genre));
+    const supported = new Set([
+      ...(profile.taste?.likedGenres || []),
+      ...(profile.taste?.okGenres || [])
+    ].map(normalizeGenreName).filter(Boolean));
+    for (const genre of supported) votes.set(genre, (votes.get(genre) || 0) + 1);
+  }
+
+  const threshold = selected.length === 1 ? 1 : 2;
+  return [...votes.entries()]
+    .filter(([genre, count]) => count >= threshold && !blocked.has(genre))
+    .sort((a, b) => b[1] - a[1])
+    .map(([genre]) => `genre:"${genre}"`);
 }
 
 function lastFmCacheKey(method, params) {
@@ -1753,10 +1980,11 @@ async function syncLastFmSources(selected, { forceStatus = false } = {}) {
   lastFmCallsThisSync = 0;
   const genres = [...new Set((selected || []).flatMap(profile => profile.genres || []).map(normalizeGenreName).filter(Boolean))];
   const categories = [...new Set((selected || []).flatMap(profile => profile.categories || []))];
-  const tags = [...new Set([
+  const allTags = [...new Set([
     ...genres,
     ...categories.flatMap(commonCategoryLastFmTags)
-  ])].slice(0, LASTFM_MAX_TAG_CALLS_PER_SYNC);
+  ])];
+  const tags = rotatingLastFmTags(allTags);
 
   if (forceStatus) lastFmStatus.textContent = "Last.fm: odświeżam bazę wykonawców...";
 
@@ -2060,6 +2288,50 @@ function searchBudgetForTarget(total) {
   if (total <= 60) return 10;
   if (total <= 90) return 12;
   return 14;
+}
+function genrePrimeBudgetForTarget(total) {
+  if (total <= 60) return 4;
+  if (total <= 90) return 5;
+  return 6;
+}
+
+async function primeProfileGenres(token, profilesToPrime, maxNewSearches = 4) {
+  const byQuery = new Map();
+  for (const profile of profilesToPrime || []) {
+    const liked = new Set((profile.taste?.likedGenres || []).map(normalizeGenreName));
+    for (const genre of profile.genres || []) {
+      const normalized = normalizeGenreName(genre);
+      if (!normalized) continue;
+      const query = `genre:"${normalized}"`;
+      const current = byQuery.get(query) || {
+        query,
+        genre: normalized,
+        bartek: false,
+        tasteLiked: false,
+        pool: candidatePoolForQueries([query]).length
+      };
+      current.bartek ||= profile.id === "bartek";
+      current.tasteLiked ||= liked.has(normalized);
+      current.pool = Math.min(current.pool, candidatePoolForQueries([query]).length);
+      byQuery.set(query, current);
+    }
+  }
+
+  const candidates = [...byQuery.values()].sort((a, b) =>
+    Number(b.tasteLiked) - Number(a.tasteLiked) ||
+    a.pool - b.pool ||
+    Number(b.bartek) - Number(a.bartek) ||
+    a.genre.localeCompare(b.genre, "pl")
+  );
+
+  const before = newSearchesThisGeneration;
+  for (const item of candidates) {
+    if (newSearchesThisGeneration - before >= maxNewSearches) break;
+    if (newSearchesThisGeneration >= maxNewSearchesThisGeneration) break;
+    const offsets = searchOffsetsForQuery(item.query);
+    if (!offsets.length) continue;
+    await searchTracks(token, item.query, offsets[0]);
+  }
 }
 const RECENT_HISTORY_SYNC_KEY = "office_recent_history_sync_v1";
 const RECENT_HISTORY_SYNC_TTL_MS = 10 * 60 * 1000;
@@ -2623,7 +2895,8 @@ function queriesForCommon(selected) {
   const categories = commonCategories(selected);
   const categoryBased = categories.flatMap(category => queriesForCommonCategory(selected, category));
   const exactGenres = exactCommonGenreQueries(selected);
-  return [...categoryBased, ...exactGenres];
+  const tasteGenres = tasteCommonGenreQueries(selected);
+  return [...tasteGenres, ...categoryBased, ...exactGenres];
 }
 
 function queriesForProfile(profile) {
@@ -2652,6 +2925,7 @@ function queriesForProfile(profile) {
 }
 
 const OFFICE_PLAYLIST_PREFIX = "Office Music Mixer - ";
+const OFFICE_PLAYLIST_MATCH_PREFIX = "Office Music Mixer";
 const OFFICE_PLAYLIST_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 
 function officePlaylistTimestamp(date = new Date()) {
@@ -2666,8 +2940,8 @@ function officePlaylistTimestamp(date = new Date()) {
 
 function officePlaylistCreatedAtFromName(name) {
   const text = String(name || "").trim();
-  if (!text.startsWith(OFFICE_PLAYLIST_PREFIX)) return null;
-  const suffix = text.slice(OFFICE_PLAYLIST_PREFIX.length).trim();
+  if (!text.startsWith(OFFICE_PLAYLIST_MATCH_PREFIX)) return null;
+  const suffix = text.slice(OFFICE_PLAYLIST_MATCH_PREFIX.length).replace(/^\s*-?\s*/, "");
 
   let match = suffix.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2}))?/);
   if (match) {
@@ -2688,6 +2962,7 @@ async function cleanupOldOfficePlaylists(token) {
     const profile = await getProfile(token);
     const profileIds = new Set([profile?.id, profile?.account_id].filter(Boolean));
     const oldUris = [];
+    let unparseable = 0;
     let offset = 0;
 
     while (offset < 500) {
@@ -2696,17 +2971,20 @@ async function cleanupOldOfficePlaylists(token) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const data = await parseJsonSafely(response);
-      if (!response.ok) return { removed: 0, skipped: `lista playlist: ${response.status}` };
+      if (!response.ok) return { found: 0, removed: 0, remaining: 0, unparseable, skipped: `lista playlist: ${response.status}` };
 
       const items = data?.items || [];
       for (const playlist of items) {
-        if (!playlist?.name?.startsWith(OFFICE_PLAYLIST_PREFIX) || !playlist?.uri) continue;
+        if (!playlist?.name?.startsWith(OFFICE_PLAYLIST_MATCH_PREFIX) || !playlist?.uri) continue;
         const ownerIds = new Set([playlist?.owner?.id, playlist?.owner?.account_id].filter(Boolean));
         if (profileIds.size && ownerIds.size && ![...ownerIds].some(id => profileIds.has(id))) continue;
         if (profileIds.size && !ownerIds.size) continue;
 
         const createdAt = officePlaylistCreatedAtFromName(playlist.name);
-        if (!createdAt || Number.isNaN(createdAt.getTime())) continue;
+        if (!createdAt || Number.isNaN(createdAt.getTime())) {
+          unparseable++;
+          continue;
+        }
         if (Date.now() - createdAt.getTime() > OFFICE_PLAYLIST_RETENTION_MS) oldUris.push(playlist.uri);
       }
 
@@ -2714,23 +2992,53 @@ async function cleanupOldOfficePlaylists(token) {
       offset += items.length;
     }
 
-    let removed = 0;
-    for (let i = 0; i < oldUris.length; i += 40) {
-      const batch = oldUris.slice(i, i + 40);
+    const uniqueOldUris = [...new Set(oldUris)];
+    let accepted = 0;
+    for (let i = 0; i < uniqueOldUris.length; i += 40) {
+      const batch = uniqueOldUris.slice(i, i + 40);
       const response = await fetch(
         `https://api.spotify.com/v1/me/library?uris=${encodeURIComponent(batch.join(","))}`,
         { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
       );
       if (response.status === 403) {
-        return { removed, skipped: "brak scope user-library-modify; wyloguj i połącz Spotify ponownie" };
+        return { found: uniqueOldUris.length, removed: accepted, remaining: uniqueOldUris.length - accepted, unparseable, skipped: "brak scope user-library-modify; wyloguj i połącz Spotify ponownie" };
       }
-      if (!response.ok) return { removed, skipped: `usuwanie z biblioteki: ${response.status}` };
-      removed += batch.length;
+      if (!response.ok) return { found: uniqueOldUris.length, removed: accepted, remaining: uniqueOldUris.length - accepted, unparseable, skipped: `usuwanie z biblioteki: ${response.status}` };
+      accepted += batch.length;
     }
-    return { removed, skipped: "" };
+
+    // Kontrola po operacji na tym samym źródle, z którego czytamy boczną bibliotekę.
+    // Nie zakładamy już, że sam status 2xx oznacza, że użytkownik faktycznie przestał
+    // widzieć playlistę.
+    const target = new Set(uniqueOldUris);
+    const stillVisible = new Set();
+    if (target.size) {
+      await sleep(350);
+      let verifyOffset = 0;
+      while (verifyOffset < 500) {
+        const response = await fetch(
+          `https://api.spotify.com/v1/me/playlists?limit=50&offset=${verifyOffset}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await parseJsonSafely(response);
+        if (!response.ok) break;
+        const items = data?.items || [];
+        for (const playlist of items) if (target.has(playlist?.uri)) stillVisible.add(playlist.uri);
+        if (!data?.next || !items.length) break;
+        verifyOffset += items.length;
+      }
+    }
+
+    return {
+      found: uniqueOldUris.length,
+      removed: Math.max(0, uniqueOldUris.length - stillVisible.size),
+      remaining: stillVisible.size,
+      unparseable,
+      skipped: ""
+    };
   } catch (err) {
     console.warn("Nie udało się posprzątać starych playlist Office Music Mixer:", err);
-    return { removed: 0, skipped: err.message || "nieznany błąd" };
+    return { found: 0, removed: 0, remaining: 0, unparseable: 0, skipped: err.message || "nieznany błąd" };
   }
 }
 
@@ -2851,7 +3159,7 @@ async function generateOfficePlaylist() {
     const total = Number(playlistLength.value);
     maxNewSearchesThisGeneration = searchBudgetForTarget(total);
 
-    progressBox.textContent = "Sprzątam playlisty Office Music Mixer starsze niż 3 dni...";
+    progressBox.textContent = "Sprzątam playlisty Office Music Mixer starsze niż 72 godziny...";
     const playlistCleanupResult = await cleanupOldOfficePlaylists(token);
 
     const selected = selectedProfiles();
@@ -2879,6 +3187,10 @@ async function generateOfficePlaylist() {
     // niewylosowani lub nigdy niewylosowani.
     progressBox.textContent = `Odświeżam pulę artystów wzorcowych (budżet ${maxNewSearchesThisGeneration} nowych wyszukiwań)...`;
     await primeManualSeedArtists(token, mixProfiles, 3);
+
+    const genrePrimeBudget = genrePrimeBudgetForTarget(total);
+    progressBox.textContent = `Rozszerzam słabiej reprezentowane gatunki (do ${genrePrimeBudget} nowych wyszukiwań)...`;
+    await primeProfileGenres(token, mixProfiles, genrePrimeBudget);
 
     const {
       blockedTracks,
@@ -3188,9 +3500,24 @@ function renderPlaylistResult(
     `wykonawca z historii nie wraca przed końcem cooldownu, na jednej playliście może pojawić się maks. 2 razy awaryjnie i nie powinien wystąpić dwa razy z rzędu. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS} pozycji), a to generowanie mogło wykonać najwyżej ${maxNewSearchesThisGeneration} nowych wyszukiwań Spotify. ` +
     `Last.fm z ostatnich 14 dni jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists. ` +
-    `Feedback 👍/👎 silnie wpływa lokalnie na ranking: 👎 konkretnego utworu całkowicie go wyklucza, a 🚫 blokuje wykonawcę. Ręcznie wpisani artyści wzorcowi mają premię rankingową i do 3 nowych wyszukiwań Spotify jest rezerwowanych na ich pulę; dawno niewylosowani dostają dodatkowy priorytet. Zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
+    `Feedback 👍/👎 silnie wpływa lokalnie na ranking: 👎 konkretnego utworu całkowicie go wyklucza, a 🚫 blokuje wykonawcę. Ręcznie wpisani artyści wzorcowi mają premię rankingową i do 3 nowych wyszukiwań Spotify jest rezerwowanych na ich pulę; dodatkowy budżet jest rezerwowany na słabo reprezentowane gatunki, zwłaszcza oznaczone ❤️ w ankiecie gustu. Dawno niewylosowani artyści wzorcowi dostają dodatkowy priorytet. Zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
 
   playlistResult.append(summary, model);
+
+  const tasteProfiles = selected.filter(profile => profile.taste?.hasSurvey);
+  if (tasteProfiles.length) {
+    const tasteDiag = document.createElement("p");
+    tasteDiag.className = "small";
+    tasteDiag.textContent = `Ankieta gustu: ` + tasteProfiles.map(profile => {
+      const liked = profile.taste?.likedGenres?.length || 0;
+      const ok = profile.taste?.okGenres?.length || 0;
+      const no = profile.taste?.blockedGenres?.length || 0;
+      const manualSet = new Set((profile.manualGenres || []).map(normalizeGenreName));
+      const added = (profile.taste?.likedGenres || []).filter(g => !manualSet.has(normalizeGenreName(g))).length;
+      return `${profile.name} ❤️ ${liked}, 🙂 ${ok}, 🚫 ${no}; +${added} gatunków do aktywnego discovery`;
+    }).join(" · ") + ".";
+    playlistResult.append(tasteDiag);
+  }
 
   const seedDiagText = seedArtistDiagnosticText(selected, tracks);
   if (seedDiagText) {
@@ -3200,15 +3527,15 @@ function renderPlaylistResult(
     playlistResult.append(seedDiag);
   }
 
-  if (playlistCleanupResult?.removed) {
+  if (playlistCleanupResult) {
     const cleanupInfo = document.createElement("p");
     cleanupInfo.className = "small";
-    cleanupInfo.textContent = `Porządki Spotify: usunięto z biblioteki ${playlistCleanupResult.removed} playlist Office Music Mixer starszych niż 3 dni.`;
-    playlistResult.append(cleanupInfo);
-  } else if (playlistCleanupResult?.skipped) {
-    const cleanupInfo = document.createElement("p");
-    cleanupInfo.className = "small";
-    cleanupInfo.textContent = `Porządki Spotify pominięte: ${playlistCleanupResult.skipped}.`;
+    if (playlistCleanupResult.skipped) {
+      cleanupInfo.textContent = `Porządki Spotify: znaleziono ${playlistCleanupResult.found || 0} playlist starszych niż 72 h; ${playlistCleanupResult.skipped}.`;
+    } else {
+      cleanupInfo.textContent = `Porządki Spotify: znaleziono ${playlistCleanupResult.found || 0} playlist starszych niż 72 h, usunięto ${playlistCleanupResult.removed || 0}, nadal widoczne ${playlistCleanupResult.remaining || 0}.` +
+        (playlistCleanupResult.unparseable ? ` Pominięto ${playlistCleanupResult.unparseable} playlist Office Music Mixer bez daty możliwej do odczytania z nazwy.` : "");
+    }
     playlistResult.append(cleanupInfo);
   }
 
