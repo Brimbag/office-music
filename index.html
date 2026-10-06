@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v30</title>
+  <title>Office Music Mixer v31</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v30 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v31 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -466,10 +466,9 @@
     </div>
 
     <p class="small">
-      Bartek jest głównym profilem i zawsze bierze udział w miksie. Około 75% playlisty ma pasować do jego gatunków, a pozostałe 25% może wychodzić poza nie i reprezentować gusta pozostałych obecnych osób.
-      Artyści wzorcowi mają większą wagę niż same gatunki, a wykonawca zablokowany przez dowolną obecną osobę nie trafi na playlistę.
-      Gatunki są edytowalne, więc profil może zmieniać się razem z gustem, także po ekspedycji po szamański śpiew gardłowy. Filtr rozpoznawalności ogranicza kandydatów słabo potwierdzonych w lokalnej bazie Last.fm.
-      Last.fm dostarcza wykonawców i konkretne utwory dla gatunków oraz jest głównym źródłem faktycznie odtwarzanej historii. Spotify służy głównie do dopasowania URI, tworzenia playlist i jako fallback historii. Do blokad anty-powtórkowych używamy scrobbli Last.fm z ostatnich 14 dni.
+      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność kolejnych utworów.
+      Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
+      Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
     </p>
 
 
@@ -874,7 +873,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v30",
+      source: "Office Music Mixer v31",
       storage: exportedStorageState()
     };
 
@@ -2331,44 +2330,80 @@ const MAX_RATE_LIMIT_RETRIES = 3;
 const CANDIDATE_POOL_KEY = "office_candidate_pool_v1";
 const CANDIDATE_POOL_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const CANDIDATE_POOL_MAX_ITEMS = 2000;
-let maxNewSearchesThisGeneration = 10;
+let maxNewSearchesThisGeneration = 12;
+const GENRE_PRIME_STATE_KEY = "office_genre_prime_state_v1";
+
 function searchBudgetForTarget(total) {
-  if (total <= 60) return 10;
-  if (total <= 90) return 12;
-  return 14;
-}
-function genrePrimeBudgetForTarget(total) {
-  if (total <= 60) return 4;
-  if (total <= 90) return 5;
-  return 6;
+  if (total <= 60) return 12;
+  if (total <= 90) return 14;
+  return 16;
 }
 
-async function primeProfileGenres(token, profilesToPrime, maxNewSearches = 4) {
+function genrePrimeBudgetForTarget(total) {
+  if (total <= 60) return 6;
+  if (total <= 90) return 7;
+  return 8;
+}
+
+function loadGenrePrimeState() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GENRE_PRIME_STATE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveGenrePrimeState(state) {
+  try {
+    localStorage.setItem(GENRE_PRIME_STATE_KEY, JSON.stringify(state || {}));
+  } catch (err) {
+    console.warn("Nie udało się zapisać rotacji wyszukiwań gatunkowych.", err);
+  }
+}
+
+async function primeProfileGenres(token, profilesToPrime, maxNewSearches = 6) {
   const byQuery = new Map();
+  const state = loadGenrePrimeState();
+
   for (const profile of profilesToPrime || []) {
     const liked = new Set((profile.taste?.likedGenres || []).map(normalizeGenreName));
+    const ok = new Set((profile.taste?.okGenres || []).map(normalizeGenreName));
     for (const genre of profile.genres || []) {
       const normalized = normalizeGenreName(genre);
       if (!normalized) continue;
       const query = `genre:"${normalized}"`;
-      const current = byQuery.get(query) || {
+      const key = canonicalQuery(query);
+      const current = byQuery.get(key) || {
         query,
+        key,
         genre: normalized,
         bartek: false,
         tasteLiked: false,
-        pool: candidatePoolForQueries([query]).length
+        tasteOk: false,
+        supporters: 0,
+        likedSupporters: 0,
+        pool: candidatePoolForQueries([query]).length,
+        lastPrimedAt: Number(state[key]?.lastPrimedAt || 0)
       };
       current.bartek ||= profile.id === "bartek";
       current.tasteLiked ||= liked.has(normalized);
+      current.tasteOk ||= ok.has(normalized);
+      current.supporters += 1;
+      if (liked.has(normalized)) current.likedSupporters += 1;
       current.pool = Math.min(current.pool, candidatePoolForQueries([query]).length);
-      byQuery.set(query, current);
+      byQuery.set(key, current);
     }
   }
 
   const candidates = [...byQuery.values()].sort((a, b) =>
+    Number(a.pool > 0) - Number(b.pool > 0) ||
+    a.lastPrimedAt - b.lastPrimedAt ||
     Number(b.tasteLiked) - Number(a.tasteLiked) ||
-    a.pool - b.pool ||
+    b.likedSupporters - a.likedSupporters ||
+    b.supporters - a.supporters ||
     Number(b.bartek) - Number(a.bartek) ||
+    a.pool - b.pool ||
     a.genre.localeCompare(b.genre, "pl")
   );
 
@@ -2379,7 +2414,13 @@ async function primeProfileGenres(token, profilesToPrime, maxNewSearches = 4) {
     const offsets = searchOffsetsForQuery(item.query);
     if (!offsets.length) continue;
     await searchTracks(token, item.query, offsets[0]);
+    state[item.key] = {
+      genre: item.genre,
+      lastPrimedAt: Date.now(),
+      count: Number(state[item.key]?.count || 0) + 1
+    };
   }
+  saveGenrePrimeState(state);
 }
 const RECENT_HISTORY_SYNC_KEY = "office_recent_history_sync_v1";
 const RECENT_HISTORY_SYNC_TTL_MS = 10 * 60 * 1000;
@@ -2391,8 +2432,28 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function canonicalQuery(query) {
+  let text = String(query || "").trim().replace(/\s+/g, " ");
+  text = text.replace(/\b(genre|artist|track):"([^"]+)"/gi, (_, field, value) => {
+    const key = field.toLocaleLowerCase("pl-PL");
+    let normalized = value;
+    if (key === "genre") normalized = normalizeGenreName(value);
+    else if (key === "artist") normalized = normalizeArtistName(value);
+    else if (key === "track") normalized = normalizeForSignature(value);
+    return `${key}:"${normalized}"`;
+  });
+  text = text.replace(/\bgenre:([^\s"]+)/gi, (_, value) =>
+    `genre:"${normalizeGenreName(value)}"`
+  );
+  return text;
+}
+
+function wasQueryAttempted(query) {
+  return queriesAttemptedThisGeneration.has(canonicalQuery(query));
+}
+
 function searchCacheKey(query, offset) {
-  return `${SEARCH_CACHE_PREFIX}${encodeURIComponent(query)}:${offset}`;
+  return `${SEARCH_CACHE_PREFIX}${encodeURIComponent(canonicalQuery(query))}:${offset}`;
 }
 
 function readSearchCache(query, offset) {
@@ -2496,7 +2557,14 @@ function addToCandidatePool(query, items) {
     if (existing) {
       existing.savedAt = now;
       existing.track = slimTrack(track);
-      existing.queries = [...new Set([...(existing.queries || []), query])];
+      const mergedQueries = [...(existing.queries || []), query];
+      const seen = new Set();
+      existing.queries = mergedQueries.filter(item => {
+        const key = canonicalQuery(item);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     } else {
       map.set(track.id, {
         track: slimTrack(track),
@@ -2511,11 +2579,11 @@ function addToCandidatePool(query, items) {
 }
 
 function candidatePoolForQueries(queries) {
-  const wanted = new Set(queries);
+  const wanted = new Set((queries || []).map(canonicalQuery).filter(Boolean));
   const byTrack = new Map();
   for (const item of loadCandidatePool()) {
     const validMatch = (item.queries || []).some(query =>
-      wanted.has(query) && queryMatchesTrack(query, item.track)
+      wanted.has(canonicalQuery(query)) && queryMatchesTrack(query, item.track)
     );
     if (validMatch) byTrack.set(item.track.id, item.track);
   }
@@ -2554,7 +2622,7 @@ async function parseJsonSafely(response) {
 }
 
 async function searchTracks(token, query, offset = 0) {
-  queriesAttemptedThisGeneration.add(query);
+  queriesAttemptedThisGeneration.add(canonicalQuery(query));
   const cached = readSearchCache(query, offset);
   if (cached) {
     const validCached = cached.filter(track => queryMatchesTrack(query, track));
@@ -2754,7 +2822,7 @@ function recognizabilityScore(track) {
   return score;
 }
 
-function trackDiagnostic(track) {
+function trackDiagnostic(track, groupDetail = null, selectedProfilesList = []) {
   const poolItem = loadCandidatePool().find(item => item?.track?.id === track?.id);
   const queries = (poolItem?.queries || []).slice(0, 3);
   const lf = lastFmEvidenceForTrack(track);
@@ -2766,6 +2834,20 @@ function trackDiagnostic(track) {
   if (lf.recentCount) sourceBits.push("Last.fm: wykonawca świeżo słuchany");
   if (fb > 0) sourceBits.push(`feedback +${Math.round(fb)}`);
   if (fb < 0) sourceBits.push(`feedback ${Math.round(fb)}`);
+
+  if (groupDetail) {
+    const people = (selectedProfilesList || []).map(profile => {
+      const score = Number(groupDetail.byUser?.[profile.id] || 0);
+      return `${profile.name} ${Math.round(score)}`;
+    }).join(", ");
+    sourceBits.push(
+      `model: ${people} · grupa ${Math.round(groupDetail.groupBase || 0)} ` +
+      `· fairness +${Math.round(groupDetail.fairness || 0)} ` +
+      `· xQuAD +${Math.round(groupDetail.xquad || 0)} ` +
+      `· MMR -${Math.round(groupDetail.mmr || 0)}`
+    );
+  }
+
   return sourceBits.length ? sourceBits.join(" · ") : "źródło: lokalna pula Spotify";
 }
 
@@ -3146,7 +3228,7 @@ async function addItemsToPlaylist(token, playlistId, uris) {
 }
 
 function hasMusicProfile(profile) {
-  return (profile.genres || []).length > 0 || (profile.artists || []).length > 0;
+  return Boolean(profile?.taste?.hasSurvey) || (profile.genres || []).length > 0 || (profile.artists || []).length > 0;
 }
 
 function trackArtistKeys(track) {
@@ -3192,6 +3274,589 @@ function arrangeWithoutAdjacentArtist(tracks) {
   return arranged;
 }
 
+function genrePreferenceKey(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLocaleLowerCase("pl-PL")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function genreKeysRelated(aspect, preference) {
+  if (!aspect || !preference) return false;
+  if (aspect === preference) return true;
+  // A broad preference may match a more specific track tag (e.g. metal -> death metal),
+  // but a specific dislike must not poison every generic parent tag.
+  if (preference.length >= 5 && aspect.includes(preference)) return true;
+  return false;
+}
+
+function extractGenreQueryValue(query) {
+  const quoted = extractQuotedQueryValue(query, "genre");
+  if (quoted) return quoted;
+  const match = String(query || "").match(/\bgenre:([^\s"]+)/i);
+  return match ? match[1] : "";
+}
+
+function buildGroupRecommendationContext(selected) {
+  const tasteLabelToId = new Map();
+  for (const [id, def] of Object.entries(TASTE_GENRE_DEFS)) {
+    tasteLabelToId.set(genrePreferenceKey(def.label), id);
+  }
+
+  const profilePrefs = new Map();
+  for (const profile of selected || []) {
+    const liked = new Set((profile.taste?.likedGenres || []).map(genrePreferenceKey).filter(Boolean));
+    const ok = new Set((profile.taste?.okGenres || []).map(genrePreferenceKey).filter(Boolean));
+    const blocked = new Set((profile.taste?.blockedGenres || []).map(genrePreferenceKey).filter(Boolean));
+    const manual = new Set((profile.manualGenres || []).map(genrePreferenceKey).filter(Boolean));
+    const seeds = new Set((profile.artists || []).map(normalizeArtistName).filter(Boolean));
+    profilePrefs.set(profile.id, { liked, ok, blocked, manual, seeds });
+  }
+
+  const poolRows = loadCandidatePool();
+  const poolByTrack = new Map(poolRows.map(item => [item.track.id, item]));
+  const artistPool = new Map(
+    loadLastFmArtistPool().map(item => [normalizeArtistName(item.artist), item])
+  );
+  const trackPool = new Map(
+    loadLastFmTrackPool().map(item => [
+      `${normalizeArtistName(item.artist)}|${normalizeForSignature(item.track)}`,
+      item
+    ])
+  );
+
+  const aspectSupport = new Map();
+  for (const profile of selected || []) {
+    const prefs = profilePrefs.get(profile.id);
+    for (const key of prefs?.liked || []) {
+      aspectSupport.set(key, (aspectSupport.get(key) || 0) + (profile.id === "bartek" ? 2.4 : 2));
+    }
+    for (const key of prefs?.ok || []) {
+      aspectSupport.set(key, (aspectSupport.get(key) || 0) + 0.8);
+    }
+    for (const key of prefs?.manual || []) {
+      aspectSupport.set(key, (aspectSupport.get(key) || 0) + 1.2);
+    }
+  }
+
+  return {
+    selected,
+    profilePrefs,
+    poolByTrack,
+    artistPool,
+    trackPool,
+    tasteLabelToId,
+    aspectSupport,
+    featureCache: new Map(),
+    staticCache: new Map()
+  };
+}
+
+function addAspectAndParents(rawGenre, aspects, ctx) {
+  const key = genrePreferenceKey(rawGenre);
+  if (!key) return;
+  aspects.add(key);
+
+  let id = ctx.tasteLabelToId.get(key);
+  const visited = new Set();
+  while (id && !visited.has(id)) {
+    visited.add(id);
+    const def = TASTE_GENRE_DEFS[id];
+    if (!def?.parent) break;
+    const parent = TASTE_GENRE_DEFS[def.parent];
+    if (!parent) break;
+    const parentKey = genrePreferenceKey(parent.label);
+    if (parentKey) aspects.add(parentKey);
+    id = def.parent;
+  }
+}
+
+function groupTrackFeatures(track, ctx) {
+  const cacheKey = track?.id || trackSignature(track);
+  if (ctx.featureCache.has(cacheKey)) return ctx.featureCache.get(cacheKey);
+
+  const aspects = new Set();
+  const row = ctx.poolByTrack.get(track?.id);
+  for (const query of row?.queries || []) {
+    const genre = extractGenreQueryValue(query);
+    if (genre) addAspectAndParents(genre, aspects, ctx);
+  }
+
+  let exactLastFm = false;
+  let recentCount = 0;
+  let sourceCount = 0;
+
+  const titleKey = normalizeForSignature(track?.name || "");
+  for (const artist of track?.artists || []) {
+    const artistKey = normalizeArtistName(artist?.name || "");
+    if (!artistKey) continue;
+
+    const artistRow = ctx.artistPool.get(artistKey);
+    if (artistRow) {
+      recentCount = Math.max(recentCount, Number(artistRow.recentCount || 0));
+      sourceCount = Math.max(sourceCount, (artistRow.sources || []).length);
+      for (const tag of artistRow.tags || []) addAspectAndParents(tag, aspects, ctx);
+    }
+
+    const trackRow = ctx.trackPool.get(`${artistKey}|${titleKey}`);
+    if (trackRow) {
+      exactLastFm = true;
+      sourceCount = Math.max(sourceCount, (trackRow.sources || []).length);
+      for (const tag of trackRow.tags || []) addAspectAndParents(tag, aspects, ctx);
+    }
+  }
+
+  for (const category of genreCategories([...aspects])) {
+    addAspectAndParents(category, aspects, ctx);
+  }
+
+  const features = {
+    aspects,
+    artists: trackArtistKeys(track),
+    exactLastFm,
+    recentCount,
+    sourceCount,
+    recognizability: recognizabilityScore(track),
+    feedback: feedbackScore(track),
+    discovery: !exactLastFm && recentCount <= 0
+  };
+  ctx.featureCache.set(cacheKey, features);
+  return features;
+}
+
+function relatedPreferenceMatches(aspects, preferenceSet) {
+  let count = 0;
+  for (const aspect of aspects || []) {
+    if ([...preferenceSet].some(pref => genreKeysRelated(aspect, pref))) count++;
+  }
+  return count;
+}
+
+function profileTrackSatisfaction(profile, track, features, ctx) {
+  const prefs = ctx.profilePrefs.get(profile.id) || {
+    liked: new Set(), ok: new Set(), blocked: new Set(), manual: new Set(), seeds: new Set()
+  };
+
+  const likedMatches = relatedPreferenceMatches(features.aspects, prefs.liked);
+  const okMatches = relatedPreferenceMatches(features.aspects, prefs.ok);
+  const blockedMatches = relatedPreferenceMatches(features.aspects, prefs.blocked);
+  const manualMatches = relatedPreferenceMatches(features.aspects, prefs.manual);
+  const seedMatch = [...features.artists].some(artist => prefs.seeds.has(artist));
+
+  let score = profile.taste?.hasSurvey ? 32 : 38;
+  if (likedMatches) score += 34 + Math.min(12, (likedMatches - 1) * 4);
+  if (!likedMatches && manualMatches) score += 26 + Math.min(8, (manualMatches - 1) * 3);
+  if (!likedMatches && okMatches) score += 15 + Math.min(8, (okMatches - 1) * 2);
+  if (seedMatch) score += 30;
+  if (blockedMatches) score -= 38 + Math.min(22, (blockedMatches - 1) * 7);
+
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    likedMatches,
+    okMatches,
+    blockedMatches,
+    manualMatches,
+    seedMatch
+  };
+}
+
+function groupCandidateStatic(track, ctx) {
+  const cacheKey = track?.id || trackSignature(track);
+  if (ctx.staticCache.has(cacheKey)) return ctx.staticCache.get(cacheKey);
+
+  const features = groupTrackFeatures(track, ctx);
+  const byUser = {};
+  let weightedSum = 0;
+  let totalWeight = 0;
+  let minScore = 100;
+  let maxScore = 0;
+  let likedByAny = false;
+  let seedByAny = false;
+
+  for (const profile of ctx.selected || []) {
+    const result = profileTrackSatisfaction(profile, track, features, ctx);
+    byUser[profile.id] = result;
+    const weight = profile.id === "bartek" ? 1.3 : 1;
+    weightedSum += result.score * weight;
+    totalWeight += weight;
+    minScore = Math.min(minScore, result.score);
+    maxScore = Math.max(maxScore, result.score);
+    likedByAny ||= result.likedMatches > 0;
+    seedByAny ||= result.seedMatch;
+  }
+
+  const weightedAverage = totalWeight ? weightedSum / totalWeight : 0;
+  const feedbackAdjustment = Math.max(-20, Math.min(16, features.feedback * 0.08));
+  const recognitionAdjustment = Math.min(12, features.recognizability * 0.12);
+  const seedRotationAdjustment = Math.min(
+    10,
+    Math.max(
+      0,
+      ...(ctx.selected || []).map(profile =>
+        preferredArtistBonus(track, profile.artists || []) * 0.1
+      )
+    )
+  );
+
+  const groupBase =
+    0.72 * weightedAverage +
+    0.28 * minScore +
+    feedbackAdjustment +
+    recognitionAdjustment +
+    seedRotationAdjustment;
+
+  const result = {
+    track,
+    features,
+    byUser,
+    weightedAverage,
+    minScore,
+    maxScore,
+    groupBase,
+    likedByAny,
+    seedByAny
+  };
+  ctx.staticCache.set(cacheKey, result);
+  return result;
+}
+
+function supportedAspectsForCandidate(staticInfo, ctx) {
+  return [...staticInfo.features.aspects]
+    .filter(aspect => (ctx.aspectSupport.get(aspect) || 0) > 0);
+}
+
+function xquadCoverageBonus(staticInfo, state, ctx) {
+  const values = supportedAspectsForCandidate(staticInfo, ctx)
+    .map(aspect => {
+      const support = ctx.aspectSupport.get(aspect) || 0;
+      const count = state.aspectCounts.get(aspect) || 0;
+      return support / Math.pow(1 + count, 0.7);
+    })
+    .sort((a, b) => b - a)
+    .slice(0, 3);
+  return Math.min(14, values.reduce((sum, value) => sum + value, 0) * 1.15);
+}
+
+function fairnessBonus(staticInfo, state, ctx) {
+  if (!state.selected.length) return 0;
+  const means = [];
+  for (const profile of ctx.selected || []) {
+    const mean = (state.userSums.get(profile.id) || 0) / state.selected.length;
+    means.push({ profile, mean });
+  }
+  const groupMean = means.length
+    ? means.reduce((sum, row) => sum + row.mean, 0) / means.length
+    : 0;
+
+  let bonus = 0;
+  for (const row of means) {
+    const deficit = Math.max(0, groupMean - row.mean);
+    const candidateScore = staticInfo.byUser[row.profile.id]?.score || 0;
+    const gain = Math.max(0, candidateScore - 45) / 55;
+    const weight = row.profile.id === "bartek" ? 0.18 : 0.24;
+    bonus += deficit * gain * weight;
+  }
+  return Math.min(14, bonus);
+}
+
+function trackGroupSimilarity(a, b, ctx) {
+  if (!a || !b) return 0;
+  if (tracksShareArtist(a, b)) return 1;
+
+  const aAspects = groupTrackFeatures(a, ctx).aspects;
+  const bAspects = groupTrackFeatures(b, ctx).aspects;
+  if (!aAspects.size || !bAspects.size) return 0;
+
+  let intersection = 0;
+  for (const value of aAspects) if (bAspects.has(value)) intersection++;
+  const union = new Set([...aAspects, ...bAspects]).size;
+  return union ? Math.min(1, intersection / union) : 0;
+}
+
+function mmrPenalty(track, state, ctx) {
+  const recent = state.selected.slice(-10);
+  if (!recent.length) return 0;
+  const similarity = Math.max(...recent.map(other => trackGroupSimilarity(track, other, ctx)));
+  return similarity * 18;
+}
+
+function discoveryBalanceBonus(staticInfo, state) {
+  const target = Math.max(0, Math.min(1, Number(discoveryLevel.value || 0) / 100));
+  if (!state.selected.length) return staticInfo.features.discovery ? target * 4 : 0;
+  const current = state.discoveryCount / state.selected.length;
+  if (staticInfo.features.discovery && current < target) {
+    return 3 + (target - current) * 12;
+  }
+  if (!staticInfo.features.discovery && current > target) {
+    return (current - target) * 8;
+  }
+  return 0;
+}
+
+function newRejectionStats(rawPoolCount = 0) {
+  return {
+    rawPool: rawPoolCount,
+    invalid: 0,
+    feedbackTrack: 0,
+    unwantedVariant: 0,
+    explicitBlockedArtist: 0,
+    feedbackBlockedArtist: 0,
+    artistCooldown: 0,
+    recentTrack: 0,
+    recognizability: 0,
+    lowGroupFit: 0,
+    eligible: 0,
+    artistLimitDuringSelection: 0,
+    duplicateDuringSelection: 0
+  };
+}
+
+function eligibleGroupCandidates(selected, blocklists, ctx) {
+  const rows = loadCandidatePool();
+  const stats = newRejectionStats(rows.length);
+  const eligible = [];
+  const seenIds = new Set();
+
+  for (const row of rows) {
+    const track = row?.track;
+    if (!track?.id || !track?.uri || seenIds.has(track.id)) {
+      stats.invalid++;
+      continue;
+    }
+    seenIds.add(track.id);
+
+    if (trackFeedbackValue(track) < 0) {
+      stats.feedbackTrack++;
+      continue;
+    }
+    if (looksLikeUnwantedVariant(track)) {
+      stats.unwantedVariant++;
+      continue;
+    }
+
+    const artistIds = (track.artists || []).map(a => a?.id || "").filter(Boolean);
+    const artistNames = (track.artists || []).map(a => normalizeArtistName(a?.name || "")).filter(Boolean);
+
+    if (artistNames.some(name => blocklists.explicitBlockedNames.has(name))) {
+      stats.explicitBlockedArtist++;
+      continue;
+    }
+    if (artistNames.some(name => blocklists.feedbackBlockedNames.has(name))) {
+      stats.feedbackBlockedArtist++;
+      continue;
+    }
+    if (
+      artistIds.some(id => blocklists.blockedArtists.has(id)) ||
+      artistNames.some(name => blocklists.historyBlockedNames.has(name))
+    ) {
+      stats.artistCooldown++;
+      continue;
+    }
+
+    const signature = trackSignature(track);
+    const duplicateSignatures = trackDuplicateSignatures(track);
+    if (
+      blocklists.blockedTracks.has(track.id) ||
+      (signature && blocklists.blockedTrackSignatures.has(signature)) ||
+      duplicateSignatures.some(key => blocklists.blockedTrackSignatures.has(key))
+    ) {
+      stats.recentTrack++;
+      continue;
+    }
+
+    const staticInfo = groupCandidateStatic(track, ctx);
+    const strongTasteDiscovery =
+      Number(discoveryLevel.value || 0) > 0 &&
+      staticInfo.maxScore >= 72 &&
+      (staticInfo.likedByAny || staticInfo.seedByAny);
+
+    if (!recognizabilityPass(track) && !strongTasteDiscovery) {
+      stats.recognizability++;
+      continue;
+    }
+
+    if (staticInfo.groupBase < 34 || staticInfo.maxScore < 45) {
+      stats.lowGroupFit++;
+      continue;
+    }
+
+    eligible.push(staticInfo);
+    stats.eligible++;
+  }
+
+  return { eligible, stats };
+}
+
+function dynamicCandidateScore(staticInfo, state, ctx) {
+  const fairness = fairnessBonus(staticInfo, state, ctx);
+  const xquad = xquadCoverageBonus(staticInfo, state, ctx);
+  const mmr = mmrPenalty(staticInfo.track, state, ctx);
+  const discovery = discoveryBalanceBonus(staticInfo, state);
+  const noise = (Number(discoveryLevel.value || 0) / 100) * 2.5 * Math.random();
+  return {
+    final: staticInfo.groupBase + fairness + xquad + discovery - mmr + noise,
+    fairness,
+    xquad,
+    mmr,
+    discovery
+  };
+}
+
+function selectGroupPlaylist(eligible, total, ctx, stats) {
+  const state = {
+    selected: [],
+    selectedIds: new Set(),
+    selectedSignatures: new Set(),
+    artistCounts: new Map(),
+    userSums: new Map((ctx.selected || []).map(profile => [profile.id, 0])),
+    aspectCounts: new Map(),
+    discoveryCount: 0,
+    details: new Map()
+  };
+
+  const remaining = [...eligible];
+
+  while (state.selected.length < total && remaining.length) {
+    let choices = [];
+
+    for (let i = 0; i < remaining.length; i++) {
+      const item = remaining[i];
+      const track = item.track;
+      const signature = trackSignature(track);
+      const duplicateSignatures = trackDuplicateSignatures(track);
+      const artists = [...trackArtistKeys(track)];
+
+      if (
+        state.selectedIds.has(track.id) ||
+        (signature && state.selectedSignatures.has(signature)) ||
+        duplicateSignatures.some(key => state.selectedSignatures.has(key))
+      ) {
+        stats.duplicateDuringSelection++;
+        continue;
+      }
+      if (artists.some(key => (state.artistCounts.get(key) || 0) >= 2)) {
+        stats.artistLimitDuringSelection++;
+        continue;
+      }
+
+      const previous = state.selected[state.selected.length - 1];
+      if (previous && tracksShareArtist(previous, track)) continue;
+
+      choices.push({ index: i, item, dynamic: dynamicCandidateScore(item, state, ctx) });
+    }
+
+    if (!choices.length) {
+      for (let i = 0; i < remaining.length; i++) {
+        const item = remaining[i];
+        const track = item.track;
+        const signature = trackSignature(track);
+        const duplicateSignatures = trackDuplicateSignatures(track);
+        const artists = [...trackArtistKeys(track)];
+
+        if (
+          state.selectedIds.has(track.id) ||
+          (signature && state.selectedSignatures.has(signature)) ||
+          duplicateSignatures.some(key => state.selectedSignatures.has(key)) ||
+          artists.some(key => (state.artistCounts.get(key) || 0) >= 2)
+        ) continue;
+
+        choices.push({ index: i, item, dynamic: dynamicCandidateScore(item, state, ctx) });
+      }
+    }
+
+    if (!choices.length) break;
+    choices.sort((a, b) => b.dynamic.final - a.dynamic.final);
+    const picked = choices[0];
+    const track = picked.item.track;
+
+    state.selected.push(track);
+    state.selectedIds.add(track.id);
+    const signature = trackSignature(track);
+    if (signature) state.selectedSignatures.add(signature);
+    for (const duplicateSignature of trackDuplicateSignatures(track)) {
+      state.selectedSignatures.add(duplicateSignature);
+    }
+    for (const key of trackArtistKeys(track)) {
+      state.artistCounts.set(key, (state.artistCounts.get(key) || 0) + 1);
+    }
+    for (const profile of ctx.selected || []) {
+      const score = picked.item.byUser[profile.id]?.score || 0;
+      state.userSums.set(profile.id, (state.userSums.get(profile.id) || 0) + score);
+    }
+    for (const aspect of supportedAspectsForCandidate(picked.item, ctx)) {
+      state.aspectCounts.set(aspect, (state.aspectCounts.get(aspect) || 0) + 1);
+    }
+    if (picked.item.features.discovery) state.discoveryCount++;
+
+    state.details.set(track.id, {
+      byUser: Object.fromEntries(
+        (ctx.selected || []).map(profile => [
+          profile.id,
+          picked.item.byUser[profile.id]?.score || 0
+        ])
+      ),
+      groupBase: picked.item.groupBase,
+      fairness: picked.dynamic.fairness,
+      xquad: picked.dynamic.xquad,
+      mmr: picked.dynamic.mmr,
+      discovery: picked.item.features.discovery,
+      final: picked.dynamic.final
+    });
+
+    remaining.splice(picked.index, 1);
+  }
+
+  const satisfaction = {};
+  for (const profile of ctx.selected || []) {
+    const scores = state.selected.map(track =>
+      groupCandidateStatic(track, ctx).byUser[profile.id]?.score || 0
+    );
+    satisfaction[profile.id] = {
+      average: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0,
+      strong: scores.filter(score => score >= 65).length,
+      weak: scores.filter(score => score < 35).length
+    };
+  }
+
+  return {
+    tracks: state.selected,
+    details: state.details,
+    satisfaction,
+    discoveryCount: state.discoveryCount,
+    aspectCounts: state.aspectCounts,
+    rejectionStats: stats
+  };
+}
+
+async function primeCommonGroupQueries(token, selected, maxNewSearches = 3) {
+  const common = [...tasteCommonGenreQueries(selected), ...exactCommonGenreQueries(selected)];
+  const unique = [];
+  const seen = new Set();
+
+  for (const query of common) {
+    const key = canonicalQuery(query);
+    if (!key || seen.has(key) || wasQueryAttempted(query)) continue;
+    seen.add(key);
+    unique.push({
+      query,
+      pool: candidatePoolForQueries([query]).length
+    });
+  }
+
+  unique.sort((a, b) => a.pool - b.pool);
+  const before = newSearchesThisGeneration;
+  for (const item of unique) {
+    if (newSearchesThisGeneration - before >= maxNewSearches) break;
+    if (newSearchesThisGeneration >= maxNewSearchesThisGeneration) break;
+    const offsets = searchOffsetsForQuery(item.query);
+    if (!offsets.length) continue;
+    await searchTracks(token, item.query, offsets[0]);
+  }
+}
+
 async function generateOfficePlaylist() {
   try {
     generateButton.disabled = true;
@@ -3216,29 +3881,32 @@ async function generateOfficePlaylist() {
       throw new Error("Profil Bartka musi być aktywny. Jest głównym profilem tej aplikacji.");
     }
     if (!hasMusicProfile(bartek)) {
-      throw new Error("Profil Bartka nie ma żadnych gatunków ani artystów wzorcowych.");
+      throw new Error("Profil Bartka nie ma danych muzycznych. Wypełnij ankietę gustu lub dodaj gatunki/artystów wzorcowych.");
     }
 
     const mixProfiles = selected.filter(hasMusicProfile);
     const ignoredProfiles = selected.filter(profile => !hasMusicProfile(profile));
-    const otherProfiles = mixProfiles.filter(profile => profile.id !== "bartek");
 
     progressBox.textContent = "Odświeżam źródła Last.fm (z cache, jeśli są świeże)...";
     await syncLastFmSources(mixProfiles);
 
-    progressBox.textContent = "Synchronizuję historię odtworzeń (Last.fm jako źródło główne, Spotify jako fallback)...";
+    progressBox.textContent = "Synchronizuję historię odtworzeń...";
     await syncSpotifyRecentHistory(token);
 
-    // v28: do 3 nowych wyszukiwań rezerwujemy na ręcznie wpisanych artystów
-    // wzorcowych. Całkowity budżet zależy od docelowej długości playlisty.
-    // Najwyższy priorytet ma Bartek, a w ramach profilu wykonawcy dawno
-    // niewylosowani lub nigdy niewylosowani.
-    progressBox.textContent = `Odświeżam pulę artystów wzorcowych (budżet ${maxNewSearchesThisGeneration} nowych wyszukiwań)...`;
+    progressBox.textContent =
+      `Odświeżam artystów wzorcowych (budżet ${maxNewSearchesThisGeneration} nowych wyszukiwań)...`;
     await primeManualSeedArtists(token, mixProfiles, 3);
 
     const genrePrimeBudget = genrePrimeBudgetForTarget(total);
-    progressBox.textContent = `Rozszerzam słabiej reprezentowane gatunki (do ${genrePrimeBudget} nowych wyszukiwań)...`;
+    progressBox.textContent =
+      `Rozszerzam słabo reprezentowane gatunki (do ${genrePrimeBudget} nowych wyszukiwań)...`;
     await primeProfileGenres(token, mixProfiles, genrePrimeBudget);
+
+    const remainingSearchBudget = Math.max(0, maxNewSearchesThisGeneration - newSearchesThisGeneration);
+    if (remainingSearchBudget > 0) {
+      progressBox.textContent = "Szukam wspólnego mianownika gustów...";
+      await primeCommonGroupQueries(token, mixProfiles, Math.min(3, remainingSearchBudget));
+    }
 
     const {
       blockedTracks,
@@ -3246,225 +3914,35 @@ async function generateOfficePlaylist() {
       blockedArtists,
       blockedArtistNamesFromHistory
     } = buildHistoryBlocklists();
-    const blockedArtistNames = new Set([
-      ...selectedBlockedArtistNames(selected),
-      ...blockedArtistNamesFromHistory,
-      ...feedbackBlockedArtistNames()
-    ]);
 
-    const bartekTarget = Math.round(total * 0.75);
-    const outsideTarget = total - bartekTarget;
-
-    const usedTracks = new Set();
-    const usedTrackSignatures = new Set();
-    const usedArtistCounts = new Map();
-    const bartekTracks = [];
-    const outsideTracks = [];
-
-    // v25: najpierw naprawdę rezerwujemy rdzeń Bartka. Dopiero po zakończeniu
-    // wszystkich prób jego uzupełnienia wpuszczamy pozostałe profile.
-    progressBox.textContent =
-      `Buduję rdzeń Bartka (${bartekTarget}/${total} utworów)...`;
-
-    bartekTracks.push(...await collectFromQueries(
-      token,
-      queriesForProfile(bartek),
-      bartekTarget,
-      usedTracks,
-      usedTrackSignatures,
-      usedArtistCounts,
+    const blocklists = {
       blockedTracks,
       blockedTrackSignatures,
       blockedArtists,
-      blockedArtistNames,
-      { preferredArtistNames: bartek.artists || [] }
-    ));
+      historyBlockedNames: new Set(blockedArtistNamesFromHistory),
+      explicitBlockedNames: selectedBlockedArtistNames(selected),
+      feedbackBlockedNames: feedbackBlockedArtistNames()
+    };
 
-    if (bartekTracks.length < bartekTarget) {
-      progressBox.textContent =
-        `Rdzeń Bartka ma ${bartekTracks.length}/${bartekTarget}. Poszerzam pulę w jego profilu...`;
+    progressBox.textContent = "Buduję model grupowy: satysfakcja, fairness, xQuAD i MMR...";
+    const ctx = buildGroupRecommendationContext(mixProfiles);
+    const { eligible, stats } = eligibleGroupCandidates(mixProfiles, blocklists, ctx);
 
-      bartekTracks.push(...await collectFromQueries(
-        token,
-        queriesForProfile(bartek),
-        bartekTarget - bartekTracks.length,
-        usedTracks,
-        usedTrackSignatures,
-        usedArtistCounts,
-        blockedTracks,
-        blockedTrackSignatures,
-        blockedArtists,
-        blockedArtistNames,
-        { maxArtistPerPlaylist: 2, preferredArtistNames: bartek.artists || [] }
-      ));
+    if (!eligible.length) {
+      throw new Error("Po filtrach nie został żaden kandydat. Diagnostyka będzie wymagała poluzowania źródeł lub filtrów.");
     }
 
-    // Jeśli średni/wysoki filtr rozpoznawalności nadal zostawia mniej niż 75%,
-    // ostatni fallback korzysta tylko z zapytań po konkretnym artyście/utworze
-    // z profilu Bartka i źródeł Last.fm. Nie rozluźniamy ogólnych genre searchy,
-    // bo to właśnie nimi najłatwiej wpuścić katalogowe dziwadła.
-    if (bartekTracks.length < bartekTarget) {
-      const bartekTrustedQueries = queriesForProfile(bartek).filter(query =>
-        query.startsWith('artist:"') || query.startsWith('track:"')
-      );
-      progressBox.textContent =
-        `Rdzeń Bartka ma ${bartekTracks.length}/${bartekTarget}. Domykam go z konkretnych wykonawców i utworów...`;
+    const groupResult = selectGroupPlaylist(eligible, total, ctx, stats);
+    const finalTracks = groupResult.tracks;
 
-      bartekTracks.push(...await collectFromQueries(
-        token,
-        bartekTrustedQueries,
-        bartekTarget - bartekTracks.length,
-        usedTracks,
-        usedTrackSignatures,
-        usedArtistCounts,
-        blockedTracks,
-        blockedTrackSignatures,
-        blockedArtists,
-        blockedArtistNames,
-        {
-          maxArtistPerPlaylist: 2,
-          recognizabilityOverride: "low",
-          preferredArtistNames: bartek.artists || []
-        }
-      ));
+    if (!finalTracks.length) {
+      throw new Error("Algorytm grupowy nie wybrał żadnego utworu.");
     }
-
-    // v27: ostatnia próba domknięcia rdzenia nadal korzysta z lokalnej puli Bartka,
-    // ale NIE rozluźnia już filtra rozpoznawalności dla ogólnych genre searchy.
-    // Lepiej zwrócić nieco krótszą playlistę niż dobijać licznik katalogowym przypadkiem.
-    if (bartekTracks.length < bartekTarget) {
-      progressBox.textContent =
-        `Rdzeń Bartka ma ${bartekTracks.length}/${bartekTarget}. Ostatnia próba z lokalnej puli...`;
-
-      bartekTracks.push(...await collectFromQueries(
-        token,
-        queriesForProfile(bartek),
-        bartekTarget - bartekTracks.length,
-        usedTracks,
-        usedTrackSignatures,
-        usedArtistCounts,
-        blockedTracks,
-        blockedTrackSignatures,
-        blockedArtists,
-        blockedArtistNames,
-        {
-          maxArtistPerPlaylist: 2,
-          preferredArtistNames: bartek.artists || []
-        }
-      ));
-    }
-
-    // v25: rdzeń Bartka jest od tej chwili zamrożony. Pozostałe profile
-    // mogą wykorzystać tylko miejsca, które zostały po nim.
-    const frozenBartekCore = [...bartekTracks].slice(0, Math.min(bartekTarget, bartekTracks.length));
-
-    // Dopiero teraz pozostałe profile dostają maksymalnie wolne miejsca.
-    const reservedBartek = frozenBartekCore.length;
-    const slotsForOthers = Math.max(0, total - reservedBartek);
-    progressBox.textContent =
-      `Rdzeń Bartka: ${reservedBartek}/${bartekTarget}. Dodaję maks. ${slotsForOthers} utworów pozostałych osób...`;
-
-    if (slotsForOthers > 0) {
-      const profilesForOutside = otherProfiles.length ? otherProfiles : [bartek];
-      const perPersonBase = Math.floor(slotsForOthers / profilesForOutside.length);
-      let remainder = slotsForOthers % profilesForOutside.length;
-
-      for (const profile of shuffle(profilesForOutside)) {
-        const wanted = perPersonBase + (remainder-- > 0 ? 1 : 0);
-        if (wanted <= 0) continue;
-
-        outsideTracks.push(...await collectFromQueries(
-          token,
-          queriesForProfile(profile),
-          wanted,
-          usedTracks,
-          usedTrackSignatures,
-          usedArtistCounts,
-          blockedTracks,
-          blockedTrackSignatures,
-          blockedArtists,
-          blockedArtistNames,
-          { preferredArtistNames: profile.artists || [] }
-        ));
-      }
-    }
-
-    let tracks = [...frozenBartekCore, ...outsideTracks];
-
-    // Jeśli inne profile nie zapełniły swoich miejsc, najpierw próbujemy nimi,
-    // a dopiero na końcu dokładamy nadwyżkę z Bartka. Nigdy nie zabieramy już
-    // zarezerwowanych miejsc z jego rdzenia.
-    if (tracks.length < total) {
-      progressBox.textContent =
-        `Mam ${tracks.length}/${total}. Uzupełniam wolne miejsca bez naruszania rdzenia Bartka...`;
-
-      const fallbackProfiles = otherProfiles.length ? otherProfiles : mixProfiles;
-      const fallbackQueries = fallbackProfiles.flatMap(queriesForProfile);
-
-      const filler = await collectFromQueries(
-        token,
-        fallbackQueries,
-        total - tracks.length,
-        usedTracks,
-        usedTrackSignatures,
-        usedArtistCounts,
-        blockedTracks,
-        blockedTrackSignatures,
-        blockedArtists,
-        blockedArtistNames,
-        {
-          maxArtistPerPlaylist: 2,
-          preferredArtistNames: fallbackProfiles.flatMap(profile => profile.artists || [])
-        }
-      );
-      outsideTracks.push(...filler);
-      tracks = [...frozenBartekCore, ...outsideTracks];
-    }
-
-    if (tracks.length < total) {
-      const extraBartek = await collectFromQueries(
-        token,
-        queriesForProfile(bartek),
-        total - tracks.length,
-        usedTracks,
-        usedTrackSignatures,
-        usedArtistCounts,
-        blockedTracks,
-        blockedTrackSignatures,
-        blockedArtists,
-        blockedArtistNames,
-        { maxArtistPerPlaylist: 2, preferredArtistNames: bartek.artists || [] }
-      );
-      // Nadwyżka Bartka jest wyłącznie fillerem. Nie zmienia zamrożonego rdzenia 75%.
-      outsideTracks.push(...extraBartek);
-      tracks = [...frozenBartekCore, ...outsideTracks];
-    }
-
-    if (!tracks.length) {
-      throw new Error("Spotify nie zwrócił żadnych utworów dla wybranych profili.");
-    }
-
-    // v28: jeśli po filtrach rdzeń Bartka jest krótszy od nominalnego celu,
-    // nie zapełniamy braków muzyką spoza rdzenia kosztem proporcji 75/25.
-    // Wolimy krótszą playlistę niż wynik, w którym główny profil spada poniżej 75%.
-    const chosenBartek = [...frozenBartekCore];
-    const maxFinalLengthForCore = chosenBartek.length
-      ? Math.floor(chosenBartek.length / 0.75)
-      : 0;
-    const effectiveFinalTarget = Math.min(total, Math.max(chosenBartek.length, maxFinalLengthForCore));
-    const remainingSlots = Math.max(0, effectiveFinalTarget - chosenBartek.length);
-    const chosenOutside = shuffle(outsideTracks).slice(0, remainingSlots);
-    let finalTracks = [...chosenBartek, ...chosenOutside];
-
-    finalTracks = arrangeWithoutAdjacentArtist(finalTracks).slice(0, effectiveFinalTarget);
-    const chosenBartekIds = new Set(chosenBartek.map(track => track.id));
-    const actualBartekCore = finalTracks.filter(track => chosenBartekIds.has(track.id)).length;
 
     progressBox.textContent =
       `Tworzę playlistę i zapisuję ${finalTracks.length} utworów...`;
 
     const playlist = await createPlaylist(token, selected, finalTracks.length);
-
     await addItemsToPlaylist(
       token,
       playlist.id,
@@ -3476,11 +3954,10 @@ async function generateOfficePlaylist() {
       playlist,
       finalTracks,
       selected,
-      bartekTarget,
-      actualBartekCore,
       ignoredProfiles,
       total,
-      playlistCleanupResult
+      playlistCleanupResult,
+      groupResult
     );
     progressBox.textContent = "";
 
@@ -3507,7 +3984,7 @@ function seedArtistDiagnosticText(selectedProfilesList, tracks) {
       const selectedCount = (tracks || []).filter(track =>
         (track.artists || []).some(a => normalizeArtistName(a?.name || "") === key)
       ).length;
-      const searched = queriesAttemptedThisGeneration.has(query) ? "tak" : "nie";
+      const searched = wasQueryAttempted(query) ? "tak" : "nie";
       rows.push(`${artist}: pula ${poolCount}, szukano: ${searched}, wynik ${selectedCount ? `tak (${selectedCount})` : "nie"}`);
     }
   }
@@ -3524,7 +4001,7 @@ function tasteGenreDiagnosticText(selectedProfilesList) {
       .map(genre => {
         const query = `genre:"${genre}"`;
         const poolCount = candidatePoolForQueries([query]).length;
-        const searched = queriesAttemptedThisGeneration.has(query) ? "tak" : "nie";
+        const searched = wasQueryAttempted(query) ? "tak" : "nie";
         return { genre, poolCount, searched };
       })
       .sort((a, b) => Number(b.searched === "tak") - Number(a.searched === "tak") || a.poolCount - b.poolCount || a.genre.localeCompare(b.genre, "pl"));
@@ -3537,36 +4014,28 @@ function renderPlaylistResult(
   playlist,
   tracks,
   selected,
-  bartekTarget,
-  actualBartekCore,
   ignoredProfiles = [],
   requestedTotal = tracks.length,
-  playlistCleanupResult = null
+  playlistCleanupResult = null,
+  groupResult = null
 ) {
   playlistResult.textContent = "";
 
   const summary = document.createElement("p");
   summary.textContent = tracks.length < requestedTotal
-    ? `Utworzono ${tracks.length} z ${requestedTotal} utworów dla: ${selected.map(p => p.name).join(", ")}. Nie rozluźniono filtrów jakości, żeby sztucznie dobić do celu.`
+    ? `Utworzono ${tracks.length} z ${requestedTotal} utworów dla: ${selected.map(p => p.name).join(", ")}. Algorytm nie dobija wyniku przypadkowymi utworami tylko po to, żeby zgadzał się licznik.`
     : `Utworzono ${tracks.length} utworów dla: ${selected.map(p => p.name).join(", ")}.`;
 
   const model = document.createElement("p");
   model.className = "small";
-  const actualPct = tracks.length
-    ? Math.round((actualBartekCore / tracks.length) * 100)
-    : 0;
-  const nominalTotal = requestedTotal || Number(playlistLength.value) || tracks.length;
-  const actualRequired = Math.ceil(tracks.length * 0.75);
   model.textContent =
-    `Bartek jest głównym profilem: plan to ok. ${bartekTarget} z ${nominalTotal} utworów, a przy faktycznej długości ${tracks.length} minimum 75% oznacza ${actualRequired} utworów. ` +
-    `Faktyczny rdzeń Bartka w tym wyniku to ${actualBartekCore}/${tracks.length} (${actualPct}%). ` +
-    `Pozostała część może wychodzić poza jego gatunki i reprezentować pozostałych obecnych użytkowników. ` +
-    `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie wcześniejszej playlisty nie blokuje ani nie obniża utworu. ` +
-    `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany po tytule i każdym z przypisanych wykonawców, także przy różnych credits; ` +
-    `wykonawca z historii nie wraca przed końcem cooldownu, na jednej playliście może pojawić się maks. 2 razy awaryjnie i nie powinien wystąpić dwa razy z rzędu. ` +
-    `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS} pozycji), a to generowanie mogło wykonać najwyżej ${maxNewSearchesThisGeneration} nowych wyszukiwań Spotify. ` +
-    `Last.fm z ostatnich 14 dni jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists. ` +
-    `Feedback 👍/👎 silnie wpływa lokalnie na ranking: 👎 konkretnego utworu całkowicie go wyklucza, a 🚫 blokuje wykonawcę. Ręcznie wpisani artyści wzorcowi mają premię rankingową i do 3 nowych wyszukiwań Spotify jest rezerwowanych na ich pulę; dodatkowy budżet jest rezerwowany na słabo reprezentowane gatunki, zwłaszcza oznaczone ❤️ w ankiecie gustu. Dawno niewylosowani artyści wzorcowi dostają dodatkowy priorytet. Zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
+    `Model grupowy v31: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
+    `Fairness podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR ogranicza monotonię i podobieństwo kolejnych wyborów. ` +
+    `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
+    `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
+    `Odkrycia: cel ${discoveryLevel.value}%. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
+    `Wyszukiwania Spotify są buforowane przez 24 h, lokalna pula żyje 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS}), a budżet tego generowania wynosił maks. ${maxNewSearchesThisGeneration} nowych wyszukiwań.`;
 
   playlistResult.append(summary, model);
 
@@ -3583,6 +4052,34 @@ function renderPlaylistResult(
       return `${profile.name} ❤️ ${liked}, 🙂 ${ok}, 🚫 ${no}; +${added} gatunków do aktywnego discovery`;
     }).join(" · ") + ".";
     playlistResult.append(tasteDiag);
+  }
+
+  if (groupResult) {
+    const satisfaction = document.createElement("p");
+    satisfaction.className = "small";
+    const satParts = selected
+      .filter(profile => groupResult.satisfaction?.[profile.id])
+      .map(profile => {
+        const row = groupResult.satisfaction[profile.id];
+        return `${profile.name}: średnia ${Math.round(row.average)}/100, mocne dopasowanie ${row.strong}/${tracks.length}, słabe ${row.weak}`;
+      });
+    const discoveryPct = tracks.length
+      ? Math.round((Number(groupResult.discoveryCount || 0) / tracks.length) * 100)
+      : 0;
+    satisfaction.textContent =
+      `Dopasowanie grupowe: ${satParts.join(" · ")}. Odkrycia w wyniku: ${groupResult.discoveryCount || 0}/${tracks.length} (${discoveryPct}%).`;
+    playlistResult.append(satisfaction);
+
+    const r = groupResult.rejectionStats || {};
+    const rejection = document.createElement("p");
+    rejection.className = "small";
+    rejection.textContent =
+      `Diagnostyka filtrów: pula ${r.rawPool || 0} → kwalifikowalne ${r.eligible || 0} → wybrane ${tracks.length}. ` +
+      `Odrzucono: 👎 utwór ${r.feedbackTrack || 0}, wariant/live/remix ${r.unwantedVariant || 0}, ` +
+      `jawnie blokowany wykonawca ${r.explicitBlockedArtist || 0}, 🚫 wykonawca z feedbacku ${r.feedbackBlockedArtist || 0}, ` +
+      `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, ` +
+      `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}.`;
+    playlistResult.append(rejection);
   }
 
   const genreDiagText = tasteGenreDiagnosticText(selected);
@@ -3637,7 +4134,7 @@ function renderPlaylistResult(
     titleLine.textContent = `${track.artists.map(a => a.name).join(", ")} - ${track.name}`;
     const meta = document.createElement("span");
     meta.className = "track-meta";
-    meta.textContent = trackDiagnostic(track);
+    meta.textContent = trackDiagnostic(track, groupResult?.details?.get?.(track.id) || null, selected);
     label.append(titleLine, meta);
 
     const votes = document.createElement("span");
