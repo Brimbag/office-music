@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v33</title>
+  <title>Office Music Mixer v34</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v33 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v34 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -823,6 +823,7 @@ const LASTFM_ARTIST_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 const LASTFM_TRACK_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 const LASTFM_MAX_TAG_CALLS_PER_SYNC = 24;
 const LASTFM_TAG_ROTATION_KEY = "office_lastfm_tag_rotation_v1";
+const STORAGE_V34_MIGRATION_KEY = "office_storage_v34_migrated_v1";
 let lastFmCallsThisSync = 0;
 let lastFmTagCallBudgetThisSync = LASTFM_MAX_TAG_CALLS_PER_SYNC;
 
@@ -841,7 +842,11 @@ function rotatingLastFmTags(tags, maxTagCalls = LASTFM_MAX_TAG_CALLS_PER_SYNC) {
   cursor %= unique.length;
   const ordered = [...unique.slice(cursor), ...unique.slice(0, cursor)];
   const chosen = ordered.slice(0, maxTags);
-  localStorage.setItem(LASTFM_TAG_ROTATION_KEY, String((cursor + chosen.length) % unique.length));
+  safeSetSmallStorageItem(
+    LASTFM_TAG_ROTATION_KEY,
+    String((cursor + chosen.length) % unique.length),
+    "rotacji tagów Last.fm"
+  );
   return chosen;
 }
 
@@ -880,7 +885,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v33",
+      source: "Office Music Mixer v34",
       storage: exportedStorageState()
     };
 
@@ -1048,7 +1053,11 @@ function loadSeedArtistRotation() {
 }
 
 function saveSeedArtistRotation(data) {
-  localStorage.setItem(SEED_ARTIST_ROTATION_KEY, JSON.stringify(data || {}));
+  safeSetSmallStorageItem(
+    SEED_ARTIST_ROTATION_KEY,
+    JSON.stringify(data || {}),
+    "rotacji artystów wzorcowych"
+  );
 }
 
 function seedArtistAgeBonus(artistName, rotation = loadSeedArtistRotation()) {
@@ -1786,13 +1795,51 @@ function readLastFmCache(method, params, ttlMs = LASTFM_CACHE_TTL_MS) {
   }
 }
 
+function compactLastFmCacheData(method, data) {
+  if (method === "tag.getTopArtists") {
+    return {
+      topartists: {
+        artist: (data?.topartists?.artist || []).map(item => ({ name: item?.name || "" }))
+      }
+    };
+  }
+  if (method === "tag.getTopTracks") {
+    return {
+      tracks: {
+        track: (data?.tracks?.track || []).map(item => ({
+          name: item?.name || "",
+          artist: { name: item?.artist?.name || item?.artist?.["#text"] || "" }
+        }))
+      }
+    };
+  }
+  if (method === "user.getRecentTracks") {
+    return {
+      recenttracks: {
+        track: (data?.recenttracks?.track || []).map(item => ({
+          name: item?.name || "",
+          artist: {
+            "#text": item?.artist?.["#text"] || item?.artist?.name || "",
+            name: item?.artist?.name || item?.artist?.["#text"] || ""
+          },
+          ...(item?.date?.uts ? { date: { uts: item.date.uts } } : {})
+        })),
+        "@attr": { totalPages: data?.recenttracks?.["@attr"]?.totalPages || "1" }
+      }
+    };
+  }
+  return data;
+}
+
 function writeLastFmCache(method, params, data) {
   try {
+    const compactData = compactLastFmCacheData(method, data);
     localStorage.setItem(
       lastFmCacheKey(method, params),
-      JSON.stringify({ savedAt: Date.now(), data })
+      JSON.stringify({ savedAt: Date.now(), data: compactData })
     );
   } catch (err) {
+    if (isStorageQuotaError(err)) emergencyStorageCleanup();
     console.warn("Nie udało się zapisać cache Last.fm.", err);
   }
 }
@@ -2176,6 +2223,59 @@ function migrateHistoryStorage() {
   }
 }
 
+function isStorageQuotaError(err) {
+  return err?.name === "QuotaExceededError" || err?.code === 22 || err?.code === 1014;
+}
+
+function disposableCacheKeys() {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    if (key.startsWith(SEARCH_CACHE_PREFIX) || key.startsWith(LASTFM_CACHE_PREFIX)) keys.push(key);
+  }
+  return keys;
+}
+
+function emergencyStorageCleanup() {
+  try { purgeExpiredCaches(); } catch {}
+  // Surowe odpowiedzi API są wyłącznie cache'em. Kandydaci i kompaktowe pule
+  // Last.fm żyją osobno, więc przy presji miejsca można bezpiecznie wyrzucić cache.
+  for (const key of disposableCacheKeys()) {
+    try { localStorage.removeItem(key); } catch {}
+  }
+}
+
+function safeSetSmallStorageItem(key, value, label = "ustawienia") {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    if (!isStorageQuotaError(err)) throw err;
+    emergencyStorageCleanup();
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (retryErr) {
+      console.warn(`Brak miejsca na zapis ${label}; generowanie będzie kontynuowane.`, retryErr);
+      return false;
+    }
+  }
+}
+
+function migrateStorageV34() {
+  if (localStorage.getItem(STORAGE_V34_MIGRATION_KEY) === "1") return;
+  // Starsze wersje zapisywały pełne odpowiedzi Last.fm (obrazy, URL-e i inne
+  // pola, których algorytm nie używał), co po zwiększeniu budżetu Last.fm mogło
+  // zapełnić typowy limit localStorage. Zachowujemy właściwe pule, usuwamy
+  // wyłącznie odtwarzalny cache odpowiedzi API.
+  for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(LASTFM_CACHE_PREFIX)) localStorage.removeItem(key);
+  }
+  safeSetSmallStorageItem(STORAGE_V34_MIGRATION_KEY, "1", "migracji magazynu v34");
+}
+
 function purgeExpiredCaches() {
   const now = Date.now();
   for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -2234,7 +2334,11 @@ async function syncSpotifyRecentHistory(token) {
     }));
 
   if (entries.length) mergeHistoryEntries(entries);
-  localStorage.setItem(RECENT_HISTORY_SYNC_KEY, String(Date.now()));
+  safeSetSmallStorageItem(
+    RECENT_HISTORY_SYNC_KEY,
+    String(Date.now()),
+    "znacznika synchronizacji historii Spotify"
+  );
   return entries.length;
 }
 
@@ -2363,11 +2467,11 @@ function loadGenrePrimeState() {
 }
 
 function saveGenrePrimeState(state) {
-  try {
-    localStorage.setItem(GENRE_PRIME_STATE_KEY, JSON.stringify(state || {}));
-  } catch (err) {
-    console.warn("Nie udało się zapisać rotacji wyszukiwań gatunkowych.", err);
-  }
+  safeSetSmallStorageItem(
+    GENRE_PRIME_STATE_KEY,
+    JSON.stringify(state || {}),
+    "rotacji wyszukiwań gatunkowych"
+  );
 }
 
 async function primeProfileGenres(token, profilesToPrime, maxNewSearches = 6) {
@@ -4364,6 +4468,7 @@ async function init() {
 }
 
 migrateHistoryStorage();
+migrateStorageV34();
 purgeExpiredCaches();
 loadRmfSettings();
 renderFeedbackSummary();
