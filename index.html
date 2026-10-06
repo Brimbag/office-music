@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v27</title>
+  <title>Office Music Mixer v28</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v27 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v28 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -383,6 +383,7 @@
   <div class="box" id="mixerBox" style="display:none;">
     <h2>Kto dziś jest w biurze?</h2>
     <div id="people" class="people"></div>
+    <p class="small"><a href="taste.html">🎵 Ankieta gustu</a> · osobna podstrona do budowania dokładniejszych profili muzycznych. Wyniki są zapisywane lokalnie; generator jeszcze ich nie wykorzystuje.</p>
 
     <div class="settings-panel lastfm-panel">
       <div class="settings-row lastfm-row">
@@ -535,6 +536,7 @@ const scopes = [
   "playlist-read-private",
   "playlist-modify-private",
   "playlist-modify-public",
+  "user-library-modify",
   "user-read-recently-played"
 ];
 
@@ -699,7 +701,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v27",
+      source: "Office Music Mixer v28",
       storage: exportedStorageState()
     };
 
@@ -1105,6 +1107,20 @@ function latestRegularRmfEpisode(episodes, dateKey) {
   ) || null;
 }
 
+async function getSpotifyPlaybackState(token) {
+  const response = await fetch("https://api.spotify.com/v1/me/player", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (response.status === 204) return { available: false, isPlaying: false };
+  const data = await parseJsonSafely(response);
+  if (!response.ok) return { available: false, isPlaying: false, status: response.status };
+  return {
+    available: true,
+    isPlaying: data?.is_playing === true,
+    deviceName: data?.device?.name || ""
+  };
+}
+
 async function addEpisodeToQueue(token, episode) {
   const response = await fetch(
     `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(episode.uri)}`,
@@ -1155,11 +1171,20 @@ async function checkRmfWatcher(force = false) {
     updateRmfStatus(`Fakty RMF: wydanie ${String(slot.slot).padStart(2,"0")}:00 jeszcze się nie pojawiło. Sprawdzę ponownie za kilka minut.`);
     return;
   }
+
+  // v28: nie dodajemy automatycznie Faktów do zatrzymanego Spotify. Jeśli
+  // odtwarzanie wróci w obrębie bieżącego okna, watcher spróbuje ponownie.
+  // Po końcu godziny zaległe wydanie zostawiamy już przyciskowi ręcznemu.
+  const playback = await getSpotifyPlaybackState(token);
+  if (!playback.isPlaying) {
+    updateRmfStatus(`Fakty RMF: ${episode.name} są dostępne, ale Spotify jest wstrzymane. Spróbuję ponownie w tej godzinie, do ${String(slot.slot).padStart(2,"0")}:55.`);
+    return;
+  }
+
   await addEpisodeToQueue(token, episode);
   queued[key] = { uri: episode.uri, queuedAt: new Date().toISOString(), name: episode.name };
   saveRmfQueued(queued);
-  const link = episode?.external_urls?.spotify || "";
-  rmfStatus.textContent = `Fakty RMF: ${episode.name} dodane jako następne w kolejce.${link ? "" : ""}`;
+  rmfStatus.textContent = `Fakty RMF: ${episode.name} dodane do kolejki Spotify.`;
 }
 
 async function manualRmfCheck(addToQueue) {
@@ -1178,7 +1203,7 @@ async function manualRmfCheck(addToQueue) {
     }
     if (addToQueue) {
       await addEpisodeToQueue(token, episode);
-      updateRmfStatus(`Fakty RMF: ${episode.name} dodane jako następne w kolejce.`);
+      updateRmfStatus(`Fakty RMF: ${episode.name} dodane do kolejki Spotify.`);
     } else {
       updateRmfStatus(`Fakty RMF: najnowsze dostępne dziś wydanie to ${episode.name}.`);
     }
@@ -2029,8 +2054,13 @@ const MAX_RATE_LIMIT_RETRIES = 3;
 // więc odkładamy wyniki z różnych stron i używamy ich ponownie przy kolejnych playlistach.
 const CANDIDATE_POOL_KEY = "office_candidate_pool_v1";
 const CANDIDATE_POOL_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const CANDIDATE_POOL_MAX_ITEMS = 1400;
-const MAX_NEW_SEARCHES_PER_GENERATION = 6;
+const CANDIDATE_POOL_MAX_ITEMS = 2000;
+let maxNewSearchesThisGeneration = 10;
+function searchBudgetForTarget(total) {
+  if (total <= 60) return 10;
+  if (total <= 90) return 12;
+  return 14;
+}
 const RECENT_HISTORY_SYNC_KEY = "office_recent_history_sync_v1";
 const RECENT_HISTORY_SYNC_TTL_MS = 10 * 60 * 1000;
 let newSearchesThisGeneration = 0;
@@ -2212,7 +2242,7 @@ async function searchTracks(token, query, offset = 0) {
     return validCached;
   }
 
-  if (newSearchesThisGeneration >= MAX_NEW_SEARCHES_PER_GENERATION) {
+  if (newSearchesThisGeneration >= maxNewSearchesThisGeneration) {
     return [];
   }
   newSearchesThisGeneration++;
@@ -2533,7 +2563,7 @@ async function collectFromQueries(
 
   for (const { query, offset } of pagePlans) {
     if (result.length >= wanted) break;
-    if (newSearchesThisGeneration >= MAX_NEW_SEARCHES_PER_GENERATION && !hasFreshSearchCache(query, offset)) {
+    if (newSearchesThisGeneration >= maxNewSearchesThisGeneration && !hasFreshSearchCache(query, offset)) {
       break;
     }
 
@@ -2621,14 +2651,92 @@ function queriesForProfile(profile) {
   return [...artistQueries, ...lastFmTrackQueries, ...lastFmQueries, ...directGenreQueries, ...categoryBased];
 }
 
+const OFFICE_PLAYLIST_PREFIX = "Office Music Mixer - ";
+const OFFICE_PLAYLIST_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
+
+function officePlaylistTimestamp(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  }).formatToParts(date);
+  const obj = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${obj.year}-${obj.month}-${obj.day} ${obj.hour}:${obj.minute}`;
+}
+
+function officePlaylistCreatedAtFromName(name) {
+  const text = String(name || "").trim();
+  if (!text.startsWith(OFFICE_PLAYLIST_PREFIX)) return null;
+  const suffix = text.slice(OFFICE_PLAYLIST_PREFIX.length).trim();
+
+  let match = suffix.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2}))?/);
+  if (match) {
+    const [, year, month, day, hour = "23", minute = "59"] = match;
+    return new Date(`${year}-${month}-${day}T${hour}:${minute}:00+02:00`);
+  }
+
+  match = suffix.match(/^(\d{2})[.](\d{2})[.](\d{4})(?:[,\s]+(\d{2}):(\d{2}))?/);
+  if (match) {
+    const [, day, month, year, hour = "23", minute = "59"] = match;
+    return new Date(`${year}-${month}-${day}T${hour}:${minute}:00+02:00`);
+  }
+  return null;
+}
+
+async function cleanupOldOfficePlaylists(token) {
+  try {
+    const profile = await getProfile(token);
+    const profileIds = new Set([profile?.id, profile?.account_id].filter(Boolean));
+    const oldUris = [];
+    let offset = 0;
+
+    while (offset < 500) {
+      const response = await fetch(
+        `https://api.spotify.com/v1/me/playlists?limit=50&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await parseJsonSafely(response);
+      if (!response.ok) return { removed: 0, skipped: `lista playlist: ${response.status}` };
+
+      const items = data?.items || [];
+      for (const playlist of items) {
+        if (!playlist?.name?.startsWith(OFFICE_PLAYLIST_PREFIX) || !playlist?.uri) continue;
+        const ownerIds = new Set([playlist?.owner?.id, playlist?.owner?.account_id].filter(Boolean));
+        if (profileIds.size && ownerIds.size && ![...ownerIds].some(id => profileIds.has(id))) continue;
+        if (profileIds.size && !ownerIds.size) continue;
+
+        const createdAt = officePlaylistCreatedAtFromName(playlist.name);
+        if (!createdAt || Number.isNaN(createdAt.getTime())) continue;
+        if (Date.now() - createdAt.getTime() > OFFICE_PLAYLIST_RETENTION_MS) oldUris.push(playlist.uri);
+      }
+
+      if (!data?.next || !items.length) break;
+      offset += items.length;
+    }
+
+    let removed = 0;
+    for (let i = 0; i < oldUris.length; i += 40) {
+      const batch = oldUris.slice(i, i + 40);
+      const response = await fetch(
+        `https://api.spotify.com/v1/me/library?uris=${encodeURIComponent(batch.join(","))}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.status === 403) {
+        return { removed, skipped: "brak scope user-library-modify; wyloguj i połącz Spotify ponownie" };
+      }
+      if (!response.ok) return { removed, skipped: `usuwanie z biblioteki: ${response.status}` };
+      removed += batch.length;
+    }
+    return { removed, skipped: "" };
+  } catch (err) {
+    console.warn("Nie udało się posprzątać starych playlist Office Music Mixer:", err);
+    return { removed: 0, skipped: err.message || "nieznany błąd" };
+  }
+}
+
 async function createPlaylist(token, selected, total) {
   const names = selected.map(p => p.name).join(", ");
-  const now = new Date();
-  const stamp = now.toLocaleDateString("pl-PL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  });
+  const stamp = officePlaylistTimestamp();
 
   const response = await fetch("https://api.spotify.com/v1/me/playlists", {
     method: "POST",
@@ -2637,10 +2745,9 @@ async function createPlaylist(token, selected, total) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      name: `Office Music Mixer - ${stamp}`,
+      name: `${OFFICE_PLAYLIST_PREFIX}${stamp}`,
       public: false,
-      description:
-        `Wspólna playlista dla: ${names}. ${total} utworów; model 75% rdzeń Bartka / 25% pozostałe profile i odkrycia.`
+      description: names
     })
   });
 
@@ -2741,6 +2848,12 @@ async function generateOfficePlaylist() {
     const token = await getValidAccessToken();
     if (!token) throw new Error("Brak aktywnej sesji Spotify.");
 
+    const total = Number(playlistLength.value);
+    maxNewSearchesThisGeneration = searchBudgetForTarget(total);
+
+    progressBox.textContent = "Sprzątam playlisty Office Music Mixer starsze niż 3 dni...";
+    const playlistCleanupResult = await cleanupOldOfficePlaylists(token);
+
     const selected = selectedProfiles();
     const bartek = selected.find(profile => profile.id === "bartek");
     if (!bartek) {
@@ -2760,11 +2873,12 @@ async function generateOfficePlaylist() {
     progressBox.textContent = "Synchronizuję historię odtworzeń (Last.fm jako źródło główne, Spotify jako fallback)...";
     await syncSpotifyRecentHistory(token);
 
-    // v25: maksymalnie 2 z 6 nowych wyszukiwań rezerwujemy na ręcznie wpisanych
-    // artystów wzorcowych. Najwyższy priorytet ma Bartek, a w ramach profilu
-    // wykonawcy dawno niewylosowani lub nigdy niewylosowani.
-    progressBox.textContent = "Odświeżam pulę artystów wzorcowych...";
-    await primeManualSeedArtists(token, mixProfiles, 2);
+    // v28: do 3 nowych wyszukiwań rezerwujemy na ręcznie wpisanych artystów
+    // wzorcowych. Całkowity budżet zależy od docelowej długości playlisty.
+    // Najwyższy priorytet ma Bartek, a w ramach profilu wykonawcy dawno
+    // niewylosowani lub nigdy niewylosowani.
+    progressBox.textContent = `Odświeżam pulę artystów wzorcowych (budżet ${maxNewSearchesThisGeneration} nowych wyszukiwań)...`;
+    await primeManualSeedArtists(token, mixProfiles, 3);
 
     const {
       blockedTracks,
@@ -2778,7 +2892,6 @@ async function generateOfficePlaylist() {
       ...feedbackBlockedArtistNames()
     ]);
 
-    const total = Number(playlistLength.value);
     const bartekTarget = Math.round(total * 0.75);
     const outsideTarget = total - bartekTarget;
 
@@ -2971,14 +3084,19 @@ async function generateOfficePlaylist() {
       throw new Error("Spotify nie zwrócił żadnych utworów dla wybranych profili.");
     }
 
-    // v25: finalny skład naprawdę nie może naruszyć zamrożonego rdzenia Bartka.
-    // Losujemy wyłącznie kolejność, nie członkostwo w rdzeniu.
+    // v28: jeśli po filtrach rdzeń Bartka jest krótszy od nominalnego celu,
+    // nie zapełniamy braków muzyką spoza rdzenia kosztem proporcji 75/25.
+    // Wolimy krótszą playlistę niż wynik, w którym główny profil spada poniżej 75%.
     const chosenBartek = [...frozenBartekCore];
-    const remainingSlots = Math.max(0, total - chosenBartek.length);
+    const maxFinalLengthForCore = chosenBartek.length
+      ? Math.floor(chosenBartek.length / 0.75)
+      : 0;
+    const effectiveFinalTarget = Math.min(total, Math.max(chosenBartek.length, maxFinalLengthForCore));
+    const remainingSlots = Math.max(0, effectiveFinalTarget - chosenBartek.length);
     const chosenOutside = shuffle(outsideTracks).slice(0, remainingSlots);
     let finalTracks = [...chosenBartek, ...chosenOutside];
 
-    finalTracks = arrangeWithoutAdjacentArtist(finalTracks).slice(0, total);
+    finalTracks = arrangeWithoutAdjacentArtist(finalTracks).slice(0, effectiveFinalTarget);
     const chosenBartekIds = new Set(chosenBartek.map(track => track.id));
     const actualBartekCore = finalTracks.filter(track => chosenBartekIds.has(track.id)).length;
 
@@ -3001,7 +3119,9 @@ async function generateOfficePlaylist() {
       selected,
       bartekTarget,
       actualBartekCore,
-      ignoredProfiles
+      ignoredProfiles,
+      total,
+      playlistCleanupResult
     );
     progressBox.textContent = "";
 
@@ -3041,32 +3161,34 @@ function renderPlaylistResult(
   selected,
   bartekTarget,
   actualBartekCore,
-  ignoredProfiles = []
+  ignoredProfiles = [],
+  requestedTotal = tracks.length,
+  playlistCleanupResult = null
 ) {
   playlistResult.textContent = "";
 
   const summary = document.createElement("p");
-  summary.textContent =
-    `Utworzono ${tracks.length} utworów dla: ${selected
-      .map(p => p.name)
-      .join(", ")}.`;
+  summary.textContent = tracks.length < requestedTotal
+    ? `Utworzono ${tracks.length} z ${requestedTotal} utworów dla: ${selected.map(p => p.name).join(", ")}. Nie rozluźniono filtrów jakości, żeby sztucznie dobić do celu.`
+    : `Utworzono ${tracks.length} utworów dla: ${selected.map(p => p.name).join(", ")}.`;
 
   const model = document.createElement("p");
   model.className = "small";
   const actualPct = tracks.length
     ? Math.round((actualBartekCore / tracks.length) * 100)
     : 0;
-  const nominalTotal = Number(playlistLength.value) || tracks.length;
+  const nominalTotal = requestedTotal || Number(playlistLength.value) || tracks.length;
+  const actualRequired = Math.ceil(tracks.length * 0.75);
   model.textContent =
-    `Bartek jest głównym profilem: cel to ok. ${bartekTarget} z ${nominalTotal} utworów (75% po zaokrągleniu), ` +
-    `a faktyczny rdzeń Bartka w tym wyniku to ${actualBartekCore}/${tracks.length} (${actualPct}%). ` +
+    `Bartek jest głównym profilem: plan to ok. ${bartekTarget} z ${nominalTotal} utworów, a przy faktycznej długości ${tracks.length} minimum 75% oznacza ${actualRequired} utworów. ` +
+    `Faktyczny rdzeń Bartka w tym wyniku to ${actualBartekCore}/${tracks.length} (${actualPct}%). ` +
     `Pozostała część może wychodzić poza jego gatunki i reprezentować pozostałych obecnych użytkowników. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie wcześniejszej playlisty nie blokuje ani nie obniża utworu. ` +
     `Odkrycia: ${discoveryLevel.value}%. Ten sam utwór jest rozpoznawany po tytule i każdym z przypisanych wykonawców, także przy różnych credits; ` +
     `wykonawca z historii nie wraca przed końcem cooldownu, na jednej playliście może pojawić się maks. 2 razy awaryjnie i nie powinien wystąpić dwa razy z rzędu. ` +
-    `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni, a pojedyncze generowanie może wykonać najwyżej 6 nowych wyszukiwań Spotify. ` +
+    `Wyszukiwania Spotify są buforowane przez 24 h, kandydaci są odkładani do lokalnej puli na 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS} pozycji), a to generowanie mogło wykonać najwyżej ${maxNewSearchesThisGeneration} nowych wyszukiwań Spotify. ` +
     `Last.fm z ostatnich 14 dni jest głównym źródłem historii faktycznych odsłuchań i dostarcza także top utwory oraz wykonawców dla tagów; Spotify pozostaje fallbackiem historii i źródłem URI/playlists. ` +
-    `Feedback 👍/👎 silnie wpływa lokalnie na ranking: 👎 konkretnego utworu całkowicie go wyklucza, a 🚫 blokuje wykonawcę. Ręcznie wpisani artyści wzorcowi mają premię rankingową i do 2 z 6 nowych wyszukiwań Spotify jest rezerwowanych na ich pulę; dawno niewylosowani dostają dodatkowy priorytet. Zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
+    `Feedback 👍/👎 silnie wpływa lokalnie na ranking: 👎 konkretnego utworu całkowicie go wyklucza, a 🚫 blokuje wykonawcę. Ręcznie wpisani artyści wzorcowi mają premię rankingową i do 3 nowych wyszukiwań Spotify jest rezerwowanych na ich pulę; dawno niewylosowani dostają dodatkowy priorytet. Zapytania artist:"..." są walidowane po dokładnej nazwie wykonawcy, a filtr rozpoznawalności korzysta z lokalnej bazy Last.fm (${recognizabilityLevel.value}).`;
 
   playlistResult.append(summary, model);
 
@@ -3076,6 +3198,18 @@ function renderPlaylistResult(
     seedDiag.className = "small";
     seedDiag.textContent = `Diagnostyka artystów wzorcowych: ${seedDiagText}`;
     playlistResult.append(seedDiag);
+  }
+
+  if (playlistCleanupResult?.removed) {
+    const cleanupInfo = document.createElement("p");
+    cleanupInfo.className = "small";
+    cleanupInfo.textContent = `Porządki Spotify: usunięto z biblioteki ${playlistCleanupResult.removed} playlist Office Music Mixer starszych niż 3 dni.`;
+    playlistResult.append(cleanupInfo);
+  } else if (playlistCleanupResult?.skipped) {
+    const cleanupInfo = document.createElement("p");
+    cleanupInfo.className = "small";
+    cleanupInfo.textContent = `Porządki Spotify pominięte: ${playlistCleanupResult.skipped}.`;
+    playlistResult.append(cleanupInfo);
   }
 
   if (ignoredProfiles.length) {
