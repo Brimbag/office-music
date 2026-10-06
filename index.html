@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v34</title>
+  <title>Office Music Mixer v35</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v34 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v35 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -466,7 +466,7 @@
     </div>
 
     <p class="small">
-      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność kolejnych utworów. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku, nie nominalnego celu.
+      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy.
       Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
       Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
     </p>
@@ -885,7 +885,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v34",
+      source: "Office Music Mixer v35",
       storage: exportedStorageState()
     };
 
@@ -3726,10 +3726,17 @@ function fairnessBonus(staticInfo, state, ctx) {
     const deficit = Math.max(0, groupMean - row.mean);
     const candidateScore = staticInfo.byUser[row.profile.id]?.score || 0;
     const gain = Math.max(0, candidateScore - 45) / 55;
-    const weight = row.profile.id === "bartek" ? 0.18 : 0.24;
+    const weight = row.profile.id === "bartek" ? 0.25 : 0.50;
     bonus += deficit * gain * weight;
+
+    // Jeśli ktoś wyraźnie odstaje od reszty, mocniej premiuj utwór,
+    // który realnie podnosi jego dotychczasową średnią.
+    if (deficit >= 6 && candidateScore > row.mean) {
+      const improvement = Math.min(1, (candidateScore - row.mean) / 24);
+      bonus += Math.min(7, (deficit / 10) * improvement * 4.5);
+    }
   }
-  return Math.min(14, bonus);
+  return Math.min(18, bonus);
 }
 
 function trackGroupSimilarity(a, b, ctx) {
@@ -3772,7 +3779,7 @@ function discoveryQuotaForTotal(total) {
   };
 }
 
-const GROUP_MIN_FINAL_SCORE = 43;
+const GROUP_HARD_MIN_BASE_SCORE = 44;
 
 function newRejectionStats(rawPoolCount = 0) {
   return {
@@ -3884,6 +3891,70 @@ function dynamicCandidateScore(staticInfo, state, ctx) {
   };
 }
 
+function shuffleArray(items) {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function sequencePlaylistForListening(tracks, minArtistGap = 5) {
+  const remaining = shuffleArray(tracks);
+  const ordered = [];
+  const lastArtistPosition = new Map();
+
+  while (remaining.length) {
+    const position = ordered.length;
+    const valid = [];
+
+    for (let i = 0; i < remaining.length; i++) {
+      const artistKeys = [...trackArtistKeys(remaining[i])];
+      const tooClose = artistKeys.some(key => {
+        const lastPos = lastArtistPosition.get(key);
+        return Number.isInteger(lastPos) && position - lastPos <= minArtistGap;
+      });
+      if (!tooClose) valid.push(i);
+    }
+
+    let pickedIndex;
+    if (valid.length) {
+      pickedIndex = valid[Math.floor(Math.random() * valid.length)];
+    } else {
+      // Awaryjnie wybierz utwór, którego wykonawca był najdawniej.
+      // Przy limicie 2 utworów na wykonawcę ta gałąź powinna być rzadka.
+      let bestDistance = -1;
+      const best = [];
+      for (let i = 0; i < remaining.length; i++) {
+        const artistKeys = [...trackArtistKeys(remaining[i])];
+        const nearest = artistKeys.length
+          ? Math.min(...artistKeys.map(key => {
+              const lastPos = lastArtistPosition.get(key);
+              return Number.isInteger(lastPos) ? position - lastPos : Number.POSITIVE_INFINITY;
+            }))
+          : Number.POSITIVE_INFINITY;
+        if (nearest > bestDistance) {
+          bestDistance = nearest;
+          best.length = 0;
+          best.push(i);
+        } else if (nearest === bestDistance) {
+          best.push(i);
+        }
+      }
+      pickedIndex = best[Math.floor(Math.random() * best.length)];
+    }
+
+    const [track] = remaining.splice(pickedIndex, 1);
+    ordered.push(track);
+    for (const key of trackArtistKeys(track)) {
+      lastArtistPosition.set(key, position);
+    }
+  }
+
+  return ordered;
+}
+
 function selectGroupPlaylist(eligible, total, ctx, stats) {
   const requestedDiscoveryQuota = discoveryQuotaForTotal(total);
   const state = {
@@ -3955,12 +4026,17 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     }
 
     if (!choices.length) break;
-    choices.sort((a, b) => b.dynamic.final - a.dynamic.final);
-    if (choices[0].dynamic.final < GROUP_MIN_FINAL_SCORE) {
+
+    // MMR ma zmieniać kolejność preferencji, a nie kończyć playlistę tylko dlatego,
+    // że po wielu podobnych utworach dynamiczny wynik został chwilowo mocno obniżony.
+    // Twardy stop opieramy na jakości samego dopasowania grupowego.
+    const qualityChoices = choices.filter(choice => choice.item.groupBase >= GROUP_HARD_MIN_BASE_SCORE);
+    if (!qualityChoices.length) {
       stats.lowFinalScoreStop = remaining.length;
       break;
     }
-    const picked = choices[0];
+    qualityChoices.sort((a, b) => b.dynamic.final - a.dynamic.final);
+    const picked = qualityChoices[0];
     const track = picked.item.track;
 
     state.selected.push(track);
@@ -4127,7 +4203,8 @@ async function generateOfficePlaylist() {
     }
 
     const groupResult = selectGroupPlaylist(eligible, total, ctx, stats);
-    const finalTracks = groupResult.tracks;
+    const finalTracks = sequencePlaylistForListening(groupResult.tracks, 5);
+    groupResult.tracks = finalTracks;
 
     if (!finalTracks.length) {
       throw new Error("Algorytm grupowy nie wybrał żadnego utworu.");
@@ -4223,9 +4300,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v32: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v35: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR ogranicza monotonię i podobieństwo kolejnych wyborów. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); quota jest pilnowana dynamicznie względem faktycznej długości wyniku, a nie nominalnego celu. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -4275,7 +4352,7 @@ function renderPlaylistResult(
       `jawnie blokowany wykonawca ${r.explicitBlockedArtist || 0}, 🚫 wykonawca z feedbacku ${r.feedbackBlockedArtist || 0}, ` +
       `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, ` +
       `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}` +
-      (r.lowFinalScoreStop ? `, zatrzymanie na progu jakości końcówki: ${r.lowFinalScoreStop} kandydatów pozostało` : "") + `.`;
+      (r.lowFinalScoreStop ? `, zatrzymanie na twardym progu jakości bazowej: ${r.lowFinalScoreStop} kandydatów pozostało` : "") + `.`;
     playlistResult.append(rejection);
   }
 
