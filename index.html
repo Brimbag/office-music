@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v32</title>
+  <title>Office Music Mixer v33</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v32 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v33 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -466,7 +466,7 @@
     </div>
 
     <p class="small">
-      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność kolejnych utworów. v32 dokładniej waży ❤️/🙂/🚫, pilnuje realnego udziału discovery i zatrzymuje dobór, gdy końcówka spada poniżej progu jakości.
+      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność kolejnych utworów. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku, nie nominalnego celu.
       Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
       Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
     </p>
@@ -880,7 +880,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v32",
+      source: "Office Music Mixer v33",
       storage: exportedStorageState()
     };
 
@@ -3369,13 +3369,25 @@ function buildGroupRecommendationContext(selected) {
   };
 }
 
-function addAspectAndParents(rawGenre, aspects, ctx) {
+function addAspectAndParents(rawGenre, aspects, ctx, evidence = null, weight = 1, source = "unknown") {
   const key = genrePreferenceKey(rawGenre);
   if (!key) return;
-  aspects.add(key);
+
+  const addWeighted = (aspectKey, aspectWeight, aspectSource) => {
+    if (!aspectKey) return;
+    aspects.add(aspectKey);
+    if (!evidence) return;
+    const current = evidence.get(aspectKey);
+    if (!current || aspectWeight > current.weight) {
+      evidence.set(aspectKey, { weight: aspectWeight, source: aspectSource });
+    }
+  };
+
+  addWeighted(key, weight, source);
 
   let id = ctx.tasteLabelToId.get(key);
   const visited = new Set();
+  let parentWeight = weight;
   while (id && !visited.has(id)) {
     visited.add(id);
     const def = TASTE_GENRE_DEFS[id];
@@ -3383,7 +3395,8 @@ function addAspectAndParents(rawGenre, aspects, ctx) {
     const parent = TASTE_GENRE_DEFS[def.parent];
     if (!parent) break;
     const parentKey = genrePreferenceKey(parent.label);
-    if (parentKey) aspects.add(parentKey);
+    parentWeight *= 0.82;
+    addWeighted(parentKey, parentWeight, `${source}:parent`);
     id = def.parent;
   }
 }
@@ -3393,10 +3406,14 @@ function groupTrackFeatures(track, ctx) {
   if (ctx.featureCache.has(cacheKey)) return ctx.featureCache.get(cacheKey);
 
   const aspects = new Set();
+  const aspectEvidence = new Map();
   const row = ctx.poolByTrack.get(track?.id);
+
+  // Spotify genre search is only a retrieval hint. It must not masquerade as
+  // reliable track metadata, because Search can return surprisingly loose matches.
   for (const query of row?.queries || []) {
     const genre = extractGenreQueryValue(query);
-    if (genre) addAspectAndParents(genre, aspects, ctx);
+    if (genre) addAspectAndParents(genre, aspects, ctx, aspectEvidence, 0.20, "spotify-genre-query");
   }
 
   let exactLastFm = false;
@@ -3412,23 +3429,35 @@ function groupTrackFeatures(track, ctx) {
     if (artistRow) {
       recentCount = Math.max(recentCount, Number(artistRow.recentCount || 0));
       sourceCount = Math.max(sourceCount, (artistRow.sources || []).length);
-      for (const tag of artistRow.tags || []) addAspectAndParents(tag, aspects, ctx);
+      for (const tag of artistRow.tags || []) {
+        addAspectAndParents(tag, aspects, ctx, aspectEvidence, 0.72, "lastfm-artist-tag");
+      }
     }
 
     const trackRow = ctx.trackPool.get(`${artistKey}|${titleKey}`);
     if (trackRow) {
       exactLastFm = true;
       sourceCount = Math.max(sourceCount, (trackRow.sources || []).length);
-      for (const tag of trackRow.tags || []) addAspectAndParents(tag, aspects, ctx);
+      for (const tag of trackRow.tags || []) {
+        addAspectAndParents(tag, aspects, ctx, aspectEvidence, 1.00, "lastfm-track-tag");
+      }
     }
   }
 
-  for (const category of genreCategories([...aspects])) {
-    addAspectAndParents(category, aspects, ctx);
+  // Broad categories are derived evidence. Keep them useful for common-ground
+  // scoring, but weaker than the most reliable underlying tag that produced them.
+  const snapshot = [...aspects];
+  for (const category of genreCategories(snapshot)) {
+    const relatedWeights = snapshot
+      .map(aspect => aspectEvidence.get(aspect)?.weight || 0)
+      .filter(Boolean);
+    const inherited = relatedWeights.length ? Math.max(...relatedWeights) * 0.58 : 0.12;
+    addAspectAndParents(category, aspects, ctx, aspectEvidence, inherited, "derived-category");
   }
 
   const features = {
     aspects,
+    aspectEvidence,
     artists: trackArtistKeys(track),
     exactLastFm,
     recentCount,
@@ -3441,17 +3470,23 @@ function groupTrackFeatures(track, ctx) {
   return features;
 }
 
-function preferenceMatchStrength(aspects, preferenceSet, ctx) {
+function preferenceMatchStrength(features, preferenceSet, ctx) {
+  const aspects = features?.aspects || new Set();
+  const evidence = features?.aspectEvidence || new Map();
   let strength = 0;
+
   for (const pref of preferenceSet || []) {
     let best = 0;
-    if ((aspects || new Set()).has(pref)) {
+    if (aspects.has(pref)) {
       const id = ctx.tasteLabelToId.get(pref);
       const isBroadFamily = Boolean(id && TASTE_GENRE_DEFS[id]?.parent === null);
-      best = isBroadFamily ? 0.58 : 1;
+      const evidenceWeight = evidence.get(pref)?.weight || 0.10;
+      best = (isBroadFamily ? 0.58 : 1) * evidenceWeight;
     } else {
-      for (const aspect of aspects || []) {
-        if (genreKeysRelated(aspect, pref)) best = Math.max(best, 0.42);
+      for (const aspect of aspects) {
+        if (!genreKeysRelated(aspect, pref)) continue;
+        const evidenceWeight = evidence.get(aspect)?.weight || 0.10;
+        best = Math.max(best, 0.42 * evidenceWeight);
       }
     }
     strength += best;
@@ -3464,10 +3499,10 @@ function profileTrackSatisfaction(profile, track, features, ctx) {
     liked: new Set(), ok: new Set(), blocked: new Set(), manual: new Set(), seeds: new Set()
   };
 
-  const likedStrength = preferenceMatchStrength(features.aspects, prefs.liked, ctx);
-  const okStrength = preferenceMatchStrength(features.aspects, prefs.ok, ctx);
-  const blockedStrength = preferenceMatchStrength(features.aspects, prefs.blocked, ctx);
-  const manualStrength = preferenceMatchStrength(features.aspects, prefs.manual, ctx);
+  const likedStrength = preferenceMatchStrength(features, prefs.liked, ctx);
+  const okStrength = preferenceMatchStrength(features, prefs.ok, ctx);
+  const blockedStrength = preferenceMatchStrength(features, prefs.blocked, ctx);
+  const manualStrength = preferenceMatchStrength(features, prefs.manual, ctx);
   const seedMatch = [...features.artists].some(artist => prefs.seeds.has(artist));
 
   let score = profile.taste?.hasSurvey ? 34 : 40;
@@ -3563,7 +3598,8 @@ function xquadCoverageBonus(staticInfo, state, ctx) {
     .map(aspect => {
       const support = ctx.aspectSupport.get(aspect) || 0;
       const count = state.aspectCounts.get(aspect) || 0;
-      return support / Math.pow(1 + count, 0.7);
+      const evidenceWeight = staticInfo.features.aspectEvidence?.get(aspect)?.weight || 0.10;
+      return support * evidenceWeight / Math.pow(1 + count, 0.7);
     })
     .sort((a, b) => b - a)
     .slice(0, 3);
@@ -3745,7 +3781,7 @@ function dynamicCandidateScore(staticInfo, state, ctx) {
 }
 
 function selectGroupPlaylist(eligible, total, ctx, stats) {
-  const discoveryQuota = discoveryQuotaForTotal(total);
+  const requestedDiscoveryQuota = discoveryQuotaForTotal(total);
   const state = {
     selected: [],
     selectedIds: new Set(),
@@ -3785,10 +3821,9 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
       const previous = state.selected[state.selected.length - 1];
       if (previous && tracksShareArtist(previous, track)) continue;
 
-      const slotsLeft = total - state.selected.length;
-      const discoveryNeededForMinimum = Math.max(0, discoveryQuota.min - state.discoveryCount);
-      if (item.features.discovery && state.discoveryCount >= discoveryQuota.max) continue;
-      if (!item.features.discovery && discoveryNeededForMinimum >= slotsLeft) continue;
+      const projectedLength = state.selected.length + 1;
+      const projectedQuota = discoveryQuotaForTotal(projectedLength);
+      if (item.features.discovery && state.discoveryCount + 1 > projectedQuota.max) continue;
 
       choices.push({ index: i, item, dynamic: dynamicCandidateScore(item, state, ctx) });
     }
@@ -3805,9 +3840,11 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
           state.selectedIds.has(track.id) ||
           (signature && state.selectedSignatures.has(signature)) ||
           duplicateSignatures.some(key => state.selectedSignatures.has(key)) ||
-          artists.some(key => (state.artistCounts.get(key) || 0) >= 2) ||
-          (item.features.discovery && state.discoveryCount >= discoveryQuota.max)
+          artists.some(key => (state.artistCounts.get(key) || 0) >= 2)
         ) continue;
+        const projectedLength = state.selected.length + 1;
+        const projectedQuota = discoveryQuotaForTotal(projectedLength);
+        if (item.features.discovery && state.discoveryCount + 1 > projectedQuota.max) continue;
 
         choices.push({ index: i, item, dynamic: dynamicCandidateScore(item, state, ctx) });
       }
@@ -3877,7 +3914,8 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     details: state.details,
     satisfaction,
     discoveryCount: state.discoveryCount,
-    discoveryQuota,
+    discoveryQuota: discoveryQuotaForTotal(state.selected.length),
+    requestedDiscoveryQuota,
     aspectCounts: state.aspectCounts,
     rejectionStats: stats
   };
@@ -4086,7 +4124,7 @@ function renderPlaylistResult(
     `Fairness podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR ogranicza monotonię i podobieństwo kolejnych wyborów. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
-    `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); quota jest pilnowana przy końcowym wyborze, a nie tylko przez bonus rankingowy. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
+    `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); quota jest pilnowana dynamicznie względem faktycznej długości wyniku, a nie nominalnego celu. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, lokalna pula żyje 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS}), a budżet tego generowania wynosił maks. ${maxNewSearchesThisGeneration} nowych wyszukiwań. ` +
     `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(requestedTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami.`;
 
@@ -4121,7 +4159,7 @@ function renderPlaylistResult(
       : 0;
     satisfaction.textContent =
       `Dopasowanie grupowe: ${satParts.join(" · ")}. Odkrycia w wyniku: ${groupResult.discoveryCount || 0}/${tracks.length} (${discoveryPct}%). ` +
-      `Quota discovery dla celu ${discoveryLevel.value}%: ${groupResult.discoveryQuota?.min ?? 0}–${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy pełnej playliście ${requestedTotal}.`;
+      `Quota discovery dla celu ${discoveryLevel.value}%: ${groupResult.discoveryQuota?.min ?? 0}–${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}.`;
     playlistResult.append(satisfaction);
 
     const r = groupResult.rejectionStats || {};
