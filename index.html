@@ -4088,7 +4088,7 @@ function renderPlaylistResult(
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); quota jest pilnowana przy końcowym wyborze, a nie tylko przez bonus rankingowy. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, lokalna pula żyje 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS}), a budżet tego generowania wynosił maks. ${maxNewSearchesThisGeneration} nowych wyszukiwań. ` +
-    `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(nominalTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami.`;
+    `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(requestedTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami.`;
 
   playlistResult.append(summary, model);
 
