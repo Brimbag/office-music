@@ -1690,6 +1690,13 @@ function tasteStateForPerson(personName) {
   };
 }
 
+function splitCommaList(value) {
+  return (value || "")
+    .split(",")
+    .map(x => x.trim())
+    .filter(Boolean);
+}
+
 function selectedProfiles() {
   const ids = Array.from(
     document.querySelectorAll('input[data-profile-id]:checked')
