@@ -467,7 +467,7 @@
     </div>
 
     <p class="small">
-      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm. v38 rozszerza diagnostykę zatrzymania selekcji. v39 wykorzystuje te dane: awaryjny próg 35–43 wymaga już tylko, by żadna obecna osoba nie miała wyniku poniżej 35, a podczas końcowego fallbacku górna quota discovery jest liczona względem docelowej długości playlisty, aby krótki wynik nie blokował sam siebie. v40 blokuje w końcowym fallbacku kandydatów z mocno negatywnym feedbackiem. v41 dodaje ręczną synchronizację trwałych preferencji z Cloudflare D1; algorytm doboru muzyki pozostaje bez zmian.
+      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm. v38 rozszerza diagnostykę zatrzymania selekcji. v39 wykorzystuje te dane: awaryjny próg 35–43 wymaga już tylko, by żadna obecna osoba nie miała wyniku poniżej 35, a podczas końcowego fallbacku górna quota discovery jest liczona względem docelowej długości playlisty, aby krótki wynik nie blokował sam siebie. v40 blokuje w końcowym fallbacku kandydatów z mocno negatywnym feedbackiem. v41 dodał ręczną synchronizację trwałych preferencji z Cloudflare D1. v42 automatyzuje synchronizację po zalogowaniu i po zmianach, przenosi do D1 także skompaktowaną pulę kandydatów Spotify oraz warunkowo odświeża Last.fm przed generowaniem; algorytm doboru muzyki pozostaje bez zmian.
       Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
       Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
     </p>
@@ -511,7 +511,7 @@
       <input id="importStateFile" type="file" accept="application/json,.json" style="display:none;">
     </div>
     <div class="small lastfm-note">Eksport obejmuje lokalną bazę, cache, historię, feedback, blokady, profile i ustawienia RMF. Tokeny logowania Spotify nie są eksportowane.</div>
-    <div class="small lastfm-note">Cloudflare D1 synchronizuje tylko trwałe preferencje: ankietę gustu, ręczne profile, feedback, blokady, ustawienia RMF/Last.fm, rotacje rekomendacji i trzy ostatnie playlisty. Duże cache Spotify/Last.fm oraz historia odsłuchań pozostają lokalne i mogą zostać odbudowane z API.</div>
+    <div class="small lastfm-note">Cloudflare D1 synchronizuje trwałe preferencje oraz skompaktowaną pulę kandydatów Spotify (maks. 2000 utworów). Surowe cache Spotify/Last.fm, baza rekomendacyjna Last.fm i historia odsłuchań pozostają lokalne. Synchronizacja chmury działa automatycznie; przyciski ręczne zostają jako awaryjne.</div>
     <div id="historySummary" class="history-summary"></div>
     <div id="progress" class="progress"></div>
   </div>
@@ -807,7 +807,7 @@ document.addEventListener("visibilitychange", () => {
 syncLastFmButton.addEventListener("click", async () => {
   try {
     syncLastFmButton.disabled = true;
-    await syncLastFmSources(selectedProfiles(), { forceStatus: true });
+    await syncLastFmSources(selectedProfiles(), { forceStatus: true, includeTags: true, includeRecent: true, forceApi: true });
   } catch (err) {
     console.error(err);
     lastFmStatus.textContent = `Last.fm: ${err.message}`;
@@ -820,13 +820,20 @@ lastFmUserInput.addEventListener("change", () => {
   localStorage.setItem(LASTFM_USER_KEY, next);
   renderLastFmStatus();
 });
+
+// Trwałe ustawienia zmieniają się głównie przez formularze i feedback.
+// Debounce zbiera kilka szybkich kliknięć w jeden zapis D1.
+document.addEventListener("change", () => scheduleAutomaticCloudSync());
+document.addEventListener("click", event => {
+  if (event.target?.closest?.("button")) scheduleAutomaticCloudSync();
+});
 discoveryLevel.addEventListener("input", () => {
   discoveryLabel.textContent = `${discoveryLevel.value}% odkryć`;
 });
 
 const LASTFM_USER_KEY = "office_lastfm_user_v1";
 const LASTFM_CACHE_PREFIX = "office_lastfm_cache_v1:";
-const LASTFM_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const LASTFM_CACHE_TTL_MS = 60 * 60 * 1000;
 const LASTFM_RECENT_CACHE_TTL_MS = 10 * 60 * 1000;
 const LASTFM_HISTORY_WINDOW_DAYS = 14;
 const LASTFM_RECENT_COUNT_KEY = "office_lastfm_recent_count_v1";
@@ -836,6 +843,10 @@ const LASTFM_ARTIST_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 const LASTFM_TRACK_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 const LASTFM_MAX_TAG_CALLS_PER_SYNC = 24;
 const LASTFM_TAG_ROTATION_KEY = "office_lastfm_tag_rotation_v1";
+const LASTFM_AUTO_TAG_SYNC_KEY = "office_lastfm_auto_tag_sync_v1";
+const LASTFM_AUTO_RECENT_SYNC_KEY = "office_lastfm_auto_recent_sync_v1";
+const LASTFM_AUTO_TAG_SYNC_TTL_MS = 60 * 60 * 1000;
+const LASTFM_AUTO_RECENT_SYNC_TTL_MS = 10 * 60 * 1000;
 const STORAGE_V34_MIGRATION_KEY = "office_storage_v34_migrated_v1";
 let lastFmCallsThisSync = 0;
 let lastFmTagCallBudgetThisSync = LASTFM_MAX_TAG_CALLS_PER_SYNC;
@@ -895,8 +906,15 @@ const CLOUD_EXACT_KEYS = [
   RECENT_PLAYLISTS_KEY,
   LASTFM_USER_KEY,
   LASTFM_TAG_ROTATION_KEY,
-  "office_polish_tag_rotation_v1"
+  "office_polish_tag_rotation_v1",
+  "office_candidate_pool_v1"
 ];
+
+const CLOUD_SHADOW_KEY = "office_cloud_shadow_v1";
+const CLOUD_AUTO_SYNC_DEBOUNCE_MS = 2500;
+let cloudAutoSyncReady = false;
+let cloudSyncTimer = null;
+let lastCloudFingerprint = "";
 
 function cloudStateKeys() {
   const keys = new Set(CLOUD_EXACT_KEYS.filter(Boolean));
@@ -919,6 +937,127 @@ function durableLocalStateForCloud() {
     state[key] = value === null ? null : value;
   }
   return state;
+}
+
+function cloudStateFingerprint(state = durableLocalStateForCloud()) {
+  let hash = 2166136261;
+  const keys = Object.keys(state).sort();
+  for (const key of keys) {
+    const text = `${key}\u0000${state[key] ?? "<null>"}\u0001`;
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function loadCloudShadow() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CLOUD_SHADOW_KEY) || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCloudShadow(state) {
+  try {
+    const compact = {};
+    for (const [key, value] of Object.entries(state || {})) {
+      if (key === "office_candidate_pool_v1") continue; // pula jest zbyt duża na kopię cienia
+      compact[key] = value;
+    }
+    localStorage.setItem(CLOUD_SHADOW_KEY, JSON.stringify(compact));
+  } catch (err) {
+    console.warn("Nie udało się zapisać lokalnego cienia synchronizacji chmury.", err);
+  }
+}
+
+function parseCandidatePoolValue(raw) {
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function mergedCandidatePool(localRaw, cloudRaw) {
+  const cutoff = Date.now() - CANDIDATE_POOL_MAX_AGE_MS;
+  const map = new Map();
+  for (const item of [...parseCandidatePoolValue(cloudRaw), ...parseCandidatePoolValue(localRaw)]) {
+    if (!item?.track?.id || !item?.track?.uri || Number(item.savedAt || 0) < cutoff) continue;
+    const id = item.track.id;
+    const prev = map.get(id);
+    if (!prev) {
+      map.set(id, { ...item, queries: [...new Set(item.queries || [])] });
+      continue;
+    }
+    const newer = Number(item.savedAt || 0) >= Number(prev.savedAt || 0) ? item : prev;
+    const queries = [...new Set([...(prev.queries || []), ...(item.queries || [])])]
+      .filter(query => queryMatchesTrack(query, newer.track));
+    map.set(id, { ...newer, queries });
+  }
+  return [...map.values()]
+    .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+    .slice(0, CANDIDATE_POOL_MAX_ITEMS);
+}
+
+function applyCloudStateWithMerge(remoteState) {
+  const remote = remoteState && typeof remoteState === "object" ? remoteState : {};
+  const allowed = new Set(cloudStateKeys());
+  const shadow = loadCloudShadow();
+  let applied = 0;
+
+  for (const key of allowed) {
+    const remoteHas = Object.prototype.hasOwnProperty.call(remote, key);
+    if (!remoteHas) continue;
+    const cloudValue = remote[key];
+
+    if (key === "office_candidate_pool_v1") {
+      const merged = mergedCandidatePool(localStorage.getItem(key), cloudValue);
+      if (merged.length) localStorage.setItem(key, JSON.stringify(merged));
+      else if (cloudValue === null) localStorage.removeItem(key);
+      applied++;
+      continue;
+    }
+
+    const localValue = localStorage.getItem(key);
+    const shadowHas = Object.prototype.hasOwnProperty.call(shadow, key);
+    const shadowValue = shadowHas ? shadow[key] : undefined;
+    let chosen = localValue;
+
+    if (localValue === null) {
+      chosen = cloudValue;
+    } else if (shadowHas) {
+      const localChanged = localValue !== shadowValue;
+      const cloudChanged = cloudValue !== shadowValue;
+      if (!localChanged && cloudChanged) chosen = cloudValue;
+      else if (localChanged && !cloudChanged) chosen = localValue;
+      else if (localChanged && cloudChanged) chosen = localValue; // konflikt: nie kasujemy świeższej pracy lokalnej
+      else chosen = cloudValue;
+    } else {
+      // Pierwsze uruchomienie v42: istniejące dane lokalne traktujemy jako bezpieczniejsze.
+      chosen = localValue;
+    }
+
+    if (chosen === null || chosen === undefined) localStorage.removeItem(key);
+    else if (typeof chosen === "string") localStorage.setItem(key, chosen);
+    else localStorage.setItem(key, JSON.stringify(chosen));
+    applied++;
+  }
+  return applied;
+}
+
+function refreshUiAfterCloudMerge() {
+  renderProfiles();
+  loadRmfSettings();
+  renderFeedbackSummary();
+  renderHistorySummary();
+  restoreMostRecentPlaylist();
+  lastFmUserInput.value = localStorage.getItem(LASTFM_USER_KEY) || "";
+  renderLastFmStatus();
 }
 
 function setCloudStatus(text, kind = "") {
@@ -944,19 +1083,46 @@ async function cloudApiRequest(token, options = {}) {
   return data;
 }
 
+async function uploadCloudStateIfChanged(token, { force = false, status = true } = {}) {
+  const state = durableLocalStateForCloud();
+  const fingerprint = cloudStateFingerprint(state);
+  if (!force && fingerprint === lastCloudFingerprint) return { saved: 0, skipped: true };
+
+  if (status) setCloudStatus("zapisuję…");
+  const result = await cloudApiRequest(token, {
+    method: "PUT",
+    body: JSON.stringify({ state })
+  });
+  lastCloudFingerprint = fingerprint;
+  saveCloudShadow(state);
+  const poolCount = candidatePoolSize();
+  if (status) setCloudStatus(`zsynchronizowano ${result?.saved ?? Object.keys(state).length} kluczy · pula Spotify ${poolCount}`, "ok");
+  return result;
+}
+
+function scheduleAutomaticCloudSync(delay = CLOUD_AUTO_SYNC_DEBOUNCE_MS) {
+  if (!cloudAutoSyncReady) return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(async () => {
+    try {
+      const token = await getValidAccessToken();
+      if (!token) return;
+      await uploadCloudStateIfChanged(token, { status: true });
+    } catch (err) {
+      console.error("Cloud auto sync:", err);
+      setCloudStatus(`autosync: ${err.message}`, "error");
+    }
+  }, delay);
+}
+
 async function uploadDurableStateToCloud() {
   try {
     cloudUploadButton.disabled = true;
     cloudDownloadButton.disabled = true;
-    setCloudStatus("zapisuję…");
     const token = await getValidAccessToken();
     if (!token) throw new Error("najpierw połącz Spotify");
-    const state = durableLocalStateForCloud();
-    const result = await cloudApiRequest(token, {
-      method: "PUT",
-      body: JSON.stringify({ state })
-    });
-    setCloudStatus(`zapisano ${result?.saved ?? Object.keys(state).length} kluczy`, "ok");
+    const result = await uploadCloudStateIfChanged(token, { force: true, status: true });
+    if (result?.saved !== undefined) setCloudStatus(`zapisano ${result.saved} kluczy · pula Spotify ${candidatePoolSize()}`, "ok");
   } catch (err) {
     console.error("Cloud upload:", err);
     setCloudStatus(err.message, "error");
@@ -975,20 +1141,10 @@ async function downloadDurableStateFromCloud() {
     if (!token) throw new Error("najpierw połącz Spotify");
     const result = await cloudApiRequest(token, { method: "GET" });
     const state = result?.state && typeof result.state === "object" ? result.state : {};
-    const allowed = new Set(cloudStateKeys());
-    let applied = 0;
-    for (const [key, value] of Object.entries(state)) {
-      if (!allowed.has(key)) continue;
-      if (value === null) localStorage.removeItem(key);
-      else if (typeof value === "string") localStorage.setItem(key, value);
-      else localStorage.setItem(key, JSON.stringify(value));
-      applied++;
-    }
-    setCloudStatus(`pobrano ${applied} kluczy`, "ok");
-    if (applied) {
-      window.alert(`Pobrano ${applied} wpisów z Cloudflare D1. Strona zostanie odświeżona.`);
-      window.location.reload();
-    }
+    const applied = applyCloudStateWithMerge(state);
+    refreshUiAfterCloudMerge();
+    await uploadCloudStateIfChanged(token, { force: true, status: false });
+    setCloudStatus(`pobrano i scalono ${applied} kluczy · pula Spotify ${candidatePoolSize()}`, "ok");
   } catch (err) {
     console.error("Cloud download:", err);
     setCloudStatus(err.message, "error");
@@ -998,15 +1154,29 @@ async function downloadDurableStateFromCloud() {
   }
 }
 
-async function probeCloudState(token) {
+async function autoSyncCloudState(token) {
   try {
-    setCloudStatus("sprawdzam…");
+    setCloudStatus("synchronizuję…");
     const result = await cloudApiRequest(token, { method: "GET" });
-    const count = Object.keys(result?.state || {}).length;
-    setCloudStatus(count ? `${count} zapisanych kluczy` : "pusta, gotowa do pierwszej migracji", "ok");
+    const remote = result?.state && typeof result.state === "object" ? result.state : {};
+    const remoteCount = Object.keys(remote).length;
+
+    if (remoteCount) {
+      applyCloudStateWithMerge(remote);
+      refreshUiAfterCloudMerge();
+    }
+
+    // Po scaleniu wysyłamy stan z powrotem. Dzięki temu istniejąca chmura v41
+    // dostanie od razu nowy klucz z pulą Spotify, a brakujące lokalne dane nie zginą.
+    const uploadResult = await uploadCloudStateIfChanged(token, { force: true, status: false });
+    lastCloudFingerprint = cloudStateFingerprint();
+    saveCloudShadow(durableLocalStateForCloud());
+    cloudAutoSyncReady = true;
+    setCloudStatus(`zsynchronizowano ${uploadResult?.saved ?? cloudStateKeys().length} kluczy · pula Spotify ${candidatePoolSize()}`, "ok");
   } catch (err) {
-    console.error("Cloud probe:", err);
-    setCloudStatus(err.message, "error");
+    console.error("Cloud auto sync:", err);
+    cloudAutoSyncReady = true; // aplikacja ma nadal działać lokalnie
+    setCloudStatus(`autosync: ${err.message}`, "error");
   }
 }
 
@@ -1027,7 +1197,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v41",
+      source: "Office Music Mixer v42",
       storage: exportedStorageState()
     };
 
@@ -1786,7 +1956,7 @@ async function showLoggedIn(token) {
   lastFmUserInput.value = localStorage.getItem(LASTFM_USER_KEY) || "";
   renderLastFmStatus();
   renderHistorySummary();
-  await probeCloudState(token);
+  await autoSyncCloudState(token);
   startRmfWatcher();
 }
 
@@ -2302,49 +2472,73 @@ function renderLastFmStatus(extra = "") {
   lastFmStatus.textContent = parts.join(" · ");
 }
 
-async function syncLastFmSources(selected, { forceStatus = false, maxTagCalls = LASTFM_MAX_TAG_CALLS_PER_SYNC } = {}) {
+async function syncLastFmSources(
+  selected,
+  {
+    forceStatus = false,
+    maxTagCalls = LASTFM_MAX_TAG_CALLS_PER_SYNC,
+    includeTags = true,
+    includeRecent = true,
+    forceApi = false
+  } = {}
+) {
   lastFmCallsThisSync = 0;
   lastFmTagCallBudgetThisSync = Math.max(2, Number(maxTagCalls || LASTFM_MAX_TAG_CALLS_PER_SYNC));
-  const genres = [...new Set((selected || []).flatMap(profile => profile.genres || []).map(normalizeGenreName).filter(Boolean))];
-  const categories = [...new Set((selected || []).flatMap(profile => profile.categories || []))];
-  const allTags = [...new Set([
-    ...genres,
-    ...categories.flatMap(commonCategoryLastFmTags)
-  ])];
-  const polishCallBudget = Math.min(4, Math.max(0, lastFmTagCallBudgetThisSync - 2));
-  const polishTagCount = Math.floor(polishCallBudget / 2);
-  const polishTags = rotatingPolishLastFmTags(polishTagCount);
-  const regularBudget = Math.max(2, lastFmTagCallBudgetThisSync - polishTags.length * 2);
-  const tags = rotatingLastFmTags(allTags, regularBudget);
-  const syncTags = [...polishTags, ...tags];
+  let polishTags = [];
+  let syncTags = [];
 
-  if (forceStatus) lastFmStatus.textContent = "Last.fm: odświeżam bazę wykonawców...";
+  if (includeTags) {
+    const genres = [...new Set((selected || []).flatMap(profile => profile.genres || []).map(normalizeGenreName).filter(Boolean))];
+    const categories = [...new Set((selected || []).flatMap(profile => profile.categories || []))];
+    const allTags = [...new Set([
+      ...genres,
+      ...categories.flatMap(commonCategoryLastFmTags)
+    ])];
+    const polishCallBudget = Math.min(4, Math.max(0, lastFmTagCallBudgetThisSync - 2));
+    const polishTagCount = Math.floor(polishCallBudget / 2);
+    polishTags = rotatingPolishLastFmTags(polishTagCount);
+    const regularBudget = Math.max(2, lastFmTagCallBudgetThisSync - polishTags.length * 2);
+    const tags = rotatingLastFmTags(allTags, regularBudget);
+    syncTags = [...polishTags, ...tags];
 
-  for (const tag of syncTags) {
-    if (lastFmCallsThisSync >= lastFmTagCallBudgetThisSync) break;
-    lastFmCallsThisSync++;
-    try {
-      const data = await lastFmRequest("tag.getTopArtists", { tag, limit: 40, page: 1 });
-      const artists = data?.topartists?.artist || [];
-      addLastFmArtists(artists, { tags: [tag], source: "tag" });
-    } catch (err) {
-      console.warn(`Last.fm top artists ${tag}:`, err);
+    if (forceStatus) lastFmStatus.textContent = "Last.fm: odświeżam bazę wykonawców i utworów...";
+
+    for (const tag of syncTags) {
+      if (lastFmCallsThisSync >= lastFmTagCallBudgetThisSync) break;
+      lastFmCallsThisSync++;
+      try {
+        const data = await lastFmRequest(
+          "tag.getTopArtists",
+          { tag, limit: 40, page: 1 },
+          forceApi ? -1 : LASTFM_CACHE_TTL_MS
+        );
+        const artists = data?.topartists?.artist || [];
+        addLastFmArtists(artists, { tags: [tag], source: "tag" });
+      } catch (err) {
+        console.warn(`Last.fm top artists ${tag}:`, err);
+      }
+
+      if (lastFmCallsThisSync >= lastFmTagCallBudgetThisSync) continue;
+      lastFmCallsThisSync++;
+      try {
+        const data = await lastFmRequest(
+          "tag.getTopTracks",
+          { tag, limit: 50, page: 1 },
+          forceApi ? -1 : LASTFM_CACHE_TTL_MS
+        );
+        const tracks = data?.tracks?.track || [];
+        addLastFmTracks(tracks, { tags: [tag], source: "tag" });
+      } catch (err) {
+        console.warn(`Last.fm top tracks ${tag}:`, err);
+      }
     }
-
-    if (lastFmCallsThisSync >= lastFmTagCallBudgetThisSync) continue;
-    lastFmCallsThisSync++;
-    try {
-      const data = await lastFmRequest("tag.getTopTracks", { tag, limit: 50, page: 1 });
-      const tracks = data?.tracks?.track || [];
-      addLastFmTracks(tracks, { tags: [tag], source: "tag" });
-    } catch (err) {
-      console.warn(`Last.fm top tracks ${tag}:`, err);
-    }
+    safeSetSmallStorageItem(LASTFM_AUTO_TAG_SYNC_KEY, String(Date.now()), "czasu synchronizacji tagów Last.fm");
   }
 
   const user = (lastFmUserInput?.value || localStorage.getItem(LASTFM_USER_KEY) || "").trim();
   let recentScrobbleCount = 0;
-  if (user) {
+  let recentOk = false;
+  if (includeRecent && user) {
     localStorage.setItem(LASTFM_USER_KEY, user);
 
     try {
@@ -2364,7 +2558,7 @@ async function syncLastFmSources(selected, { forceStatus = false, maxTagCalls = 
         const data = await lastFmRequest(
           "user.getRecentTracks",
           { user, limit: 200, from: fromSeconds, extended: 0, page },
-          LASTFM_RECENT_CACHE_TTL_MS
+          forceApi ? -1 : LASTFM_RECENT_CACHE_TTL_MS
         );
         const tracks = data?.recenttracks?.track || [];
         const attr = data?.recenttracks?.["@attr"] || {};
@@ -2377,7 +2571,6 @@ async function syncLastFmSources(selected, { forceStatus = false, maxTagCalls = 
           if (!key) continue;
 
           const uts = Number(track?.date?.uts || 0);
-          // Pozycja bez date to zwykle "now playing". Nie traktujemy jej jeszcze jako odsłuchanej.
           if (!title || uts <= 0) continue;
 
           recentScrobbleCount++;
@@ -2408,16 +2601,45 @@ async function syncLastFmSources(selected, { forceStatus = false, maxTagCalls = 
       addLastFmArtists(recentArtists, { source: "recent", recentCounts: counts });
 
       localStorage.setItem(LASTFM_RECENT_COUNT_KEY, String(recentScrobbleCount));
+      safeSetSmallStorageItem(LASTFM_AUTO_RECENT_SYNC_KEY, String(Date.now()), "czasu synchronizacji historii Last.fm");
+      recentOk = true;
     } catch (err) {
       console.warn("Last.fm recent tracks:", err);
       if (forceStatus) lastFmStatus.textContent = `Last.fm: nie udało się pobrać scrobbli z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni (${err.message}).`;
     }
-  } else {
+  } else if (includeRecent && !user) {
     localStorage.setItem(LASTFM_RECENT_COUNT_KEY, "0");
+    safeSetSmallStorageItem(LASTFM_AUTO_RECENT_SYNC_KEY, String(Date.now()), "czasu synchronizacji historii Last.fm");
+    recentOk = true;
   }
 
-  renderLastFmStatus(`odświeżono ${syncTags.length} tagów, w tym ${polishTags.length} PL`);
+  const bits = [];
+  if (includeTags) bits.push(`tagi ${syncTags.length}, w tym ${polishTags.length} PL`);
+  if (includeRecent) bits.push(user ? (recentOk ? "historia świeża" : "błąd historii") : "brak konta historii");
+  renderLastFmStatus(bits.length ? `odświeżono: ${bits.join(" · ")}` : "cache aktualny");
 }
+
+async function refreshLastFmBeforeGeneration(selected, total) {
+  const now = Date.now();
+  const lastTags = Number(localStorage.getItem(LASTFM_AUTO_TAG_SYNC_KEY) || 0);
+  const lastRecent = Number(localStorage.getItem(LASTFM_AUTO_RECENT_SYNC_KEY) || 0);
+  const tagsDue = !lastTags || now - lastTags >= LASTFM_AUTO_TAG_SYNC_TTL_MS;
+  const recentDue = !lastRecent || now - lastRecent >= LASTFM_AUTO_RECENT_SYNC_TTL_MS;
+
+  if (!tagsDue && !recentDue) {
+    renderLastFmStatus("automatyka: cache aktualny");
+    return { tagsDue, recentDue };
+  }
+
+  await syncLastFmSources(selected, {
+    maxTagCalls: lastFmTagBudgetForTarget(total),
+    includeTags: tagsDue,
+    includeRecent: recentDue,
+    forceApi: false
+  });
+  return { tagsDue, recentDue };
+}
+
 
 function compactPlayedHistoryItem(item) {
   return {
@@ -4632,8 +4854,8 @@ async function generateOfficePlaylist() {
     const mixProfiles = selected.filter(hasMusicProfile);
     const ignoredProfiles = selected.filter(profile => !hasMusicProfile(profile));
 
-    progressBox.textContent = "Odświeżam źródła Last.fm (z cache, jeśli są świeże)...";
-    await syncLastFmSources(mixProfiles, { maxTagCalls: lastFmTagBudgetForTarget(total) });
+    progressBox.textContent = "Sprawdzam świeżość Last.fm (historia 10 min, baza tagów 60 min)...";
+    await refreshLastFmBeforeGeneration(mixProfiles, total);
 
     progressBox.textContent = "Synchronizuję historię odtworzeń...";
     await syncSpotifyRecentHistory(token);
@@ -4706,6 +4928,16 @@ async function generateOfficePlaylist() {
       playlistCleanupResult,
       groupResult
     );
+
+    // Pula Spotify jest kosztowna do odbudowy, więc po udanym generowaniu zapisujemy
+    // jej skompaktowaną wersję do D1 razem z trwałymi preferencjami. Błąd chmury
+    // nie może unieważnić poprawnie utworzonej playlisty.
+    try {
+      await uploadCloudStateIfChanged(token, { status: true });
+    } catch (cloudErr) {
+      console.error("Cloud sync after generation:", cloudErr);
+      setCloudStatus(`po generowaniu: ${cloudErr.message}`, "error");
+    }
     progressBox.textContent = "";
 
   } catch (err) {
@@ -4943,14 +5175,15 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v41: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v42: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
     `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v40 dodatkowo nie pozwala, aby końcowy fallback dobierał wykonawcę z mocną karą feedbacku (<= -40); normalna ścieżka nadal może go wybrać, jeśli mimo kary ma wystarczająco dobry wynik. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, a dopiero końcowy fallback może wykorzystać górny limit odpowiadający docelowej długości playlisty. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
     `Wyszukiwania Spotify są buforowane przez 24 h, lokalna pula żyje 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS}), a budżet tego generowania wynosił maks. ${maxNewSearchesThisGeneration} nowych wyszukiwań. ` +
-    `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(requestedTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami.`;
+    `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(requestedTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami. ` +
+    `v42 przed generowaniem odświeża historię Last.fm najwyżej raz na 10 min i bazę tagową najwyżej raz na 60 min; po generowaniu synchronizuje z D1 również skompaktowaną pulę kandydatów Spotify.`;
 
   playlistResult.append(summary, model);
 
