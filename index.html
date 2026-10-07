@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v36</title>
+  <title>Office Music Mixer v37</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v36 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v37 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -466,7 +466,7 @@
     </div>
 
     <p class="small">
-      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF.
+      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm.
       Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
       Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
     </p>
@@ -892,7 +892,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v36",
+      source: "Office Music Mixer v37",
       storage: exportedStorageState()
     };
 
@@ -2067,10 +2067,50 @@ function lastFmTrackPoolSize() {
   return loadLastFmTrackPool().length;
 }
 
+const POLISH_LASTFM_TAGS = ["polish rock", "polish alternative", "polish metal", "polish punk", "polish"];
+const POLISH_TAG_ROTATION_KEY = "office_polish_tag_rotation_v1";
+
+function isPolishLastFmTag(tag) {
+  const value = normalizeGenreName(tag || "");
+  return value === "polish" || value.startsWith("polish ");
+}
+
+function polishTagGenreAliases(tag) {
+  const value = normalizeGenreName(tag || "");
+  const map = {
+    "polish rock": ["rock"],
+    "polish alternative": ["alternative rock", "rock"],
+    "polish metal": ["metal", "heavy metal"],
+    "polish punk": ["punk", "punk rock"],
+    "polish pop": ["pop"]
+  };
+  return map[value] || [];
+}
+
+function lastFmTagMatchesWanted(tag, wanted) {
+  const value = normalizeGenreName(tag || "");
+  if (wanted.has(value)) return true;
+  return polishTagGenreAliases(value).some(alias => wanted.has(normalizeGenreName(alias)));
+}
+
+function rotatingPolishLastFmTags(maxTags = 2) {
+  let cursor = Number(localStorage.getItem(POLISH_TAG_ROTATION_KEY) || 0);
+  if (!Number.isFinite(cursor) || cursor < 0) cursor = 0;
+  cursor %= POLISH_LASTFM_TAGS.length;
+  const ordered = [...POLISH_LASTFM_TAGS.slice(cursor), ...POLISH_LASTFM_TAGS.slice(0, cursor)];
+  const chosen = ordered.slice(0, Math.max(0, Math.min(maxTags, POLISH_LASTFM_TAGS.length)));
+  safeSetSmallStorageItem(
+    POLISH_TAG_ROTATION_KEY,
+    String((cursor + chosen.length) % POLISH_LASTFM_TAGS.length),
+    "rotacji polskich tagów Last.fm"
+  );
+  return chosen;
+}
+
 function lastFmTracksForTags(tags, limit = 30) {
   const wanted = new Set((tags || []).map(normalizeGenreName).filter(Boolean));
   const candidates = loadLastFmTrackPool().filter(item =>
-    (item.tags || []).some(tag => wanted.has(normalizeGenreName(tag)))
+    (item.tags || []).some(tag => lastFmTagMatchesWanted(tag, wanted))
   );
   return shuffle(candidates).slice(0, limit);
 }
@@ -2095,7 +2135,7 @@ function lastFmArtistsForTags(tags, limit = 12, { includeRecent = false } = {}) 
   const wanted = new Set((tags || []).map(normalizeGenreName).filter(Boolean));
   const candidates = loadLastFmArtistPool().filter(item => {
     if (includeRecent && (item.sources || []).includes("recent")) return true;
-    return (item.tags || []).some(tag => wanted.has(normalizeGenreName(tag)));
+    return (item.tags || []).some(tag => lastFmTagMatchesWanted(tag, wanted));
   });
 
   candidates.sort((a, b) =>
@@ -2135,11 +2175,16 @@ async function syncLastFmSources(selected, { forceStatus = false, maxTagCalls = 
     ...genres,
     ...categories.flatMap(commonCategoryLastFmTags)
   ])];
-  const tags = rotatingLastFmTags(allTags, lastFmTagCallBudgetThisSync);
+  const polishCallBudget = Math.min(4, Math.max(0, lastFmTagCallBudgetThisSync - 2));
+  const polishTagCount = Math.floor(polishCallBudget / 2);
+  const polishTags = rotatingPolishLastFmTags(polishTagCount);
+  const regularBudget = Math.max(2, lastFmTagCallBudgetThisSync - polishTags.length * 2);
+  const tags = rotatingLastFmTags(allTags, regularBudget);
+  const syncTags = [...polishTags, ...tags];
 
   if (forceStatus) lastFmStatus.textContent = "Last.fm: odświeżam bazę wykonawców...";
 
-  for (const tag of tags) {
+  for (const tag of syncTags) {
     if (lastFmCallsThisSync >= lastFmTagCallBudgetThisSync) break;
     lastFmCallsThisSync++;
     try {
@@ -2235,7 +2280,7 @@ async function syncLastFmSources(selected, { forceStatus = false, maxTagCalls = 
     localStorage.setItem(LASTFM_RECENT_COUNT_KEY, "0");
   }
 
-  renderLastFmStatus(`odświeżono ${tags.length} tagów`);
+  renderLastFmStatus(`odświeżono ${syncTags.length} tagów, w tym ${polishTags.length} PL`);
 }
 
 function compactPlayedHistoryItem(item) {
@@ -2920,7 +2965,7 @@ function normalizeForSignature(value) {
     .trim();
 }
 
-const HARD_VARIANT_WORDS = "remix|live|edit|acoustic|slowed|reverb|instrumental|reimagined|orchestra|variation(?:s)?|mono(?: version)?|studio version|new version|single remix|mix";
+const HARD_VARIANT_WORDS = "remix|live|edit|acoustic|slowed|reverb|instrumental|reimagined|orchestra|variation(?:s)?|mono(?: version)?|studio version|new version|single remix|mix|version";
 const REMASTER_WORDS = "remaster(?:ed)?";
 
 function variantContextRegex(words) {
@@ -3100,6 +3145,8 @@ function trackDiagnostic(track, groupDetail = null, selectedProfilesList = []) {
       `· least misery -${Math.round(groupDetail.leastMiseryPenalty || 0)} ` +
       `· fairness +${Math.round(groupDetail.fairness || 0)} ` +
       `· xQuAD +${Math.round(groupDetail.xquad || 0)} ` +
+      (groupDetail.isPolish ? `· 🇵🇱 PL +${Math.round(groupDetail.polishBoost || 0)} ` : "") +
+      (groupDetail.fallback ? `· próg awaryjny ` : "") +
       `· MMR -${Math.round(groupDetail.mmr || 0)}`
     );
   }
@@ -3661,6 +3708,7 @@ function groupTrackFeatures(track, ctx) {
   let exactLastFm = false;
   let recentCount = 0;
   let sourceCount = 0;
+  let isPolish = false;
 
   const titleKey = normalizeForSignature(track?.name || "");
   for (const artist of track?.artists || []) {
@@ -3673,6 +3721,12 @@ function groupTrackFeatures(track, ctx) {
       sourceCount = Math.max(sourceCount, (artistRow.sources || []).length);
       for (const tag of artistRow.tags || []) {
         addAspectAndParents(tag, aspects, ctx, aspectEvidence, 0.72, "lastfm-artist-tag");
+        if (isPolishLastFmTag(tag)) {
+          isPolish = true;
+          for (const alias of polishTagGenreAliases(tag)) {
+            addAspectAndParents(alias, aspects, ctx, aspectEvidence, 0.68, "lastfm-polish-tag-alias");
+          }
+        }
       }
     }
 
@@ -3682,6 +3736,12 @@ function groupTrackFeatures(track, ctx) {
       sourceCount = Math.max(sourceCount, (trackRow.sources || []).length);
       for (const tag of trackRow.tags || []) {
         addAspectAndParents(tag, aspects, ctx, aspectEvidence, 1.00, "lastfm-track-tag");
+        if (isPolishLastFmTag(tag)) {
+          isPolish = true;
+          for (const alias of polishTagGenreAliases(tag)) {
+            addAspectAndParents(alias, aspects, ctx, aspectEvidence, 0.92, "lastfm-polish-track-tag-alias");
+          }
+        }
       }
     }
   }
@@ -3706,7 +3766,8 @@ function groupTrackFeatures(track, ctx) {
     sourceCount,
     recognizability: recognizabilityScore(track),
     feedback: feedbackScore(track),
-    discovery: !exactLastFm && recentCount <= 0
+    discovery: !exactLastFm && recentCount <= 0,
+    isPolish
   };
   ctx.featureCache.set(cacheKey, features);
   return features;
@@ -3898,6 +3959,15 @@ function mmrPenalty(track, state, ctx) {
   return similarity * 18;
 }
 
+function polishMusicBonus(staticInfo, state) {
+  if (!staticInfo?.features?.isPolish) return 0;
+  // PL jest wyłącznie tie-breakerem wśród muzyki, która już pasuje do grupy.
+  // Pierwszy polski utwór dostaje +7, kolejne coraz mniej; nie ma minimalnej kwoty PL.
+  const count = Number(state.polishCount || 0);
+  const coverage = 4 / Math.pow(1 + count, 0.8);
+  return 3 + coverage;
+}
+
 function discoveryBalanceBonus(staticInfo, state) {
   const target = Math.max(0, Math.min(1, Number(discoveryLevel.value || 0) / 100));
   if (!state.selected.length) return staticInfo.features.discovery ? target * 2 : 0;
@@ -3918,6 +3988,9 @@ function discoveryQuotaForTotal(total) {
 }
 
 const GROUP_HARD_MIN_BASE_SCORE = 44;
+const GROUP_FALLBACK_MIN_BASE_SCORE = 35;
+const GROUP_FALLBACK_MIN_MAX_SCORE = 65;
+const GROUP_FALLBACK_MIN_USER_SCORE = 35;
 
 function newRejectionStats(rawPoolCount = 0) {
   return {
@@ -3934,6 +4007,7 @@ function newRejectionStats(rawPoolCount = 0) {
     eligible: 0,
     artistLimitDuringSelection: 0,
     duplicateDuringSelection: 0,
+    fallbackSelections: 0,
     lowFinalScoreStop: 0
   };
 }
@@ -4018,13 +4092,15 @@ function eligibleGroupCandidates(selected, blocklists, ctx) {
 function dynamicCandidateScore(staticInfo, state, ctx) {
   const fairness = fairnessBonus(staticInfo, state, ctx);
   const xquad = xquadCoverageBonus(staticInfo, state, ctx);
+  const polish = polishMusicBonus(staticInfo, state);
   const mmr = mmrPenalty(staticInfo.track, state, ctx);
   const discovery = discoveryBalanceBonus(staticInfo, state);
   const noise = (Number(discoveryLevel.value || 0) / 100) * 2.5 * Math.random();
   return {
-    final: staticInfo.groupBase + fairness + xquad + discovery - mmr + noise,
+    final: staticInfo.groupBase + fairness + xquad + polish + discovery - mmr + noise,
     fairness,
     xquad,
+    polish,
     mmr,
     discovery
   };
@@ -4104,6 +4180,7 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     userSums: new Map((ctx.selected || []).map(profile => [profile.id, 0])),
     aspectCounts: new Map(),
     discoveryCount: 0,
+    polishCount: 0,
     details: new Map()
   };
 
@@ -4169,7 +4246,16 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     // MMR ma zmieniać kolejność preferencji, a nie kończyć playlistę tylko dlatego,
     // że po wielu podobnych utworach dynamiczny wynik został chwilowo mocno obniżony.
     // Twardy stop opieramy na jakości samego dopasowania grupowego.
-    const qualityChoices = choices.filter(choice => choice.item.groupBase >= GROUP_HARD_MIN_BASE_SCORE);
+    let qualityChoices = choices.filter(choice => choice.item.groupBase >= GROUP_HARD_MIN_BASE_SCORE);
+    let usedFallback = false;
+    if (!qualityChoices.length) {
+      qualityChoices = choices.filter(choice =>
+        choice.item.groupBase >= GROUP_FALLBACK_MIN_BASE_SCORE &&
+        choice.item.maxScore >= GROUP_FALLBACK_MIN_MAX_SCORE &&
+        choice.item.minScore >= GROUP_FALLBACK_MIN_USER_SCORE
+      );
+      usedFallback = qualityChoices.length > 0;
+    }
     if (!qualityChoices.length) {
       stats.lowFinalScoreStop = remaining.length;
       break;
@@ -4177,6 +4263,7 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     qualityChoices.sort((a, b) => b.dynamic.final - a.dynamic.final);
     const picked = qualityChoices[0];
     const track = picked.item.track;
+    if (usedFallback) stats.fallbackSelections++;
 
     state.selected.push(track);
     state.selectedIds.add(track.id);
@@ -4196,6 +4283,7 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
       state.aspectCounts.set(aspect, (state.aspectCounts.get(aspect) || 0) + 1);
     }
     if (picked.item.features.discovery) state.discoveryCount++;
+    if (picked.item.features.isPolish) state.polishCount++;
 
     state.details.set(track.id, {
       byUser: Object.fromEntries(
@@ -4208,6 +4296,9 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
       leastMiseryPenalty: picked.item.leastMiseryPenalty,
       fairness: picked.dynamic.fairness,
       xquad: picked.dynamic.xquad,
+      polishBoost: picked.dynamic.polish,
+      isPolish: picked.item.features.isPolish,
+      fallback: usedFallback,
       mmr: picked.dynamic.mmr,
       discovery: picked.item.features.discovery,
       final: picked.dynamic.final
@@ -4233,6 +4324,7 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     details: state.details,
     satisfaction,
     discoveryCount: state.discoveryCount,
+    polishCount: state.polishCount,
     discoveryQuota: discoveryQuotaForTotal(state.selected.length),
     requestedDiscoveryQuota,
     aspectCounts: state.aspectCounts,
@@ -4607,9 +4699,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v36: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v37: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 po wyczerpaniu kandydatów z bazowym wynikiem ≥44 może dobrać utwory z zakresu 35–43 tylko wtedy, gdy najlepszy profil ma ≥65, a żaden obecny profil nie spada poniżej 35. Polska muzyka zgodna z gustami dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); quota jest pilnowana dynamicznie względem faktycznej długości wyniku, a nie nominalnego celu. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -4647,6 +4739,7 @@ function renderPlaylistResult(
       : 0;
     satisfaction.textContent =
       `Dopasowanie grupowe: ${satParts.join(" · ")}. Odkrycia w wyniku: ${groupResult.discoveryCount || 0}/${tracks.length} (${discoveryPct}%). ` +
+      `Polska muzyka rozpoznana przez Last.fm: ${groupResult.polishCount || 0}/${tracks.length}. ` +
       `Quota discovery dla celu ${discoveryLevel.value}%: ${groupResult.discoveryQuota?.min ?? 0}–${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}.`;
     playlistResult.append(satisfaction);
 
@@ -4658,8 +4751,9 @@ function renderPlaylistResult(
       `Odrzucono: 👎 utwór ${r.feedbackTrack || 0}, wariant/live/remix ${r.unwantedVariant || 0}, ` +
       `jawnie blokowany wykonawca ${r.explicitBlockedArtist || 0}, 🚫 wykonawca z feedbacku ${r.feedbackBlockedArtist || 0}, ` +
       `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, ` +
-      `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}` +
-      (r.lowFinalScoreStop ? `, zatrzymanie na twardym progu jakości bazowej: ${r.lowFinalScoreStop} kandydatów pozostało` : "") + `.`;
+      `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}, ` +
+      `dobrane przez próg awaryjny ${r.fallbackSelections || 0}` +
+      (r.lowFinalScoreStop ? `, zatrzymanie po wyczerpaniu bezpiecznego progu awaryjnego: ${r.lowFinalScoreStop} kandydatów pozostało` : "") + `.`;
     playlistResult.append(rejection);
   }
 
