@@ -3990,6 +3990,7 @@ function discoveryQuotaForTotal(total) {
 const GROUP_HARD_MIN_BASE_SCORE = 44;
 const GROUP_FALLBACK_MIN_BASE_SCORE = 35;
 const GROUP_FALLBACK_MIN_USER_SCORE = 35;
+const GROUP_FALLBACK_MIN_FEEDBACK = -40;
 
 function newRejectionStats(rawPoolCount = 0) {
   return {
@@ -4027,6 +4028,7 @@ function analyzeSelectionStop(remaining, state, requestedTotal) {
     baseBelow35: 0,
     fallbackRange: 0,
     fallbackFailMinUser: 0,
+    fallbackStrongNegativeFeedback: 0,
     fallbackSafe: 0,
     targetQuotaMax: targetQuota.max
   };
@@ -4070,7 +4072,11 @@ function analyzeSelectionStop(remaining, state, requestedTotal) {
     if (item.groupBase >= GROUP_FALLBACK_MIN_BASE_SCORE) {
       out.fallbackRange++;
       if (item.minScore < GROUP_FALLBACK_MIN_USER_SCORE) out.fallbackFailMinUser++;
-      if (item.minScore >= GROUP_FALLBACK_MIN_USER_SCORE) out.fallbackSafe++;
+      if (item.features.feedback <= GROUP_FALLBACK_MIN_FEEDBACK) out.fallbackStrongNegativeFeedback++;
+      if (
+        item.minScore >= GROUP_FALLBACK_MIN_USER_SCORE &&
+        item.features.feedback > GROUP_FALLBACK_MIN_FEEDBACK
+      ) out.fallbackSafe++;
     }
   }
 
@@ -4313,7 +4319,7 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     let usedFallback = false;
 
     if (!qualityChoices.length) {
-      // v39: końcowy fallback nie może zakleszczać się przez quota liczoną względem
+      // v40: końcowy fallback nie może zakleszczać się przez quota liczoną względem
       // aktualnie krótkiej playlisty. Używamy górnego limitu discovery dla docelowej
       // długości, nadal zachowując limit 2 utworów wykonawcy, deduplikację i min 35
       // dla każdej obecnej osoby. Nie wymagamy już, by któryś profil miał >=65.
@@ -4341,6 +4347,9 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
           if (item.features.discovery && state.discoveryCount + 1 > targetDiscoveryMax) continue;
           if (item.groupBase < GROUP_FALLBACK_MIN_BASE_SCORE) continue;
           if (item.minScore < GROUP_FALLBACK_MIN_USER_SCORE) continue;
+          // v40: mocno negatywny feedback wykonawcy nie może ratować długości playlisty.
+          // Normalna ścieżka nadal może go wybrać, jeśli mimo kary ma groupBase >=44.
+          if (item.features.feedback <= GROUP_FALLBACK_MIN_FEEDBACK) continue;
 
           fallbackChoices.push({ index: i, item, dynamic: dynamicCandidateScore(item, state, ctx) });
         }
@@ -4798,9 +4807,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v39: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v40: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v40 dodatkowo nie pozwala, aby końcowy fallback dobierał wykonawcę z mocną karą feedbacku (<= -40); normalna ścieżka nadal może go wybrać, jeśli mimo kary ma wystarczająco dobry wynik. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, a dopiero końcowy fallback może wykorzystać górny limit odpowiadający docelowej długości playlisty. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -4860,11 +4869,13 @@ function renderPlaylistResult(
       const stopDiag = document.createElement("p");
       stopDiag.className = "small";
       stopDiag.textContent =
-        `Diagnostyka zatrzymania v39: pozostało ${d.remaining || 0}; ` +
+        `Diagnostyka zatrzymania v40: pozostało ${d.remaining || 0}; ` +
         `blokady: duplikat ${d.duplicateBlocked || 0}, limit 2 utworów wykonawcy ${d.artistLimitBlocked || 0}, ` +
         `quota discovery przy długości bieżącej ${d.discoveryQuotaBlockedCurrent || 0}, quota discovery przy celu ${requestedTotal} (max ${d.targetQuotaMax ?? 0}) ${d.discoveryQuotaBlockedTarget || 0}; ` +
         `wybieralnych przy quota docelowej ${d.selectableAtTargetQuota || 0}. Rozkład groupBase: >=44: ${d.base44Plus || 0}, 40-43: ${d.base40to43 || 0}, 35-39: ${d.base35to39 || 0}, <35: ${d.baseBelow35 || 0}. ` +
-        `Kandydaci >=35: ${d.fallbackRange || 0}; min profilu <35: ${d.fallbackFailMinUser || 0}, bezpiecznych dla fallbacku: ${d.fallbackSafe || 0}.`;
+        `Kandydaci >=35: ${d.fallbackRange || 0}; min profilu <35: ${d.fallbackFailMinUser || 0}, ` +
+        `mocny negatywny feedback <= -40: ${d.fallbackStrongNegativeFeedback || 0}, ` +
+        `bezpiecznych dla fallbacku: ${d.fallbackSafe || 0}.`;
       playlistResult.append(stopDiag);
     }
   }
