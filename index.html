@@ -3,6 +3,4797 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Office Music Mixer v36</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg: #f3f5f7;
+      --surface: #ffffff;
+      --surface-2: #f8f9fa;
+      --text: #17191c;
+      --muted: #66707a;
+      --border: #dfe3e7;
+      --input-border: #c9d0d6;
+      --accent: #17191c;
+      --accent-text: #ffffff;
+      --secondary: #e9edf0;
+      --secondary-text: #2a3036;
+      --ok: #187a33;
+      --error: #a01818;
+      --link: #095bd8;
+      --shadow: 0 8px 26px rgba(20, 28, 36, .06);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px 18px 44px;
+      line-height: 1.45;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    h1, h2, h3 { margin-top: 0; }
+    h1 { font-size: clamp(24px, 4vw, 34px); margin-bottom: 3px; }
+    h2 { font-size: 21px; margin-bottom: 12px; }
+    button, select, input { font: inherit; }
+
+    button {
+      padding: 9px 14px;
+      border: 0;
+      border-radius: 9px;
+      cursor: pointer;
+      background: var(--accent);
+      color: var(--accent-text);
+      font-weight: 650;
+    }
+    button.secondary {
+      background: var(--secondary);
+      color: var(--secondary-text);
+    }
+    button:disabled { opacity: .55; cursor: default; }
+
+    .connection-card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px 18px;
+      align-items: center;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      margin-bottom: 22px;
+    }
+    .connection-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 7px;
+    }
+    .connection-subtitle {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .connection-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px 12px;
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .connection-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    #profile p { display: inline; margin: 0; }
+
+    .box {
+      margin-top: 16px;
+      padding: 17px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    #mixerBox {
+      margin-top: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .people {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .person {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: var(--surface-2);
+    }
+    .person label.main {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-weight: 750;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+    .person .small {
+      display: block;
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+
+    .seed-input, .genre-input {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .ok { color: var(--ok); font-weight: 650; }
+    .error { color: var(--error); font-weight: 650; }
+    .result-list { padding-left: 22px; }
+    .result-list li { margin: 4px 0; }
+    a { color: var(--link); }
+    code { word-break: break-all; }
+
+    .progress {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .settings-panel {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .settings-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+    .settings-row label {
+      display: grid;
+      gap: 5px;
+      font-size: 13px;
+    }
+    .settings-row select {
+      padding: 7px 9px;
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+    }
+    .settings-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 22px;
+      margin-top: 12px;
+    }
+    .settings-checks label {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .history-summary {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .version {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      vertical-align: middle;
+    }
+
+    .lastfm-panel {
+      margin-top: 18px;
+    }
+
+    .lastfm-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+    }
+
+    .lastfm-actions {
+      display: flex;
+      align-items: end;
+    }
+
+    .lastfm-note {
+      margin: 8px 0 0;
+    }
+
+
+
+    .feedback-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .feedback-summary {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .result-list li {
+      margin: 7px 0;
+    }
+    .track-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .track-meta {
+      display: block;
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .track-votes {
+      display: inline-flex;
+      gap: 4px;
+    }
+    .vote-btn {
+      padding: 4px 8px;
+      min-width: 34px;
+      background: var(--secondary);
+      color: var(--secondary-text);
+      border: 1px solid var(--border);
+      font-weight: 700;
+    }
+    .vote-btn.active-up {
+      background: #1f8a46;
+      color: #fff;
+      border-color: transparent;
+    }
+    .vote-btn.active-down {
+      background: #a83232;
+      color: #fff;
+      border-color: transparent;
+    }
+    .vote-btn.active-block {
+      background: #7a1f1f;
+      color: #fff;
+      border-color: transparent;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
+    }
+
+    .rmf-panel {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .rmf-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .rmf-head h3 { margin: 0; }
+    .rmf-slots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin: 10px 0;
+    }
+    .rmf-slots label, .rmf-enabled {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      font-size: 13px;
+    }
+    .rmf-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #rmfStatus {
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 760px) {
+      body { padding: 14px 12px 32px; }
+      .connection-card { grid-template-columns: 1fr; }
+      .connection-actions { justify-content: flex-start; }
+      .people { grid-template-columns: 1fr; }
+      .settings-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 470px) {
+      .settings-row { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101214;
+        --surface: #191c1f;
+        --surface-2: #15181b;
+        --text: #edf0f2;
+        --muted: #aeb6bd;
+        --border: #343a40;
+        --input-border: #4a5158;
+        --accent: #edf0f2;
+        --accent-text: #111315;
+        --secondary: #30363c;
+        --secondary-text: #edf0f2;
+        --ok: #68d487;
+        --error: #ff8e8e;
+        --link: #82b6ff;
+        --shadow: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="connection-card">
+    <div>
+      <div class="connection-title-row">
+        <h1>Office Music Mixer <span class="version">v36 beta</span></h1>
+      </div>
+      <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
+      <div class="connection-meta">
+        <span id="status">Niepołączony</span>
+        <span id="profileBox" style="display:none;">Spotify: <span id="profile"></span></span>
+      </div>
+    </div>
+    <div class="connection-actions">
+      <button id="loginButton">Połącz ze Spotify</button>
+      <button id="logoutButton" class="secondary" style="display:none;">Wyloguj</button>
+    </div>
+  </div>
+
+  <div class="box" id="mixerBox" style="display:none;">
+    <h2>Kto dziś jest w biurze?</h2>
+    <div id="people" class="people"></div>
+    <p class="small"><a href="taste.html">🎵 Ankieta gustu</a> · osobna podstrona do budowania dokładniejszych profili muzycznych. Wyniki są zapisywane lokalnie; generator wykorzystuje ❤️ jako aktywne discovery, 🙂 jako wspólny mianownik, a 🚫 wyłącza daną gałąź z discovery.</p>
+
+    <div class="settings-panel lastfm-panel">
+      <div class="settings-row lastfm-row">
+        <label>
+          Użytkownik Last.fm (opcjonalnie)
+          <input id="lastFmUser" type="text" placeholder="nazwa użytkownika Last.fm">
+        </label>
+        <div class="lastfm-actions">
+          <button id="syncLastFmButton" type="button" class="secondary">Odśwież bazę Last.fm</button>
+        </div>
+      </div>
+      <div id="lastFmStatus" class="small"></div>
+      <p class="small lastfm-note">
+        Last.fm służy jako dodatkowa baza wykonawców dla wybranych gatunków. Historia Last.fm z ostatnich 14 dni jest głównym źródłem faktycznych odsłuchań do blokad anty-powtórkowych. Starsze scrobble są ignorowane.
+        Dane rekomendacyjne: <a href="https://www.last.fm/" target="_blank" rel="noopener noreferrer">Last.fm</a>.
+      </p>
+    </div>
+
+    <div class="settings-panel">
+      <div class="settings-row">
+        <label>
+          Długość playlisty
+          <select id="playlistLength">
+            <option value="30">30 utworów</option>
+            <option value="60" selected>60 utworów (~4 h)</option>
+            <option value="90">90 utworów</option>
+            <option value="120">120 utworów</option>
+            <option value="150">150 utworów (~9 h)</option>
+          </select>
+        </label>
+
+        <label>
+          Nie powtarzaj utworu przez
+          <select id="trackBlockDays">
+            <option value="3">3 dni</option>
+            <option value="7">7 dni</option>
+            <option value="14" selected>14 dni</option>
+            <option value="30">30 dni</option>
+          </select>
+        </label>
+
+        <label>
+          Nie wracaj do wykonawcy przez
+          <select id="artistCooldownHours">
+            <option value="1">1 godzinę</option>
+            <option value="2" selected>2 godziny</option>
+            <option value="4">4 godziny</option>
+            <option value="8">8 godzin</option>
+            <option value="24">24 godziny</option>
+          </select>
+        </label>
+
+        <label>
+          Odkrycia vs znane
+          <input id="discoveryLevel" type="range" min="0" max="100" value="30" step="10">
+          <span id="discoveryLabel">30% odkryć</span>
+        </label>
+
+        <label>
+          Minimalna rozpoznawalność
+          <select id="recognizabilityLevel">
+            <option value="low">Niska</option>
+            <option value="medium" selected>Średnia</option>
+            <option value="high">Wysoka</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="settings-checks">
+        <label>
+          <input id="avoidNonLatin" type="checkbox" checked>
+          Ogranicz wyniki zapisane alfabetami innymi niż łaciński
+        </label>
+
+        <label>
+          <input id="avoidRemixes" type="checkbox" checked>
+          Unikaj alternatywnych wersji (live/remix/acoustic…; remaster, gdy jest zwykła wersja)
+        </label>
+      </div>
+    </div>
+
+    <p class="small">
+      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF.
+      Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
+      Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
+    </p>
+
+
+
+    <div class="rmf-panel">
+      <div class="rmf-head">
+        <h3>Fakty RMF FM <span class="version">beta</span></h3>
+        <label class="rmf-enabled">
+          <input id="rmfEnabled" type="checkbox" checked>
+          Automatycznie dodawaj do kolejki
+        </label>
+      </div>
+      <div class="rmf-slots">
+        <span class="small">Godziny:</span>
+        <label><input class="rmf-slot" type="checkbox" value="9" checked> 09:00</label>
+        <label><input class="rmf-slot" type="checkbox" value="10" checked> 10:00</label>
+        <label><input class="rmf-slot" type="checkbox" value="12" checked> 12:00</label>
+        <label><input class="rmf-slot" type="checkbox" value="14" checked> 14:00</label>
+        <label><input class="rmf-slot" type="checkbox" value="16" checked> 16:00</label>
+      </div>
+      <div class="rmf-actions">
+        <button id="rmfCheckButton" type="button" class="secondary">Sprawdź Fakty teraz</button>
+        <button id="rmfQueueButton" type="button" class="secondary">Dodaj najnowsze Fakty do kolejki</button>
+      </div>
+      <div id="rmfStatus" class="small">Fakty RMF: oczekiwanie na aktywne połączenie ze Spotify.</div>
+      <div id="rmfDiagnostics" class="small lastfm-note"></div>
+      <p class="small lastfm-note">
+        W wybranych godzinach aplikacja przez maks. 55 minut czeka na odcinek „HH:00 Fakty”. Gdy się pojawi, dodaje go jako następny element kolejki Spotify. Karta z aplikacją musi pozostać otwarta, a Spotify musi mieć aktywne odtwarzanie.
+      </p>
+    </div>
+
+    <div class="toolbar">
+      <button id="generateButton">Generuj playlistę</button>
+      <button id="clearHistoryButton" class="secondary">Wyczyść historię aplikacji</button>
+      <button id="exportStateButton" type="button" class="secondary">Eksportuj bazę</button>
+      <button id="importStateButton" type="button" class="secondary">Importuj bazę</button>
+      <input id="importStateFile" type="file" accept="application/json,.json" style="display:none;">
+    </div>
+    <div class="small lastfm-note">Eksport obejmuje lokalną bazę, cache, historię, feedback, blokady, profile i ustawienia RMF. Tokeny logowania Spotify nie są eksportowane.</div>
+    <div id="historySummary" class="history-summary"></div>
+    <div id="progress" class="progress"></div>
+  </div>
+
+  <div class="box" id="playlistBox" style="display:none;">
+    <strong>Wynik:</strong>
+    <div id="recentPlaylists" class="small" style="margin:8px 0 12px;"></div>
+    <div id="playlistResult"></div>
+    <div class="feedback-toolbar">
+      <span id="feedbackSummary" class="feedback-summary"></span>
+      <button id="clearFeedbackButton" type="button" class="secondary">Wyczyść oceny</button>
+      <button id="clearBlockedFeedbackButton" type="button" class="secondary">Wyczyść blokady wykonawców</button>
+    </div>
+    <div class="small">👍 premiuje utwór i wykonawcę, 👎 mocno obniża ich ranking, 🚫 blokuje głównego wykonawcę, a ▶ YT otwiera małe okno wyszukiwania YouTube. Samo pojawienie się utworu na wcześniejszej wygenerowanej playliście nie wpływa na kolejne losowanie.</div>
+  </div>
+
+<script>
+const clientId = "d207523201ce4426923cda4cc893f76f";
+const redirectUri = "https://brimbag.github.io/office-music/";
+const lastFmApiKey = "3136af137781e276d21c2ae3f04424ad";
+const lastFmApiRoot = "https://ws.audioscrobbler.com/2.0/";
+
+const scopes = [
+  "user-read-private",
+  "user-read-playback-state",
+  "user-modify-playback-state",
+  "playlist-read-private",
+  "playlist-modify-private",
+  "playlist-modify-public",
+  "user-library-modify",
+  "user-read-recently-played"
+];
+
+const profiles = {
+  bartek: {
+    name: "Bartek",
+    genres: ["metal", "hard rock", "punk", "grunge"]
+  },
+  edyta: {
+    name: "Edyta",
+    genres: ["classic rock", "pop", "piosenka poetycka"]
+  },
+  asia: {
+    name: "Asia",
+    genres: ["pop", "rock"]
+  },
+  monika: {
+    name: "Monika",
+    genres: []
+  }
+};
+
+const TASTE_STORAGE_KEY = "office_taste_profile_v1";
+const TASTE_GENRE_DEFS = {
+  "rock": { label: "Rock", parent: null },
+  "classic-rock": { label: "Classic Rock", parent: "rock" },
+  "hard-rock": { label: "Hard Rock", parent: "rock" },
+  "alternative-rock": { label: "Alternative Rock", parent: "rock" },
+  "indie-rock": { label: "Indie Rock", parent: "rock" },
+  "grunge": { label: "Grunge", parent: "rock" },
+  "britpop": { label: "Britpop", parent: "rock" },
+  "garage-rock": { label: "Garage Rock", parent: "rock" },
+  "psychedelic-rock": { label: "Psychedelic Rock", parent: "rock" },
+  "progressive-rock": { label: "Progressive Rock", parent: "rock" },
+  "southern-rock": { label: "Southern Rock", parent: "rock" },
+  "glam-rock": { label: "Glam Rock", parent: "rock" },
+  "post-rock": { label: "Post-Rock", parent: "rock" },
+  "shoegaze": { label: "Shoegaze", parent: "rock" },
+  "new-wave-post-punk": { label: "New Wave / Post-Punk", parent: "rock" },
+  "gothic-rock": { label: "Gothic Rock", parent: "rock" },
+  "metal": { label: "Metal", parent: null },
+  "heavy-metal": { label: "Heavy Metal", parent: "metal" },
+  "thrash-metal": { label: "Thrash Metal", parent: "metal" },
+  "groove-metal": { label: "Groove Metal", parent: "metal" },
+  "alternative-metal": { label: "Alternative Metal", parent: "metal" },
+  "nu-metal": { label: "Nu Metal", parent: "metal" },
+  "progressive-metal": { label: "Progressive Metal", parent: "metal" },
+  "power-metal": { label: "Power Metal", parent: "metal" },
+  "doom-metal": { label: "Doom Metal", parent: "metal" },
+  "stoner-metal": { label: "Stoner Metal", parent: "metal" },
+  "death-metal": { label: "Death Metal", parent: "metal" },
+  "black-metal": { label: "Black Metal", parent: "metal" },
+  "symphonic-metal": { label: "Symphonic Metal", parent: "metal" },
+  "folk-metal": { label: "Folk Metal", parent: "metal" },
+  "industrial-metal": { label: "Industrial Metal", parent: "metal" },
+  "metalcore": { label: "Metalcore", parent: "metal" },
+  "funk-metal": { label: "Funk Metal", parent: "metal" },
+  "punk": { label: "Punk", parent: null },
+  "punk-rock": { label: "Punk Rock", parent: "punk" },
+  "pop-punk": { label: "Pop Punk", parent: "punk" },
+  "hardcore-punk": { label: "Hardcore Punk", parent: "punk" },
+  "skate-punk": { label: "Skate Punk", parent: "punk" },
+  "post-hardcore": { label: "Post-Hardcore", parent: "punk" },
+  "emo": { label: "Emo", parent: "punk" },
+  "ska-punk": { label: "Ska Punk", parent: "punk" },
+  "folk-punk": { label: "Folk Punk", parent: "punk" },
+  "psychobilly": { label: "Psychobilly", parent: "punk" },
+  "pop": { label: "Pop", parent: null },
+  "mainstream-pop": { label: "Mainstream Pop", parent: "pop" },
+  "pop-rock": { label: "Pop Rock", parent: "pop" },
+  "dance-pop": { label: "Dance Pop", parent: "pop" },
+  "synthpop": { label: "Synthpop", parent: "pop" },
+  "indie-pop": { label: "Indie Pop", parent: "pop" },
+  "dream-pop": { label: "Dream Pop", parent: "pop" },
+  "electropop": { label: "Electropop", parent: "pop" },
+  "art-pop": { label: "Art Pop", parent: "pop" },
+  "europop": { label: "Europop", parent: "pop" },
+  "k-pop": { label: "K-Pop", parent: "pop" },
+  "j-pop": { label: "J-Pop", parent: "pop" },
+  "hiphop": { label: "Hip-hop / Rap", parent: null },
+  "old-school-hiphop": { label: "Old School Hip-Hop", parent: "hiphop" },
+  "boom-bap": { label: "Boom Bap", parent: "hiphop" },
+  "alternative-hiphop": { label: "Alternative Hip-Hop", parent: "hiphop" },
+  "conscious-hiphop": { label: "Conscious Hip-Hop", parent: "hiphop" },
+  "gangsta-rap": { label: "Gangsta Rap", parent: "hiphop" },
+  "trap": { label: "Trap", parent: "hiphop" },
+  "drill": { label: "Drill", parent: "hiphop" },
+  "cloud-rap": { label: "Cloud Rap", parent: "hiphop" },
+  "pop-rap": { label: "Pop Rap", parent: "hiphop" },
+  "rap-rock-metal": { label: "Rap Rock / Rap Metal", parent: "hiphop" },
+  "electronic": { label: "Electronic / Dance", parent: null },
+  "house": { label: "House", parent: "electronic" },
+  "deep-house": { label: "Deep House", parent: "electronic" },
+  "progressive-house": { label: "Progressive House", parent: "electronic" },
+  "techno": { label: "Techno", parent: "electronic" },
+  "trance": { label: "Trance", parent: "electronic" },
+  "drum-bass": { label: "Drum & Bass", parent: "electronic" },
+  "jungle": { label: "Jungle", parent: "electronic" },
+  "dubstep": { label: "Dubstep", parent: "electronic" },
+  "ambient": { label: "Ambient", parent: "electronic" },
+  "idm": { label: "IDM / Experimental Electronic", parent: "electronic" },
+  "synthwave": { label: "Synthwave", parent: "electronic" },
+  "industrial-ebm": { label: "Industrial / EBM", parent: "electronic" },
+  "eurodance": { label: "Eurodance", parent: "electronic" },
+  "disco-nu-disco": { label: "Disco / Nu-Disco", parent: "electronic" },
+  "trip-hop": { label: "Trip-Hop", parent: "electronic" },
+  "rnb": { label: "R&B / Soul / Funk", parent: null },
+  "soul": { label: "Soul", parent: "rnb" },
+  "contemporary-rnb": { label: "Contemporary R&B", parent: "rnb" },
+  "neo-soul": { label: "Neo-Soul", parent: "rnb" },
+  "funk": { label: "Funk", parent: "rnb" },
+  "disco": { label: "Disco", parent: "rnb" },
+  "motown": { label: "Motown", parent: "rnb" },
+  "quiet-storm": { label: "Quiet Storm", parent: "rnb" },
+  "funk-rock": { label: "Funk Rock", parent: "rnb" },
+  "jazz": { label: "Jazz", parent: null },
+  "swing": { label: "Traditional / Swing", parent: "jazz" },
+  "bebop": { label: "Bebop", parent: "jazz" },
+  "cool-jazz": { label: "Cool Jazz", parent: "jazz" },
+  "hard-bop": { label: "Hard Bop", parent: "jazz" },
+  "fusion": { label: "Fusion", parent: "jazz" },
+  "smooth-jazz": { label: "Smooth Jazz", parent: "jazz" },
+  "vocal-jazz": { label: "Vocal Jazz", parent: "jazz" },
+  "free-jazz": { label: "Free Jazz", parent: "jazz" },
+  "acid-jazz": { label: "Acid Jazz", parent: "jazz" },
+  "blues": { label: "Blues", parent: null },
+  "delta-blues": { label: "Delta Blues", parent: "blues" },
+  "chicago-blues": { label: "Chicago Blues", parent: "blues" },
+  "electric-blues": { label: "Electric Blues", parent: "blues" },
+  "blues-rock": { label: "Blues Rock", parent: "blues" },
+  "country-blues": { label: "Country Blues", parent: "blues" },
+  "soul-blues": { label: "Soul Blues", parent: "blues" },
+  "folk": { label: "Folk / Singer-Songwriter", parent: null },
+  "folk": { label: "Folk", parent: "folk" },
+  "folk-rock": { label: "Folk Rock", parent: "folk" },
+  "contemporary-folk": { label: "Contemporary Folk", parent: "folk" },
+  "singer-songwriter": { label: "Singer-Songwriter", parent: "folk" },
+  "indie-folk": { label: "Indie Folk", parent: "folk" },
+  "celtic-folk": { label: "Celtic Folk", parent: "folk" },
+  "poetic-song": { label: "Piosenka poetycka", parent: "folk" },
+  "world-folk": { label: "World Folk", parent: "folk" },
+  "country": { label: "Country / Americana", parent: null },
+  "traditional-country": { label: "Traditional Country", parent: "country" },
+  "contemporary-country": { label: "Contemporary Country", parent: "country" },
+  "country-rock": { label: "Country Rock", parent: "country" },
+  "americana": { label: "Americana", parent: "country" },
+  "alt-country": { label: "Alternative Country", parent: "country" },
+  "bluegrass": { label: "Bluegrass", parent: "country" },
+  "outlaw-country": { label: "Outlaw Country", parent: "country" },
+  "reggae": { label: "Reggae / Ska / Caribbean", parent: null },
+  "reggae": { label: "Reggae", parent: "reggae" },
+  "roots-reggae": { label: "Roots Reggae", parent: "reggae" },
+  "dub": { label: "Dub", parent: "reggae" },
+  "ska": { label: "Ska", parent: "reggae" },
+  "rocksteady": { label: "Rocksteady", parent: "reggae" },
+  "dancehall": { label: "Dancehall", parent: "reggae" },
+  "reggae-rock": { label: "Reggae Rock", parent: "reggae" },
+  "world": { label: "World / Latin", parent: null },
+  "latin-pop": { label: "Latin Pop", parent: "world" },
+  "salsa": { label: "Salsa", parent: "world" },
+  "reggaeton": { label: "Reggaeton", parent: "world" },
+  "flamenco": { label: "Flamenco", parent: "world" },
+  "tango": { label: "Tango", parent: "world" },
+  "afrobeat": { label: "Afrobeat", parent: "world" },
+  "afrobeats": { label: "Afrobeats", parent: "world" },
+  "balkan": { label: "Balkan", parent: "world" },
+  "middle-eastern": { label: "Middle Eastern", parent: "world" },
+  "indian": { label: "Indian", parent: "world" },
+  "east-asian-traditional": { label: "East Asian Traditional", parent: "world" },
+  "throat-singing": { label: "Mongolian / Tuvan Throat Singing", parent: "world" },
+  "classical": { label: "Classical / Soundtrack / Instrumental", parent: null },
+  "classical": { label: "Classical", parent: "classical" },
+  "contemporary-classical": { label: "Contemporary Classical", parent: "classical" },
+  "minimalism": { label: "Minimalism", parent: "classical" },
+  "film-score": { label: "Film Score", parent: "classical" },
+  "game-soundtrack": { label: "Game Soundtrack", parent: "classical" },
+  "piano-instrumental": { label: "Piano / Instrumental", parent: "classical" },
+  "new-age": { label: "New Age", parent: "classical" },
+  "ambient-instrumental": { label: "Ambient Instrumental", parent: "classical" }
+};
+
+const categoryQueries = {
+  rock: ["genre:rock", "genre:\"classic rock\"", "genre:\"alternative rock\""],
+  pop: ["genre:pop", "genre:\"pop rock\""],
+  metal: ["genre:metal", "genre:\"hard rock\""],
+  punk: ["genre:punk", "genre:\"punk rock\""],
+  grunge: ["genre:grunge"],
+  poetic: []
+};
+
+const commonCategoryQueries = {
+  rock: ['genre:"classic rock"', 'genre:"alternative rock"', 'genre:"pop rock"'],
+  pop: ["genre:pop", 'genre:"pop rock"'],
+  metal: ["genre:metal"],
+  punk: ['genre:"punk rock"'],
+  grunge: ["genre:grunge"],
+  poetic: []
+};
+
+const loginButton = document.getElementById("loginButton");
+const logoutButton = document.getElementById("logoutButton");
+const statusBox = document.getElementById("status");
+const profileBox = document.getElementById("profileBox");
+const profileDiv = document.getElementById("profile");
+const mixerBox = document.getElementById("mixerBox");
+const peopleDiv = document.getElementById("people");
+const playlistLength = document.getElementById("playlistLength");
+const trackBlockDays = document.getElementById("trackBlockDays");
+const artistCooldownHours = document.getElementById("artistCooldownHours");
+const discoveryLevel = document.getElementById("discoveryLevel");
+const discoveryLabel = document.getElementById("discoveryLabel");
+const recognizabilityLevel = document.getElementById("recognizabilityLevel");
+const avoidNonLatin = document.getElementById("avoidNonLatin");
+const avoidRemixes = document.getElementById("avoidRemixes");
+const generateButton = document.getElementById("generateButton");
+const clearHistoryButton = document.getElementById("clearHistoryButton");
+const exportStateButton = document.getElementById("exportStateButton");
+const importStateButton = document.getElementById("importStateButton");
+const importStateFile = document.getElementById("importStateFile");
+const historySummary = document.getElementById("historySummary");
+const progressBox = document.getElementById("progress");
+const playlistBox = document.getElementById("playlistBox");
+const playlistResult = document.getElementById("playlistResult");
+const recentPlaylists = document.getElementById("recentPlaylists");
+const lastFmUserInput = document.getElementById("lastFmUser");
+const syncLastFmButton = document.getElementById("syncLastFmButton");
+const lastFmStatus = document.getElementById("lastFmStatus");
+
+const feedbackSummary = document.getElementById("feedbackSummary");
+const clearFeedbackButton = document.getElementById("clearFeedbackButton");
+const clearBlockedFeedbackButton = document.getElementById("clearBlockedFeedbackButton");
+const rmfEnabled = document.getElementById("rmfEnabled");
+const rmfSlotInputs = [...document.querySelectorAll(".rmf-slot")];
+const rmfCheckButton = document.getElementById("rmfCheckButton");
+const rmfQueueButton = document.getElementById("rmfQueueButton");
+const rmfStatus = document.getElementById("rmfStatus");
+const rmfDiagnostics = document.getElementById("rmfDiagnostics");
+
+
+loginButton.addEventListener("click", login);
+logoutButton.addEventListener("click", logout);
+generateButton.addEventListener("click", generateOfficePlaylist);
+clearHistoryButton.addEventListener("click", clearAppHistory);
+exportStateButton.addEventListener("click", exportLocalState);
+importStateButton.addEventListener("click", () => importStateFile.click());
+importStateFile.addEventListener("change", importLocalStateFromFile);
+
+clearFeedbackButton.addEventListener("click", clearFeedback);
+clearBlockedFeedbackButton.addEventListener("click", clearFeedbackArtistBlocks);
+rmfEnabled.addEventListener("change", () => { saveRmfSettings(); updateRmfStatus(); });
+for (const input of rmfSlotInputs) input.addEventListener("change", saveRmfSettings);
+rmfCheckButton.addEventListener("click", () => manualRmfCheck(false));
+rmfQueueButton.addEventListener("click", () => manualRmfCheck(true));
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) checkRmfWatcher().catch(console.error);
+});
+
+syncLastFmButton.addEventListener("click", async () => {
+  try {
+    syncLastFmButton.disabled = true;
+    await syncLastFmSources(selectedProfiles(), { forceStatus: true });
+  } catch (err) {
+    console.error(err);
+    lastFmStatus.textContent = `Last.fm: ${err.message}`;
+  } finally {
+    syncLastFmButton.disabled = false;
+  }
+});
+lastFmUserInput.addEventListener("change", () => {
+  const next = lastFmUserInput.value.trim();
+  localStorage.setItem(LASTFM_USER_KEY, next);
+  renderLastFmStatus();
+});
+discoveryLevel.addEventListener("input", () => {
+  discoveryLabel.textContent = `${discoveryLevel.value}% odkryć`;
+});
+
+const LASTFM_USER_KEY = "office_lastfm_user_v1";
+const LASTFM_CACHE_PREFIX = "office_lastfm_cache_v1:";
+const LASTFM_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const LASTFM_RECENT_CACHE_TTL_MS = 10 * 60 * 1000;
+const LASTFM_HISTORY_WINDOW_DAYS = 14;
+const LASTFM_RECENT_COUNT_KEY = "office_lastfm_recent_count_v1";
+const LASTFM_ARTIST_POOL_KEY = "office_lastfm_artist_pool_v1";
+const LASTFM_TRACK_POOL_KEY = "office_lastfm_track_pool_v1";
+const LASTFM_ARTIST_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
+const LASTFM_TRACK_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
+const LASTFM_MAX_TAG_CALLS_PER_SYNC = 24;
+const LASTFM_TAG_ROTATION_KEY = "office_lastfm_tag_rotation_v1";
+const STORAGE_V34_MIGRATION_KEY = "office_storage_v34_migrated_v1";
+let lastFmCallsThisSync = 0;
+let lastFmTagCallBudgetThisSync = LASTFM_MAX_TAG_CALLS_PER_SYNC;
+
+function lastFmTagBudgetForTarget(total) {
+  if (total <= 60) return 24;
+  if (total <= 90) return 28;
+  return 32;
+}
+
+function rotatingLastFmTags(tags, maxTagCalls = LASTFM_MAX_TAG_CALLS_PER_SYNC) {
+  const unique = [...new Set((tags || []).map(normalizeGenreName).filter(Boolean))];
+  if (!unique.length) return [];
+  const maxTags = Math.max(1, Math.floor(maxTagCalls / 2));
+  let cursor = Number(localStorage.getItem(LASTFM_TAG_ROTATION_KEY) || 0);
+  if (!Number.isFinite(cursor) || cursor < 0) cursor = 0;
+  cursor %= unique.length;
+  const ordered = [...unique.slice(cursor), ...unique.slice(0, cursor)];
+  const chosen = ordered.slice(0, maxTags);
+  safeSetSmallStorageItem(
+    LASTFM_TAG_ROTATION_KEY,
+    String((cursor + chosen.length) % unique.length),
+    "rotacji tagów Last.fm"
+  );
+  return chosen;
+}
+
+const HISTORY_KEY = "office_music_history_v1";
+const HISTORY_MAX_AGE_DAYS = 90;
+
+const FEEDBACK_KEY = "office_music_feedback_v1";
+const FEEDBACK_BLOCKED_ARTISTS_KEY = "office_music_feedback_blocked_artists_v1";
+const SEED_ARTIST_ROTATION_KEY = "office_seed_artist_rotation_v1";
+const RMF_SHOW_ID = "2BeZqsvzZUSldlZWvjeGe3";
+const RMF_SETTINGS_KEY = "office_rmf_settings_v2";
+const RMF_SETTINGS_LEGACY_KEY = "office_rmf_settings_v1";
+const RMF_QUEUED_KEY = "office_rmf_queued_v1";
+const RMF_DIAGNOSTICS_KEY = "office_rmf_diagnostics_v1";
+const RECENT_PLAYLISTS_KEY = "office_recent_playlists_v1";
+const RECENT_PLAYLISTS_MAX = 3;
+const RMF_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const RMF_WINDOW_MINUTES = 55;
+let rmfWatcherTimer = null;
+let rmfLastApiCheckAt = 0;
+
+const APP_STORAGE_PREFIX = "office_";
+const STATE_EXPORT_FORMAT = "office-music-state";
+const STATE_EXPORT_VERSION = 1;
+
+function exportedStorageState() {
+  const storage = {};
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(APP_STORAGE_PREFIX)) continue;
+    storage[key] = localStorage.getItem(key);
+  }
+  return storage;
+}
+
+function exportLocalState() {
+  try {
+    const payload = {
+      format: STATE_EXPORT_FORMAT,
+      version: STATE_EXPORT_VERSION,
+      exportedAt: new Date().toISOString(),
+      source: "Office Music Mixer v36",
+      storage: exportedStorageState()
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `office-music-backup-${date}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    progressBox.textContent = `Wyeksportowano ${Object.keys(payload.storage).length} wpisów lokalnej bazy.`;
+  } catch (err) {
+    console.error(err);
+    progressBox.textContent = `Eksport bazy nie powiódł się: ${err.message}`;
+  }
+}
+
+async function importLocalStateFromFile(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    if (
+      payload?.format !== STATE_EXPORT_FORMAT ||
+      Number(payload?.version) !== STATE_EXPORT_VERSION ||
+      !payload?.storage ||
+      typeof payload.storage !== "object" ||
+      Array.isArray(payload.storage)
+    ) {
+      throw new Error("To nie jest prawidłowy plik kopii Office Music Mixer.");
+    }
+
+    const entries = Object.entries(payload.storage).filter(
+      ([key, value]) => key.startsWith(APP_STORAGE_PREFIX) && typeof value === "string"
+    );
+    if (!entries.length) {
+      throw new Error("Plik nie zawiera lokalnej bazy Office Music Mixer.");
+    }
+
+    const confirmed = window.confirm(
+      `Import zastąpi obecną lokalną bazę danymi z pliku (${entries.length} wpisów). Logowanie Spotify pozostanie bez zmian. Kontynuować?`
+    );
+    if (!confirmed) return;
+
+    const appKeys = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(APP_STORAGE_PREFIX)) appKeys.push(key);
+    }
+    for (const key of appKeys) localStorage.removeItem(key);
+    for (const [key, value] of entries) localStorage.setItem(key, value);
+
+    window.alert(`Zaimportowano ${entries.length} wpisów. Strona zostanie odświeżona.`);
+    window.location.reload();
+  } catch (err) {
+    console.error(err);
+    window.alert(`Nie udało się zaimportować bazy: ${err.message}`);
+  }
+}
+
+
+
+function loadFeedback() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FEEDBACK_KEY) || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveFeedback(data) {
+  localStorage.setItem(FEEDBACK_KEY, JSON.stringify(data));
+  renderFeedbackSummary();
+}
+
+function loadFeedbackBlockedArtists() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FEEDBACK_BLOCKED_ARTISTS_KEY) || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveFeedbackBlockedArtists(data) {
+  localStorage.setItem(FEEDBACK_BLOCKED_ARTISTS_KEY, JSON.stringify(data));
+  renderFeedbackSummary();
+}
+
+function feedbackBlockedArtistNames() {
+  return new Set(Object.keys(loadFeedbackBlockedArtists()));
+}
+
+function feedbackArtistStats(data = loadFeedback()) {
+  const stats = new Map();
+  for (const entry of Object.values(data)) {
+    const value = Number(entry?.value || 0);
+    if (!value) continue;
+    for (const key of entry?.artists || []) {
+      if (!stats.has(key)) stats.set(key, { ups: 0, downs: 0, balance: 0 });
+      const row = stats.get(key);
+      if (value > 0) row.ups += 1;
+      if (value < 0) row.downs += 1;
+      row.balance += value;
+    }
+  }
+  return stats;
+}
+
+function feedbackArtistTotals(data = loadFeedback()) {
+  const totals = new Map();
+  for (const [key, row] of feedbackArtistStats(data)) {
+    totals.set(key, row.balance);
+  }
+  return totals;
+}
+
+function feedbackScore(track) {
+  const data = loadFeedback();
+  const signature = trackSignature(track);
+  const trackValue = Number(data[signature]?.value || 0);
+
+  // Feedback jest celowo silny: ma z czasem korygować katalogowe rekomendacje.
+  let score = trackValue > 0 ? 90 : trackValue < 0 ? -320 : 0;
+  const artistStats = feedbackArtistStats(data);
+  const hardBlocked = feedbackBlockedArtistNames();
+
+  for (const artist of track?.artists || []) {
+    const key = normalizeArtistName(artist?.name || "");
+    if (!key) continue;
+    if (hardBlocked.has(key)) return -100000;
+
+    const row = artistStats.get(key) || { ups: 0, downs: 0, balance: 0 };
+    if (row.balance > 0) score += Math.min(90, row.balance * 18);
+    if (row.balance < 0) score += Math.max(-220, row.balance * 55);
+
+    if (row.downs >= 2 && row.ups === 0) score -= 140 + (row.downs - 2) * 45;
+    if (row.ups >= 2 && row.downs === 0) score += 30 + (row.ups - 2) * 12;
+  }
+  return score;
+}
+
+function trackFeedbackValue(track) {
+  const signature = trackSignature(track);
+  if (!signature) return 0;
+  return Number(loadFeedback()[signature]?.value || 0);
+}
+
+function loadSeedArtistRotation() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SEED_ARTIST_ROTATION_KEY) || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSeedArtistRotation(data) {
+  safeSetSmallStorageItem(
+    SEED_ARTIST_ROTATION_KEY,
+    JSON.stringify(data || {}),
+    "rotacji artystów wzorcowych"
+  );
+}
+
+function seedArtistAgeBonus(artistName, rotation = loadSeedArtistRotation()) {
+  const key = normalizeArtistName(artistName || "");
+  if (!key) return 0;
+  const last = Number(rotation[key]?.lastSelectedAt || 0);
+  if (!last) return 36;
+  const days = Math.max(0, (Date.now() - last) / 86400000);
+  return Math.min(30, days * 6);
+}
+
+function preferredArtistBonus(track, preferredArtistNames = []) {
+  if (!preferredArtistNames?.length) return 0;
+  const preferred = new Map(
+    preferredArtistNames
+      .map(name => [normalizeArtistName(name), name])
+      .filter(([key]) => Boolean(key))
+  );
+  const rotation = loadSeedArtistRotation();
+  let bonus = 0;
+  for (const artist of track?.artists || []) {
+    const key = normalizeArtistName(artist?.name || "");
+    if (!preferred.has(key)) continue;
+    bonus = Math.max(bonus, 70 + seedArtistAgeBonus(preferred.get(key), rotation));
+  }
+  return bonus;
+}
+
+function recordSeedArtistSelections(tracks, selectedProfilesList) {
+  const rotation = loadSeedArtistRotation();
+  const now = Date.now();
+  const selectedSeedNames = new Map();
+  for (const profile of selectedProfilesList || []) {
+    for (const artist of profile.artists || []) {
+      const key = normalizeArtistName(artist);
+      if (key) selectedSeedNames.set(key, artist);
+    }
+  }
+  for (const track of tracks || []) {
+    for (const artist of track?.artists || []) {
+      const key = normalizeArtistName(artist?.name || "");
+      if (!selectedSeedNames.has(key)) continue;
+      const current = rotation[key] || {};
+      rotation[key] = {
+        artist: selectedSeedNames.get(key),
+        lastSelectedAt: now,
+        selectedCount: Number(current.selectedCount || 0) + 1
+      };
+    }
+  }
+  saveSeedArtistRotation(rotation);
+}
+
+async function primeManualSeedArtists(token, selectedProfilesList, maxNewSearches = 2) {
+  const rotation = loadSeedArtistRotation();
+  const rows = [];
+  for (const profile of selectedProfilesList || []) {
+    for (const artist of profile.artists || []) {
+      const key = normalizeArtistName(artist);
+      if (!key) continue;
+      rows.push({
+        profileId: profile.id,
+        artist,
+        key,
+        query: `artist:"${artist}"`,
+        ageBonus: seedArtistAgeBonus(artist, rotation)
+      });
+    }
+  }
+  const unique = [...new Map(rows.map(row => [row.key, row])).values()];
+  unique.sort((a, b) => {
+    const aMain = a.profileId === "bartek" ? 1 : 0;
+    const bMain = b.profileId === "bartek" ? 1 : 0;
+    if (aMain !== bMain) return bMain - aMain;
+    return b.ageBonus - a.ageBonus;
+  });
+
+  const startSearches = newSearchesThisGeneration;
+  for (const row of unique) {
+    if (newSearchesThisGeneration - startSearches >= maxNewSearches) break;
+    if (candidatePoolForQueries([row.query]).length >= 3) continue;
+    const offsets = searchOffsetsForQuery(row.query);
+    const offset = offsets[0] ?? 0;
+    await searchTracks(token, row.query, offset);
+  }
+}
+
+function setTrackFeedback(track, value) {
+  const signature = trackSignature(track);
+  if (!signature) return;
+  const data = loadFeedback();
+  const current = Number(data[signature]?.value || 0);
+  if (current === value) {
+    delete data[signature];
+  } else {
+    data[signature] = {
+      value,
+      artists: (track.artists || []).map(a => normalizeArtistName(a?.name || "")).filter(Boolean),
+      track: track.name || "",
+      updatedAt: new Date().toISOString()
+    };
+  }
+  saveFeedback(data);
+}
+
+function togglePrimaryArtistBlock(track) {
+  const primary = track?.artists?.[0];
+  const key = normalizeArtistName(primary?.name || "");
+  if (!key) return false;
+  const data = loadFeedbackBlockedArtists();
+  if (data[key]) {
+    delete data[key];
+  } else {
+    data[key] = {
+      name: primary.name || key,
+      blockedAt: new Date().toISOString(),
+      source: "playlist_feedback"
+    };
+  }
+  saveFeedbackBlockedArtists(data);
+  return Boolean(data[key]);
+}
+
+function renderFeedbackSummary() {
+  if (!feedbackSummary) return;
+  const entries = Object.values(loadFeedback());
+  const ups = entries.filter(x => Number(x?.value) > 0).length;
+  const downs = entries.filter(x => Number(x?.value) < 0).length;
+  const blocked = Object.keys(loadFeedbackBlockedArtists()).length;
+  feedbackSummary.textContent = `Preferencje z feedbacku: ${ups} 👍 / ${downs} 👎 / ${blocked} 🚫 wykonawców`;
+}
+
+function clearFeedback() {
+  if (!confirm("Wyczyścić wszystkie lokalne oceny utworów? Blokady wykonawców zostaną zachowane.")) return;
+  localStorage.removeItem(FEEDBACK_KEY);
+  renderFeedbackSummary();
+  document.querySelectorAll(".vote-btn").forEach(btn => {
+    btn.classList.remove("active-up", "active-down");
+  });
+}
+
+function clearFeedbackArtistBlocks() {
+  if (!confirm("Wyczyścić wszystkie blokady wykonawców dodane przyciskiem 🚫?")) return;
+  localStorage.removeItem(FEEDBACK_BLOCKED_ARTISTS_KEY);
+  renderFeedbackSummary();
+  document.querySelectorAll(".vote-btn").forEach(btn => btn.classList.remove("active-block"));
+}
+
+function loadRmfSettings() {
+  try {
+    const currentRaw = localStorage.getItem(RMF_SETTINGS_KEY);
+    const legacyRaw = localStorage.getItem(RMF_SETTINGS_LEGACY_KEY);
+    const data = JSON.parse(currentRaw || legacyRaw || "{}");
+    rmfEnabled.checked = data.enabled !== false;
+    let slots = Array.isArray(data.slots) ? data.slots.map(Number) : [9, 10, 12, 14, 16];
+    // v24: przy migracji starych ustawień dokładamy nowe wydanie 09:00,
+    // ale późniejsze ręczne odznaczenie 09:00 jest już respektowane przez klucz v2.
+    if (!currentRaw && legacyRaw && !slots.includes(9)) slots = [9, ...slots];
+    for (const input of rmfSlotInputs) input.checked = slots.includes(Number(input.value));
+    if (!currentRaw) saveRmfSettings();
+  } catch {
+    rmfEnabled.checked = true;
+    for (const input of rmfSlotInputs) input.checked = [9, 10, 12, 14, 16].includes(Number(input.value));
+  }
+}
+
+function saveRmfSettings() {
+  localStorage.setItem(RMF_SETTINGS_KEY, JSON.stringify({
+    enabled: rmfEnabled.checked,
+    slots: rmfSlotInputs.filter(x => x.checked).map(x => Number(x.value))
+  }));
+}
+
+function loadRmfQueued() {
+  try { return JSON.parse(localStorage.getItem(RMF_QUEUED_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+function saveRmfQueued(data) {
+  localStorage.setItem(RMF_QUEUED_KEY, JSON.stringify(data));
+}
+
+function warsawNowParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  }).formatToParts(date);
+  const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  return {
+    dateKey: `${obj.year}-${obj.month}-${obj.day}`,
+    hour: Number(obj.hour), minute: Number(obj.minute)
+  };
+}
+
+function selectedRmfSlots() {
+  return rmfSlotInputs.filter(x => x.checked).map(x => Number(x.value)).sort((a,b) => a-b);
+}
+
+function currentRmfSlot() {
+  const now = warsawNowParts();
+  const minutes = now.hour * 60 + now.minute;
+  for (const slot of selectedRmfSlots()) {
+    const start = slot * 60;
+    if (minutes >= start && minutes <= start + RMF_WINDOW_MINUTES) return { ...now, slot };
+  }
+  return null;
+}
+
+async function fetchRmfEpisodes(token) {
+  const response = await fetch(
+    `https://api.spotify.com/v1/shows/${RMF_SHOW_ID}/episodes?market=PL&limit=20&offset=0`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const data = await parseJsonSafely(response);
+  if (!response.ok) {
+    if (response.status === 429) throw new Error("Spotify ograniczyło zapytania podczas sprawdzania Faktów RMF.");
+    throw new Error(`Nie udało się pobrać Faktów RMF (${response.status}).`);
+  }
+  return data?.items || [];
+}
+
+function findRmfEpisodeForSlot(episodes, dateKey, slot) {
+  const expected = `${String(slot).padStart(2, "0")}:00 Fakty`.toLocaleLowerCase("pl-PL");
+  return episodes.find(ep =>
+    ep?.release_date === dateKey &&
+    (ep?.name || "").trim().toLocaleLowerCase("pl-PL") === expected
+  ) || null;
+}
+
+function latestRegularRmfEpisode(episodes, dateKey) {
+  return episodes.find(ep =>
+    ep?.release_date === dateKey &&
+    /^\d{2}:00 Fakty$/i.test((ep?.name || "").trim())
+  ) || null;
+}
+
+async function getSpotifyPlaybackState(token) {
+  const response = await fetch("https://api.spotify.com/v1/me/player", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (response.status === 204) return { available: false, isPlaying: false, deviceId: "", deviceName: "" };
+  const data = await parseJsonSafely(response);
+  if (!response.ok) return { available: false, isPlaying: false, status: response.status, deviceId: "", deviceName: "" };
+  return {
+    available: true,
+    isPlaying: data?.is_playing === true,
+    deviceId: data?.device?.id || "",
+    deviceName: data?.device?.name || "",
+    contextUri: data?.context?.uri || "",
+    itemUri: data?.item?.uri || ""
+  };
+}
+
+async function fetchSpotifyQueueSnapshot(token) {
+  const response = await fetch("https://api.spotify.com/v1/me/player/queue", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (response.status === 204) return { ok: true, current: null, queue: [] };
+  const data = await parseJsonSafely(response);
+  if (!response.ok) return { ok: false, status: response.status, current: null, queue: [] };
+  const compact = item => item ? { uri: item.uri || "", name: item.name || "", type: item.type || "" } : null;
+  return {
+    ok: true,
+    current: compact(data?.currently_playing),
+    queue: (data?.queue || []).slice(0, 50).map(compact).filter(Boolean)
+  };
+}
+
+function queuePosition(snapshot, uri) {
+  if (!snapshot?.ok || !uri) return null;
+  const index = (snapshot.queue || []).findIndex(item => item?.uri === uri);
+  return index >= 0 ? index + 1 : null;
+}
+
+function loadRmfDiagnostics() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(RMF_DIAGNOSTICS_KEY) || "[]");
+    return Array.isArray(rows) ? rows : [];
+  } catch { return []; }
+}
+
+function saveRmfDiagnostic(entry) {
+  const rows = [entry, ...loadRmfDiagnostics()].slice(0, 20);
+  safeSetSmallStorageItem(RMF_DIAGNOSTICS_KEY, JSON.stringify(rows), "diagnostyki RMF");
+  renderRmfDiagnostics();
+}
+
+function renderRmfDiagnostics() {
+  if (!rmfDiagnostics) return;
+  const rows = loadRmfDiagnostics().slice(0, 3);
+  if (!rows.length) { rmfDiagnostics.textContent = ""; return; }
+  rmfDiagnostics.textContent = "Ostatnie próby RMF: " + rows.map(row => {
+    const time = row.at ? new Date(row.at).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "?";
+    const pos = Number.isInteger(row.afterPosition) ? `pozycja ${row.afterPosition}` : "pozycji nie potwierdzono";
+    const device = row.deviceName ? `, ${row.deviceName}` : "";
+    return `${time} ${row.episodeName || "Fakty"}: ${pos}${device}`;
+  }).join(" · ");
+}
+
+async function addEpisodeToQueue(token, episode, deviceId = "") {
+  const params = new URLSearchParams({ uri: episode.uri });
+  if (deviceId) params.set("device_id", deviceId);
+  const response = await fetch(
+    `https://api.spotify.com/v1/me/player/queue?${params.toString()}`,
+    { method: "POST", headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (response.ok) return;
+  if (response.status === 404 || response.status === 403) {
+    throw new Error("Nie udało się dodać Faktów do kolejki. Uruchom odtwarzanie na aktywnym urządzeniu Spotify i spróbuj ponownie.");
+  }
+  if (response.status === 429) throw new Error("Spotify ograniczyło zapytania do kolejki. Spróbuję przy kolejnym sprawdzeniu.");
+  throw new Error(`Spotify nie przyjęło Faktów do kolejki (${response.status}).`);
+}
+
+function sleepMs(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function queueRmfWithDiagnostics(token, episode, playback, mode = "auto") {
+  const before = await fetchSpotifyQueueSnapshot(token);
+  await addEpisodeToQueue(token, episode, playback?.deviceId || "");
+  await sleepMs(900);
+  const after = await fetchSpotifyQueueSnapshot(token);
+  const afterPosition = queuePosition(after, episode.uri);
+  saveRmfDiagnostic({
+    at: new Date().toISOString(),
+    mode,
+    episodeName: episode.name || "Fakty",
+    episodeUri: episode.uri || "",
+    deviceId: playback?.deviceId || "",
+    deviceName: playback?.deviceName || "",
+    isPlaying: playback?.isPlaying === true,
+    currentBefore: before?.current?.uri || playback?.itemUri || "",
+    queueLengthBefore: before?.queue?.length ?? null,
+    queueLengthAfter: after?.queue?.length ?? null,
+    beforePosition: queuePosition(before, episode.uri),
+    afterPosition,
+    queueReadOkBefore: before?.ok === true,
+    queueReadOkAfter: after?.ok === true
+  });
+  return { before, after, afterPosition };
+}
+
+function updateRmfStatus(text = "") {
+  if (!rmfStatus) return;
+  if (text) { rmfStatus.textContent = text; return; }
+  if (!rmfEnabled.checked) {
+    rmfStatus.textContent = "Fakty RMF: automatyczne dodawanie jest wyłączone.";
+    return;
+  }
+  const slot = currentRmfSlot();
+  if (slot) {
+    rmfStatus.textContent = `Fakty RMF: czekam na wydanie ${String(slot.slot).padStart(2,"0")}:00 (okno do ${String(slot.slot).padStart(2,"0")}:55).`;
+  } else {
+    const slots = selectedRmfSlots().map(h => `${String(h).padStart(2,"0")}:00`).join(", ");
+    rmfStatus.textContent = `Fakty RMF: monitoring aktywny. Zaplanowane godziny: ${slots || "brak"}.`;
+  }
+}
+
+async function checkRmfWatcher(force = false) {
+  if (!rmfEnabled?.checked) return;
+  const slot = currentRmfSlot();
+  if (!slot) { updateRmfStatus(); return; }
+  const key = `${slot.dateKey}-${slot.slot}`;
+  const queued = loadRmfQueued();
+  if (queued[key]) {
+    updateRmfStatus(`Fakty RMF ${String(slot.slot).padStart(2,"0")}:00 zostały już dziś dodane do kolejki.`);
+    return;
+  }
+  if (!force && Date.now() - rmfLastApiCheckAt < RMF_POLL_INTERVAL_MS) return;
+  rmfLastApiCheckAt = Date.now();
+  const token = await getValidAccessToken();
+  if (!token) return;
+  updateRmfStatus(`Fakty RMF: sprawdzam, czy pojawiło się wydanie ${String(slot.slot).padStart(2,"0")}:00…`);
+  const episodes = await fetchRmfEpisodes(token);
+  const episode = findRmfEpisodeForSlot(episodes, slot.dateKey, slot.slot);
+  if (!episode) {
+    updateRmfStatus(`Fakty RMF: wydanie ${String(slot.slot).padStart(2,"0")}:00 jeszcze się nie pojawiło. Sprawdzę ponownie za kilka minut.`);
+    return;
+  }
+
+  // v28: nie dodajemy automatycznie Faktów do zatrzymanego Spotify. Jeśli
+  // odtwarzanie wróci w obrębie bieżącego okna, watcher spróbuje ponownie.
+  // Po końcu godziny zaległe wydanie zostawiamy już przyciskowi ręcznemu.
+  const playback = await getSpotifyPlaybackState(token);
+  if (!playback.isPlaying) {
+    updateRmfStatus(`Fakty RMF: ${episode.name} są dostępne, ale Spotify jest wstrzymane. Spróbuję ponownie w tej godzinie, do ${String(slot.slot).padStart(2,"0")}:55.`);
+    return;
+  }
+
+  const queueResult = await queueRmfWithDiagnostics(token, episode, playback, "auto");
+  queued[key] = { uri: episode.uri, queuedAt: new Date().toISOString(), name: episode.name, queuePosition: queueResult.afterPosition };
+  saveRmfQueued(queued);
+  rmfStatus.textContent = Number.isInteger(queueResult.afterPosition)
+    ? `Fakty RMF: ${episode.name} dodane do kolejki Spotify (pozycja ${queueResult.afterPosition}).`
+    : `Fakty RMF: ${episode.name} dodane do kolejki Spotify; pozycja nie została potwierdzona przez API.`;
+}
+
+async function manualRmfCheck(addToQueue) {
+  try {
+    rmfCheckButton.disabled = true;
+    rmfQueueButton.disabled = true;
+    const token = await getValidAccessToken();
+    if (!token) throw new Error("Najpierw połącz aplikację ze Spotify.");
+    updateRmfStatus("Fakty RMF: sprawdzam najnowsze wydania…");
+    const episodes = await fetchRmfEpisodes(token);
+    const now = warsawNowParts();
+    const episode = latestRegularRmfEpisode(episodes, now.dateKey);
+    if (!episode) {
+      updateRmfStatus("Fakty RMF: nie znalazłem dziś jeszcze zwykłego wydania Faktów.");
+      return;
+    }
+    if (addToQueue) {
+      const playback = await getSpotifyPlaybackState(token);
+      const queueResult = await queueRmfWithDiagnostics(token, episode, playback, "manual");
+      updateRmfStatus(Number.isInteger(queueResult.afterPosition)
+        ? `Fakty RMF: ${episode.name} dodane do kolejki Spotify (pozycja ${queueResult.afterPosition}).`
+        : `Fakty RMF: ${episode.name} dodane do kolejki Spotify; pozycja nie została potwierdzona przez API.`);
+    } else {
+      updateRmfStatus(`Fakty RMF: najnowsze dostępne dziś wydanie to ${episode.name}.`);
+    }
+  } catch (err) {
+    console.error(err);
+    updateRmfStatus(`Fakty RMF: ${err.message}`);
+  } finally {
+    rmfCheckButton.disabled = false;
+    rmfQueueButton.disabled = false;
+  }
+}
+
+function startRmfWatcher() {
+  if (rmfWatcherTimer) clearInterval(rmfWatcherTimer);
+  updateRmfStatus();
+  checkRmfWatcher(true).catch(err => updateRmfStatus(`Fakty RMF: ${err.message}`));
+  rmfWatcherTimer = setInterval(() => {
+    checkRmfWatcher().catch(err => updateRmfStatus(`Fakty RMF: ${err.message}`));
+  }, 60 * 1000);
+}
+
+function randomString(length = 64) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+  const array = new Uint32Array(length);
+  crypto.getRandomValues(array);
+  return Array.from(array, n => chars[n % chars.length]).join("");
+}
+
+async function sha256(text) {
+  return crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+}
+
+function base64UrlEncode(buffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+async function login() {
+  const codeVerifier = randomString(64);
+  const codeChallenge = base64UrlEncode(await sha256(codeVerifier));
+  const state = randomString(32);
+
+  localStorage.setItem("spotify_code_verifier", codeVerifier);
+  sessionStorage.setItem("spotify_auth_state", state);
+
+  const authUrl = new URL("https://accounts.spotify.com/authorize");
+  authUrl.search = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    scope: scopes.join(" "),
+    redirect_uri: redirectUri,
+    code_challenge_method: "S256",
+    code_challenge: codeChallenge,
+    state
+  }).toString();
+
+  window.location.href = authUrl.toString();
+}
+
+async function exchangeCodeForToken(code) {
+  const codeVerifier = localStorage.getItem("spotify_code_verifier");
+  if (!codeVerifier) {
+    throw new Error("Brak code verifier. Rozpocznij logowanie ponownie.");
+  }
+
+  const response = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+      code_verifier: codeVerifier
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    console.error(data);
+    throw new Error("Nie udało się pobrać tokenu Spotify.");
+  }
+
+  saveTokens(data);
+  localStorage.removeItem("spotify_code_verifier");
+  return data.access_token;
+}
+
+function saveTokens(data) {
+  localStorage.setItem("spotify_access_token", data.access_token);
+  localStorage.setItem(
+    "spotify_token_expires",
+    String(Date.now() + data.expires_in * 1000 - 60000)
+  );
+  if (data.refresh_token) {
+    localStorage.setItem("spotify_refresh_token", data.refresh_token);
+  }
+}
+
+async function refreshAccessToken() {
+  const refreshToken = localStorage.getItem("spotify_refresh_token");
+  if (!refreshToken) return null;
+
+  const response = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: clientId
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    console.error(data);
+    clearTokens();
+    return null;
+  }
+
+  saveTokens(data);
+  return data.access_token;
+}
+
+async function getValidAccessToken() {
+  const token = localStorage.getItem("spotify_access_token");
+  const expires = Number(localStorage.getItem("spotify_token_expires"));
+
+  if (token && expires > Date.now()) return token;
+  return refreshAccessToken();
+}
+
+async function getProfile(token) {
+  const response = await fetch("https://api.spotify.com/v1/me", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    throw new Error("Nie udało się odczytać profilu Spotify.");
+  }
+
+  return response.json();
+}
+
+async function showLoggedIn(token) {
+  const profile = await getProfile(token);
+
+  statusBox.innerHTML = '<span class="ok">Spotify połączone ✓</span>';
+  profileDiv.textContent = "";
+
+  const name = document.createElement("strong");
+  name.textContent = profile.display_name || "Użytkownik Spotify";
+
+  const account = document.createElement("span");
+  account.textContent = ` · ${profile.product || "brak informacji"}`;
+
+  profileDiv.append(name, account);
+
+  profileBox.style.display = "block";
+  mixerBox.style.display = "block";
+  loginButton.style.display = "none";
+  logoutButton.style.display = "inline-block";
+
+  renderProfiles();
+  lastFmUserInput.value = localStorage.getItem(LASTFM_USER_KEY) || "";
+  renderLastFmStatus();
+  renderHistorySummary();
+  startRmfWatcher();
+}
+
+function renderProfiles() {
+  peopleDiv.textContent = "";
+
+  for (const [id, profile] of Object.entries(profiles)) {
+    const card = document.createElement("div");
+    card.className = "person";
+
+    const mainLabel = document.createElement("label");
+    mainLabel.className = "main";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.profileId = id;
+    checkbox.checked = true;
+    if (id === "bartek") {
+      checkbox.disabled = true;
+      checkbox.title = "Bartek jest głównym profilem i zawsze bierze udział w miksie.";
+    }
+
+    const name = document.createElement("span");
+    name.textContent = id === "bartek" ? `${profile.name} · główny profil` : profile.name;
+
+    mainLabel.append(checkbox, name);
+
+    const genreLabel = document.createElement("label");
+    genreLabel.className = "small";
+    genreLabel.textContent = "Gatunki, rozdzielone przecinkami:";
+
+    const genreInput = document.createElement("input");
+    genreInput.className = "genre-input";
+    genreInput.dataset.genreProfileId = id;
+    genreInput.placeholder = "np. rock, pop, throat singing...";
+    genreInput.value = localStorage.getItem(`office_genres_${id}`) ?? profile.genres.join(", ");
+    genreInput.addEventListener("input", () => {
+      localStorage.setItem(`office_genres_${id}`, genreInput.value.trim());
+    });
+
+    const seedLabel = document.createElement("label");
+    seedLabel.className = "small";
+    seedLabel.textContent = "Artyści wzorcowi, rozdzieleni przecinkami:";
+
+    const seedInput = document.createElement("input");
+    seedInput.className = "seed-input";
+    seedInput.dataset.seedProfileId = id;
+    seedInput.placeholder =
+      id === "edyta"
+        ? "np. Marek Grechuta, Grzegorz Turnau..."
+        : "np. 2–5 wykonawców...";
+    seedInput.value = localStorage.getItem(`office_seed_${id}`) || "";
+    seedInput.addEventListener("change", () => {
+      localStorage.setItem(`office_seed_${id}`, seedInput.value.trim());
+    });
+
+    const blockedLabel = document.createElement("label");
+    blockedLabel.className = "small";
+    blockedLabel.textContent = "Blokowani wykonawcy, rozdzieleni przecinkami:";
+
+    const blockedInput = document.createElement("input");
+    blockedInput.className = "seed-input";
+    blockedInput.dataset.blockedProfileId = id;
+    blockedInput.placeholder = "np. wykonawca, którego ta osoba nie chce słyszeć";
+    const defaultBlocked = id === "edyta" ? "Slipknot" : "";
+    blockedInput.value = localStorage.getItem(`office_blocked_${id}`) ?? defaultBlocked;
+    blockedInput.addEventListener("change", () => {
+      localStorage.setItem(`office_blocked_${id}`, blockedInput.value.trim());
+    });
+
+    card.append(mainLabel, genreLabel, genreInput, seedLabel, seedInput, blockedLabel, blockedInput);
+    peopleDiv.appendChild(card);
+  }
+}
+
+function normalizeGenreName(name) {
+  return (name || "").trim().toLocaleLowerCase("pl-PL");
+}
+
+function genreCategories(genres) {
+  const categories = new Set();
+
+  for (const rawGenre of genres || []) {
+    const genre = normalizeGenreName(rawGenre);
+    if (!genre) continue;
+
+    if (genre.includes("rock")) categories.add("rock");
+    if (genre.includes("pop")) categories.add("pop");
+    if (genre.includes("metal")) categories.add("metal");
+    if (genre.includes("punk")) {
+      categories.add("punk");
+      categories.add("rock");
+    }
+    if (genre === "grunge") {
+      categories.add("grunge");
+      categories.add("rock");
+    }
+    if (["hard rock"].includes(genre)) categories.add("metal");
+    if (["piosenka poetycka", "poezja śpiewana"].includes(genre)) categories.add("poetic");
+  }
+
+  return [...categories];
+}
+
+function loadTasteProfileDb() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TASTE_STORAGE_KEY) || "null");
+    if (!parsed || parsed.version !== 1 || !parsed.people || typeof parsed.people !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function tasteStateForPerson(personName) {
+  const db = loadTasteProfileDb();
+  const ratings = db?.people?.[personName]?.genres || {};
+  const likedGenres = [];
+  const okGenres = [];
+  const blockedGenres = [];
+  const blockedIds = new Set();
+
+  // 🚫 na rodzinie wyłącza całą gałąź z discovery, nawet jeśli w starych
+  // danych zostały wcześniejsze oceny dzieci.
+  for (const [id, def] of Object.entries(TASTE_GENRE_DEFS)) {
+    if (def.parent === null && ratings[id] === "no") blockedIds.add(id);
+  }
+
+  for (const [id, def] of Object.entries(TASTE_GENRE_DEFS)) {
+    const parentBlocked = def.parent && blockedIds.has(def.parent);
+    const rating = parentBlocked ? "no" : ratings[id];
+    if (rating === "like") likedGenres.push(def.label);
+    else if (rating === "ok") okGenres.push(def.label);
+    else if (rating === "no") blockedGenres.push(def.label);
+  }
+
+  return {
+    hasSurvey: Object.keys(ratings).length > 0,
+    likedGenres: [...new Set(likedGenres)],
+    okGenres: [...new Set(okGenres)],
+    blockedGenres: [...new Set(blockedGenres)]
+  };
+}
+
+function splitCommaList(value) {
+  return (value || "")
+    .split(",")
+    .map(x => x.trim())
+    .filter(Boolean);
+}
+
+function selectedProfiles() {
+  const ids = Array.from(
+    document.querySelectorAll('input[data-profile-id]:checked')
+  ).map(el => el.dataset.profileId);
+
+  return ids.map(id => {
+    const genreInput = document.querySelector(`input[data-genre-profile-id="${id}"]`);
+    const seedInput = document.querySelector(`input[data-seed-profile-id="${id}"]`);
+    const blockedInput = document.querySelector(`input[data-blocked-profile-id="${id}"]`);
+
+    const manualGenres = splitCommaList(
+      genreInput?.value ?? localStorage.getItem(`office_genres_${id}`) ?? profiles[id].genres.join(", ")
+    );
+    const artists = splitCommaList(
+      seedInput?.value ?? localStorage.getItem(`office_seed_${id}`) ?? ""
+    );
+    const blockedArtists = splitCommaList(
+      blockedInput?.value ?? localStorage.getItem(`office_blocked_${id}`) ?? (id === "edyta" ? "Slipknot" : "")
+    );
+
+    localStorage.setItem(`office_genres_${id}`, manualGenres.join(", "));
+    localStorage.setItem(`office_seed_${id}`, artists.join(", "));
+    localStorage.setItem(`office_blocked_${id}`, blockedArtists.join(", "));
+
+    const taste = tasteStateForPerson(profiles[id].name);
+    const blockedTaste = new Set(taste.blockedGenres.map(normalizeGenreName));
+    const mergedGenres = [...new Set([...manualGenres, ...taste.likedGenres])]
+      .filter(genre => !blockedTaste.has(normalizeGenreName(genre)));
+
+    return {
+      id,
+      ...profiles[id],
+      genres: mergedGenres,
+      manualGenres,
+      categories: genreCategories(mergedGenres),
+      artists,
+      blockedArtists,
+      taste
+    };
+  });
+}
+
+function tasteCommonGenreQueries(selected) {
+  if (!selected?.length) return [];
+  const votes = new Map();
+  const blocked = new Set();
+
+  for (const profile of selected) {
+    for (const genre of profile.taste?.blockedGenres || []) blocked.add(normalizeGenreName(genre));
+    const supported = new Set([
+      ...(profile.taste?.likedGenres || []),
+      ...(profile.taste?.okGenres || [])
+    ].map(normalizeGenreName).filter(Boolean));
+    for (const genre of supported) votes.set(genre, (votes.get(genre) || 0) + 1);
+  }
+
+  const threshold = selected.length === 1 ? 1 : 2;
+  return [...votes.entries()]
+    .filter(([genre, count]) => count >= threshold && !blocked.has(genre))
+    .sort((a, b) => b[1] - a[1])
+    .map(([genre]) => `genre:"${genre}"`);
+}
+
+function lastFmCacheKey(method, params) {
+  const sorted = Object.entries(params || {}).sort(([a], [b]) => a.localeCompare(b));
+  return `${LASTFM_CACHE_PREFIX}${method}:${encodeURIComponent(JSON.stringify(sorted))}`;
+}
+
+function readLastFmCache(method, params, ttlMs = LASTFM_CACHE_TTL_MS) {
+  try {
+    const raw = localStorage.getItem(lastFmCacheKey(method, params));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.savedAt || Date.now() - parsed.savedAt > ttlMs) {
+      localStorage.removeItem(lastFmCacheKey(method, params));
+      return null;
+    }
+    return parsed.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function compactLastFmCacheData(method, data) {
+  if (method === "tag.getTopArtists") {
+    return {
+      topartists: {
+        artist: (data?.topartists?.artist || []).map(item => ({ name: item?.name || "" }))
+      }
+    };
+  }
+  if (method === "tag.getTopTracks") {
+    return {
+      tracks: {
+        track: (data?.tracks?.track || []).map(item => ({
+          name: item?.name || "",
+          artist: { name: item?.artist?.name || item?.artist?.["#text"] || "" }
+        }))
+      }
+    };
+  }
+  if (method === "user.getRecentTracks") {
+    return {
+      recenttracks: {
+        track: (data?.recenttracks?.track || []).map(item => ({
+          name: item?.name || "",
+          artist: {
+            "#text": item?.artist?.["#text"] || item?.artist?.name || "",
+            name: item?.artist?.name || item?.artist?.["#text"] || ""
+          },
+          ...(item?.date?.uts ? { date: { uts: item.date.uts } } : {})
+        })),
+        "@attr": { totalPages: data?.recenttracks?.["@attr"]?.totalPages || "1" }
+      }
+    };
+  }
+  return data;
+}
+
+function writeLastFmCache(method, params, data) {
+  try {
+    const compactData = compactLastFmCacheData(method, data);
+    localStorage.setItem(
+      lastFmCacheKey(method, params),
+      JSON.stringify({ savedAt: Date.now(), data: compactData })
+    );
+  } catch (err) {
+    if (isStorageQuotaError(err)) emergencyStorageCleanup();
+    console.warn("Nie udało się zapisać cache Last.fm.", err);
+  }
+}
+
+async function lastFmRequest(method, params = {}, ttlMs = LASTFM_CACHE_TTL_MS) {
+  const cached = readLastFmCache(method, params, ttlMs);
+  if (cached) return cached;
+
+  const url = new URL(lastFmApiRoot);
+  url.search = new URLSearchParams({
+    method,
+    api_key: lastFmApiKey,
+    format: "json",
+    ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
+  }).toString();
+
+  const response = await fetch(url);
+  const data = await parseJsonSafely(response);
+  if (!response.ok || data?.error) {
+    const msg = data?.message || `HTTP ${response.status}`;
+    throw new Error(`błąd API ${msg}`);
+  }
+
+  writeLastFmCache(method, params, data);
+  return data;
+}
+
+function loadLastFmArtistPool() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LASTFM_ARTIST_POOL_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    const cutoff = Date.now() - LASTFM_ARTIST_POOL_MAX_AGE_MS;
+    return parsed.filter(item => item?.artist && Number(item.savedAt || 0) >= cutoff);
+  } catch {
+    return [];
+  }
+}
+
+function saveLastFmArtistPool(pool) {
+  try {
+    const cutoff = Date.now() - LASTFM_ARTIST_POOL_MAX_AGE_MS;
+    const cleaned = pool
+      .filter(item => item?.artist && Number(item.savedAt || 0) >= cutoff)
+      .sort((a, b) => Number(b.recentCount || 0) - Number(a.recentCount || 0) || Number(b.savedAt || 0) - Number(a.savedAt || 0))
+      .slice(0, 1800);
+    localStorage.setItem(LASTFM_ARTIST_POOL_KEY, JSON.stringify(cleaned));
+  } catch (err) {
+    console.warn("Nie udało się zapisać puli Last.fm.", err);
+  }
+}
+
+function addLastFmArtists(items, { tags = [], source = "tag", recentCounts = null } = {}) {
+  if (!Array.isArray(items) || !items.length) return;
+  const pool = loadLastFmArtistPool();
+  const map = new Map(pool.map(item => [normalizeArtistName(item.artist), item]));
+  const now = Date.now();
+
+  for (const raw of items) {
+    const artist = typeof raw === "string" ? raw : (raw?.name || raw?.artist || "");
+    if (!artist) continue;
+    const key = normalizeArtistName(artist);
+    if (!key) continue;
+    const current = map.get(key) || {
+      artist,
+      tags: [],
+      sources: [],
+      recentCount: 0,
+      savedAt: now
+    };
+    current.artist = artist;
+    current.tags = [...new Set([...(current.tags || []), ...tags.map(normalizeGenreName).filter(Boolean)])];
+    current.sources = [...new Set([...(current.sources || []), source])];
+    current.recentCount = Math.max(Number(current.recentCount || 0), Number(recentCounts?.get?.(key) || 0));
+    current.savedAt = now;
+    map.set(key, current);
+  }
+
+  saveLastFmArtistPool([...map.values()]);
+  renderHistorySummary();
+}
+
+function loadLastFmTrackPool() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LASTFM_TRACK_POOL_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    const cutoff = Date.now() - LASTFM_TRACK_POOL_MAX_AGE_MS;
+    return parsed.filter(item => item?.track && item?.artist && Number(item.savedAt || 0) >= cutoff);
+  } catch {
+    return [];
+  }
+}
+
+function saveLastFmTrackPool(pool) {
+  try {
+    const cutoff = Date.now() - LASTFM_TRACK_POOL_MAX_AGE_MS;
+    const cleaned = pool
+      .filter(item => item?.track && item?.artist && Number(item.savedAt || 0) >= cutoff)
+      .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+      .slice(0, 3000);
+    localStorage.setItem(LASTFM_TRACK_POOL_KEY, JSON.stringify(cleaned));
+  } catch (err) {
+    console.warn("Nie udało się zapisać puli utworów Last.fm.", err);
+  }
+}
+
+function addLastFmTracks(items, { tags = [], source = "tag" } = {}) {
+  if (!Array.isArray(items) || !items.length) return;
+  const pool = loadLastFmTrackPool();
+  const map = new Map(pool.map(item => [
+    `${normalizeArtistName(item.artist)}|${normalizeForSignature(item.track)}`,
+    item
+  ]));
+  const now = Date.now();
+
+  for (const raw of items) {
+    const track = raw?.name || raw?.track || "";
+    const artist = raw?.artist?.name || raw?.artist?.["#text"] || raw?.artist || "";
+    if (!track || !artist) continue;
+    const key = `${normalizeArtistName(artist)}|${normalizeForSignature(track)}`;
+    if (!key || key === "|") continue;
+    const current = map.get(key) || { track, artist, tags: [], sources: [], savedAt: now };
+    current.track = track;
+    current.artist = artist;
+    current.tags = [...new Set([...(current.tags || []), ...tags.map(normalizeGenreName).filter(Boolean)])];
+    current.sources = [...new Set([...(current.sources || []), source])];
+    current.savedAt = now;
+    map.set(key, current);
+  }
+
+  saveLastFmTrackPool([...map.values()]);
+  renderHistorySummary();
+}
+
+function lastFmTrackPoolSize() {
+  return loadLastFmTrackPool().length;
+}
+
+function lastFmTracksForTags(tags, limit = 30) {
+  const wanted = new Set((tags || []).map(normalizeGenreName).filter(Boolean));
+  const candidates = loadLastFmTrackPool().filter(item =>
+    (item.tags || []).some(tag => wanted.has(normalizeGenreName(tag)))
+  );
+  return shuffle(candidates).slice(0, limit);
+}
+
+function lastFmArtistPoolSize() {
+  return loadLastFmArtistPool().length;
+}
+
+function commonCategoryLastFmTags(category) {
+  const map = {
+    rock: ["rock", "classic rock", "alternative rock", "pop rock"],
+    pop: ["pop", "pop rock"],
+    metal: ["metal", "heavy metal"],
+    punk: ["punk", "punk rock"],
+    grunge: ["grunge"],
+    poetic: ["singer-songwriter", "poezja śpiewana", "piosenka poetycka"]
+  };
+  return map[category] || [category];
+}
+
+function lastFmArtistsForTags(tags, limit = 12, { includeRecent = false } = {}) {
+  const wanted = new Set((tags || []).map(normalizeGenreName).filter(Boolean));
+  const candidates = loadLastFmArtistPool().filter(item => {
+    if (includeRecent && (item.sources || []).includes("recent")) return true;
+    return (item.tags || []).some(tag => wanted.has(normalizeGenreName(tag)));
+  });
+
+  candidates.sort((a, b) =>
+    Number(b.recentCount || 0) - Number(a.recentCount || 0) ||
+    Number(b.savedAt || 0) - Number(a.savedAt || 0)
+  );
+
+  const head = candidates.slice(0, Math.max(limit * 3, limit));
+  return shuffle(head).slice(0, limit).map(item => item.artist);
+}
+
+function lastFmRecentCount() {
+  const value = Number(localStorage.getItem(LASTFM_RECENT_COUNT_KEY) || 0);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function renderLastFmStatus(extra = "") {
+  if (!lastFmStatus) return;
+  const user = localStorage.getItem(LASTFM_USER_KEY) || "";
+  const pool = lastFmArtistPoolSize();
+  const trackPool = lastFmTrackPoolSize();
+  const parts = [`Baza Last.fm: ${pool} wykonawców, ${trackPool} utworów`];
+  if (user) {
+    parts.push(`konto: ${user}`);
+    parts.push(`scrobble ${LASTFM_HISTORY_WINDOW_DAYS} dni: ${lastFmRecentCount()}`);
+  }
+  if (extra) parts.push(extra);
+  lastFmStatus.textContent = parts.join(" · ");
+}
+
+async function syncLastFmSources(selected, { forceStatus = false, maxTagCalls = LASTFM_MAX_TAG_CALLS_PER_SYNC } = {}) {
+  lastFmCallsThisSync = 0;
+  lastFmTagCallBudgetThisSync = Math.max(2, Number(maxTagCalls || LASTFM_MAX_TAG_CALLS_PER_SYNC));
+  const genres = [...new Set((selected || []).flatMap(profile => profile.genres || []).map(normalizeGenreName).filter(Boolean))];
+  const categories = [...new Set((selected || []).flatMap(profile => profile.categories || []))];
+  const allTags = [...new Set([
+    ...genres,
+    ...categories.flatMap(commonCategoryLastFmTags)
+  ])];
+  const tags = rotatingLastFmTags(allTags, lastFmTagCallBudgetThisSync);
+
+  if (forceStatus) lastFmStatus.textContent = "Last.fm: odświeżam bazę wykonawców...";
+
+  for (const tag of tags) {
+    if (lastFmCallsThisSync >= lastFmTagCallBudgetThisSync) break;
+    lastFmCallsThisSync++;
+    try {
+      const data = await lastFmRequest("tag.getTopArtists", { tag, limit: 40, page: 1 });
+      const artists = data?.topartists?.artist || [];
+      addLastFmArtists(artists, { tags: [tag], source: "tag" });
+    } catch (err) {
+      console.warn(`Last.fm top artists ${tag}:`, err);
+    }
+
+    if (lastFmCallsThisSync >= lastFmTagCallBudgetThisSync) continue;
+    lastFmCallsThisSync++;
+    try {
+      const data = await lastFmRequest("tag.getTopTracks", { tag, limit: 50, page: 1 });
+      const tracks = data?.tracks?.track || [];
+      addLastFmTracks(tracks, { tags: [tag], source: "tag" });
+    } catch (err) {
+      console.warn(`Last.fm top tracks ${tag}:`, err);
+    }
+  }
+
+  const user = (lastFmUserInput?.value || localStorage.getItem(LASTFM_USER_KEY) || "").trim();
+  let recentScrobbleCount = 0;
+  if (user) {
+    localStorage.setItem(LASTFM_USER_KEY, user);
+
+    try {
+      // Stałe 14-dniowe okno odpowiada naszej twardej blokadzie odtworzonych utworów.
+      // Zaokrąglamy początek do pełnej godziny, żeby 10-minutowy cache Last.fm był użyteczny.
+      const rawFrom = Date.now() - LASTFM_HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+      const fromSeconds = Math.floor(rawFrom / 1000 / 3600) * 3600;
+      const historyEntries = [];
+      const recentPoolItems = [];
+      const counts = new Map();
+      const names = new Map();
+
+      let page = 1;
+      let totalPages = 1;
+      const maxPages = 3;
+      do {
+        const data = await lastFmRequest(
+          "user.getRecentTracks",
+          { user, limit: 200, from: fromSeconds, extended: 0, page },
+          LASTFM_RECENT_CACHE_TTL_MS
+        );
+        const tracks = data?.recenttracks?.track || [];
+        const attr = data?.recenttracks?.["@attr"] || {};
+        totalPages = Math.max(1, Number(attr.totalPages || 1));
+
+        for (const track of tracks) {
+          const name = track?.artist?.["#text"] || track?.artist?.name || "";
+          const title = track?.name || "";
+          const key = normalizeArtistName(name);
+          if (!key) continue;
+
+          const uts = Number(track?.date?.uts || 0);
+          // Pozycja bez date to zwykle "now playing". Nie traktujemy jej jeszcze jako odsłuchanej.
+          if (!title || uts <= 0) continue;
+
+          recentScrobbleCount++;
+          counts.set(key, (counts.get(key) || 0) + 1);
+          names.set(key, name);
+
+          historyEntries.push({
+            trackId: "",
+            trackName: title,
+            artistIds: [],
+            artistNames: [name],
+            trackSignature: trackSignatureFromParts(title, [name]),
+            playedAt: new Date(uts * 1000).toISOString(),
+            source: "lastfm"
+          });
+          recentPoolItems.push({ name: title, artist: { name } });
+        }
+
+        page++;
+      } while (page <= totalPages && page <= maxPages);
+
+      if (historyEntries.length) mergeHistoryEntries(historyEntries);
+      if (recentPoolItems.length) addLastFmTracks(recentPoolItems, { source: "recent" });
+      const recentArtists = [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 40)
+        .map(([key]) => names.get(key));
+      addLastFmArtists(recentArtists, { source: "recent", recentCounts: counts });
+
+      localStorage.setItem(LASTFM_RECENT_COUNT_KEY, String(recentScrobbleCount));
+    } catch (err) {
+      console.warn("Last.fm recent tracks:", err);
+      if (forceStatus) lastFmStatus.textContent = `Last.fm: nie udało się pobrać scrobbli z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni (${err.message}).`;
+    }
+  } else {
+    localStorage.setItem(LASTFM_RECENT_COUNT_KEY, "0");
+  }
+
+  renderLastFmStatus(`odświeżono ${tags.length} tagów`);
+}
+
+function compactPlayedHistoryItem(item) {
+  return {
+    trackId: item.trackId || "",
+    trackName: item.trackName || "",
+    artistIds: Array.isArray(item.artistIds) ? item.artistIds.filter(Boolean) : [],
+    artistNames: Array.isArray(item.artistNames) ? item.artistNames.filter(Boolean) : [],
+    trackSignature: item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames),
+    playedAt: item.playedAt || "",
+    source: item.source || ""
+  };
+}
+
+function isActualPlayHistoryItem(item, cutoff = 0) {
+  if (!item || !["spotify", "lastfm"].includes(item.source)) return false;
+  const time = new Date(item.playedAt || 0).getTime();
+  return Number.isFinite(time) && time >= cutoff && (item.trackId || item.trackSignature);
+}
+
+function loadHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+
+    const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    return parsed
+      .filter(item => isActualPlayHistoryItem(item, cutoff))
+      .map(compactPlayedHistoryItem);
+  } catch (error) {
+    console.warn("Nie udało się odczytać historii:", error);
+    return [];
+  }
+}
+
+function saveHistory(history) {
+  const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const cleaned = history
+    .filter(item => isActualPlayHistoryItem(item, cutoff))
+    .map(compactPlayedHistoryItem)
+    .sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
+
+  // Historia ma przechowywać wyłącznie faktyczne odsłuchania. W razie presji
+  // na localStorage zachowujemy najnowsze wpisy zamiast wywracać generowanie.
+  const limits = [1500, 1200, 900, 700, 500, 300, 150];
+  let lastError = null;
+  for (const limit of limits) {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(cleaned.slice(0, limit)));
+      renderHistorySummary();
+      return;
+    } catch (err) {
+      lastError = err;
+      if (err?.name !== "QuotaExceededError") throw err;
+    }
+  }
+  console.warn("Brak miejsca na zapis historii nawet po awaryjnym przycięciu.", lastError);
+  renderHistorySummary();
+}
+
+function migrateHistoryStorage() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    const before = parsed.length;
+    const actual = parsed.filter(item => ["spotify", "lastfm"].includes(item?.source));
+    if (actual.length !== before || parsed.some(item => item?.generatedAt)) {
+      saveHistory(actual);
+      console.info(`Historia v30: usunięto ${before - actual.length} wpisów wygenerowanych playlist.`);
+    }
+  } catch (err) {
+    console.warn("Migracja historii v30 nie powiodła się:", err);
+  }
+}
+
+function isStorageQuotaError(err) {
+  return err?.name === "QuotaExceededError" || err?.code === 22 || err?.code === 1014;
+}
+
+function disposableCacheKeys() {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    if (key.startsWith(SEARCH_CACHE_PREFIX) || key.startsWith(LASTFM_CACHE_PREFIX)) keys.push(key);
+  }
+  return keys;
+}
+
+function emergencyStorageCleanup() {
+  try { purgeExpiredCaches(); } catch {}
+  // Surowe odpowiedzi API są wyłącznie cache'em. Kandydaci i kompaktowe pule
+  // Last.fm żyją osobno, więc przy presji miejsca można bezpiecznie wyrzucić cache.
+  for (const key of disposableCacheKeys()) {
+    try { localStorage.removeItem(key); } catch {}
+  }
+}
+
+function safeSetSmallStorageItem(key, value, label = "ustawienia") {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    if (!isStorageQuotaError(err)) throw err;
+    emergencyStorageCleanup();
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (retryErr) {
+      console.warn(`Brak miejsca na zapis ${label}; generowanie będzie kontynuowane.`, retryErr);
+      return false;
+    }
+  }
+}
+
+function migrateStorageV34() {
+  if (localStorage.getItem(STORAGE_V34_MIGRATION_KEY) === "1") return;
+  // Starsze wersje zapisywały pełne odpowiedzi Last.fm (obrazy, URL-e i inne
+  // pola, których algorytm nie używał), co po zwiększeniu budżetu Last.fm mogło
+  // zapełnić typowy limit localStorage. Zachowujemy właściwe pule, usuwamy
+  // wyłącznie odtwarzalny cache odpowiedzi API.
+  for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(LASTFM_CACHE_PREFIX)) localStorage.removeItem(key);
+  }
+  safeSetSmallStorageItem(STORAGE_V34_MIGRATION_KEY, "1", "migracji magazynu v34");
+}
+
+function purgeExpiredCaches() {
+  const now = Date.now();
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (!key || (!key.startsWith(SEARCH_CACHE_PREFIX) && !key.startsWith(LASTFM_CACHE_PREFIX))) continue;
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || "null");
+      const ttl = key.startsWith(SEARCH_CACHE_PREFIX) ? SEARCH_CACHE_TTL_MS : LASTFM_CACHE_TTL_MS;
+      if (!value?.savedAt || now - Number(value.savedAt) > ttl) localStorage.removeItem(key);
+    } catch {
+      localStorage.removeItem(key);
+    }
+  }
+}
+
+function mergeHistoryEntries(entries) {
+  const existing = loadHistory();
+  const map = new Map();
+
+  for (const item of [...entries, ...existing]) {
+    const timestamp = item.playedAt || item.generatedAt;
+    const key = `${item.trackId || item.trackSignature || "unknown"}|${timestamp}|${item.source || "unknown"}`;
+    if (!map.has(key)) map.set(key, item);
+  }
+
+  saveHistory([...map.values()]);
+}
+
+async function syncSpotifyRecentHistory(token) {
+  const lastSync = Number(localStorage.getItem(RECENT_HISTORY_SYNC_KEY) || 0);
+  if (Date.now() - lastSync < RECENT_HISTORY_SYNC_TTL_MS) {
+    return 0;
+  }
+
+  const response = await fetch(
+    "https://api.spotify.com/v1/me/player/recently-played?limit=50",
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  if (!response.ok) {
+    console.warn(`Nie udało się pobrać historii Spotify: ${response.status}`);
+    return 0;
+  }
+
+  const data = await response.json();
+  const entries = (data.items || [])
+    .filter(item => item?.track?.id && item?.played_at)
+    .map(item => ({
+      trackId: item.track.id,
+      trackName: item.track.name || "",
+      artistIds: (item.track.artists || []).map(artist => artist.id).filter(Boolean),
+      artistNames: (item.track.artists || []).map(artist => artist.name).filter(Boolean),
+      trackSignature: trackSignature(item.track),
+      playedAt: item.played_at,
+      source: "spotify"
+    }));
+
+  if (entries.length) mergeHistoryEntries(entries);
+  safeSetSmallStorageItem(
+    RECENT_HISTORY_SYNC_KEY,
+    String(Date.now()),
+    "znacznika synchronizacji historii Spotify"
+  );
+  return entries.length;
+}
+
+function buildHistoryBlocklists() {
+  const history = loadHistory();
+  const now = Date.now();
+  const trackCutoff = now - Number(trackBlockDays.value) * 24 * 60 * 60 * 1000;
+  const artistCutoff = now - Number(artistCooldownHours.value) * 60 * 60 * 1000;
+
+  const blockedTracks = new Set();
+  const blockedTrackSignatures = new Set();
+  const blockedArtists = new Set();
+  const blockedArtistNamesFromHistory = new Set();
+
+  for (const item of history) {
+    const time = new Date(item.playedAt || 0).getTime();
+    if (!Number.isFinite(time)) continue;
+
+    const playedSource = item.source === "spotify" || item.source === "lastfm";
+    const signature = item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames);
+
+    // Do blokad liczą się wyłącznie faktyczne odsłuchania.
+    if (playedSource && time >= trackCutoff) {
+      if (item.trackId) blockedTracks.add(item.trackId);
+      if (signature) blockedTrackSignatures.add(signature);
+      for (const duplicateSignature of historyDuplicateSignatures(item)) {
+        blockedTrackSignatures.add(duplicateSignature);
+      }
+    }
+
+    if (playedSource && time >= artistCutoff) {
+      for (const artistId of item.artistIds || []) blockedArtists.add(artistId);
+      for (const artistName of item.artistNames || []) {
+        const key = normalizeArtistName(artistName);
+        if (key) blockedArtistNamesFromHistory.add(key);
+      }
+    }
+  }
+
+  return { blockedTracks, blockedTrackSignatures, blockedArtists, blockedArtistNamesFromHistory };
+}
+
+function renderHistorySummary() {
+  if (!historySummary) return;
+
+  const history = loadHistory();
+  const spotifyCount = history.filter(item => item.source === "spotify").length;
+  const lastFmCount = history.filter(item => item.source === "lastfm").length;
+  const generatedCount = history.filter(item => item.source === "generated").length;
+
+  const poolCount = candidatePoolSize();
+  const lastFmPoolCount = lastFmArtistPoolSize();
+  const lastFmTrackCount = lastFmTrackPoolSize();
+  historySummary.textContent = history.length
+    ? `Historia lokalna: ${history.length} wpisów (${lastFmCount} z Last.fm, ${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji). Last.fm: ${lastFmRecentCount()} scrobbli z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`
+    : `Historia lokalna jest jeszcze pusta. Last.fm: ${lastFmRecentCount()} scrobbli z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`;
+}
+
+function clearAppHistory() {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistorySummary();
+  progressBox.textContent =
+    "Historia aplikacji wyczyszczona. Przy następnym generowaniu ostatnie odtworzenia ze Spotify zostaną pobrane ponownie.";
+}
+
+function shuffle(array) {
+  const copy = [...array];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function commonCategories(selected) {
+  const counts = new Map();
+
+  for (const profile of selected) {
+    for (const category of new Set(profile.categories)) {
+      counts.set(category, (counts.get(category) || 0) + 1);
+    }
+  }
+
+  const threshold = selected.length === 1 ? 1 : 2;
+  const common = [...counts.entries()]
+    .filter(([, count]) => count >= threshold)
+    .sort((a, b) => b[1] - a[1])
+    .map(([category]) => category);
+
+  if (common.length) return common;
+  return [...new Set(selected.flatMap(p => p.categories))];
+}
+
+const SEARCH_CACHE_PREFIX = "office_search_cache_v1:";
+const SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const SEARCH_REQUEST_GAP_MS = 700;
+const MAX_RATE_LIMIT_RETRIES = 3;
+
+// v12: lokalna pula kandydatów. Spotify Search w Development Mode zwraca maks. 10 wyników,
+// więc odkładamy wyniki z różnych stron i używamy ich ponownie przy kolejnych playlistach.
+const CANDIDATE_POOL_KEY = "office_candidate_pool_v1";
+const CANDIDATE_POOL_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const CANDIDATE_POOL_MAX_ITEMS = 2000;
+let maxNewSearchesThisGeneration = 12;
+const GENRE_PRIME_STATE_KEY = "office_genre_prime_state_v1";
+
+function searchBudgetForTarget(total) {
+  if (total <= 60) return 12;
+  if (total <= 90) return 14;
+  return 16;
+}
+
+function genrePrimeBudgetForTarget(total) {
+  if (total <= 60) return 6;
+  if (total <= 90) return 7;
+  return 8;
+}
+
+function loadGenrePrimeState() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GENRE_PRIME_STATE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveGenrePrimeState(state) {
+  safeSetSmallStorageItem(
+    GENRE_PRIME_STATE_KEY,
+    JSON.stringify(state || {}),
+    "rotacji wyszukiwań gatunkowych"
+  );
+}
+
+async function primeProfileGenres(token, profilesToPrime, maxNewSearches = 6) {
+  const byQuery = new Map();
+  const state = loadGenrePrimeState();
+
+  for (const profile of profilesToPrime || []) {
+    const liked = new Set((profile.taste?.likedGenres || []).map(normalizeGenreName));
+    const ok = new Set((profile.taste?.okGenres || []).map(normalizeGenreName));
+    for (const genre of profile.genres || []) {
+      const normalized = normalizeGenreName(genre);
+      if (!normalized) continue;
+      const query = `genre:"${normalized}"`;
+      const key = canonicalQuery(query);
+      const current = byQuery.get(key) || {
+        query,
+        key,
+        genre: normalized,
+        bartek: false,
+        tasteLiked: false,
+        tasteOk: false,
+        supporters: 0,
+        likedSupporters: 0,
+        pool: candidatePoolForQueries([query]).length,
+        lastPrimedAt: Number(state[key]?.lastPrimedAt || 0)
+      };
+      current.bartek ||= profile.id === "bartek";
+      current.tasteLiked ||= liked.has(normalized);
+      current.tasteOk ||= ok.has(normalized);
+      current.supporters += 1;
+      if (liked.has(normalized)) current.likedSupporters += 1;
+      current.pool = Math.min(current.pool, candidatePoolForQueries([query]).length);
+      byQuery.set(key, current);
+    }
+  }
+
+  const candidates = [...byQuery.values()].sort((a, b) =>
+    Number(a.pool > 0) - Number(b.pool > 0) ||
+    a.lastPrimedAt - b.lastPrimedAt ||
+    Number(b.tasteLiked) - Number(a.tasteLiked) ||
+    b.likedSupporters - a.likedSupporters ||
+    b.supporters - a.supporters ||
+    Number(b.bartek) - Number(a.bartek) ||
+    a.pool - b.pool ||
+    a.genre.localeCompare(b.genre, "pl")
+  );
+
+  const before = newSearchesThisGeneration;
+  for (const item of candidates) {
+    if (newSearchesThisGeneration - before >= maxNewSearches) break;
+    if (newSearchesThisGeneration >= maxNewSearchesThisGeneration) break;
+    const offsets = searchOffsetsForQuery(item.query);
+    if (!offsets.length) continue;
+    await searchTracks(token, item.query, offsets[0]);
+    state[item.key] = {
+      genre: item.genre,
+      lastPrimedAt: Date.now(),
+      count: Number(state[item.key]?.count || 0) + 1
+    };
+  }
+  saveGenrePrimeState(state);
+}
+const RECENT_HISTORY_SYNC_KEY = "office_recent_history_sync_v1";
+const RECENT_HISTORY_SYNC_TTL_MS = 10 * 60 * 1000;
+let newSearchesThisGeneration = 0;
+let queriesAttemptedThisGeneration = new Set();
+let lastSearchRequestAt = 0;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function canonicalQuery(query) {
+  let text = String(query || "").trim().replace(/\s+/g, " ");
+  text = text.replace(/\b(genre|artist|track):"([^"]+)"/gi, (_, field, value) => {
+    const key = field.toLocaleLowerCase("pl-PL");
+    let normalized = value;
+    if (key === "genre") normalized = normalizeGenreName(value);
+    else if (key === "artist") normalized = normalizeArtistName(value);
+    else if (key === "track") normalized = normalizeForSignature(value);
+    return `${key}:"${normalized}"`;
+  });
+  text = text.replace(/\bgenre:([^\s"]+)/gi, (_, value) =>
+    `genre:"${normalizeGenreName(value)}"`
+  );
+  return text;
+}
+
+function wasQueryAttempted(query) {
+  return queriesAttemptedThisGeneration.has(canonicalQuery(query));
+}
+
+function searchCacheKey(query, offset) {
+  return `${SEARCH_CACHE_PREFIX}${encodeURIComponent(canonicalQuery(query))}:${offset}`;
+}
+
+function readSearchCache(query, offset) {
+  try {
+    const raw = localStorage.getItem(searchCacheKey(query, offset));
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (!cached?.savedAt || Date.now() - cached.savedAt > SEARCH_CACHE_TTL_MS) {
+      localStorage.removeItem(searchCacheKey(query, offset));
+      return null;
+    }
+    return Array.isArray(cached.items) ? cached.items : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSearchCache(query, offset, items) {
+  try {
+    localStorage.setItem(
+      searchCacheKey(query, offset),
+      JSON.stringify({ savedAt: Date.now(), items })
+    );
+  } catch (err) {
+    console.warn("Nie udało się zapisać cache wyszukiwania.", err);
+  }
+}
+
+function slimTrack(track) {
+  return {
+    id: track?.id || "",
+    uri: track?.uri || "",
+    name: track?.name || "",
+    artists: (track?.artists || []).map(a => ({ id: a?.id || "", name: a?.name || "" })),
+    album: { name: track?.album?.name || "" }
+  };
+}
+
+function loadCandidatePool() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CANDIDATE_POOL_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    const cutoff = Date.now() - CANDIDATE_POOL_MAX_AGE_MS;
+    return parsed
+      .filter(item =>
+        item?.track?.id && item?.track?.uri &&
+        Number(item.savedAt || 0) >= cutoff &&
+        Array.isArray(item.queries)
+      )
+      .map(item => ({
+        ...item,
+        queries: (item.queries || []).filter(query => queryMatchesTrack(query, item.track))
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function saveCandidatePool(pool) {
+  try {
+    const cutoff = Date.now() - CANDIDATE_POOL_MAX_AGE_MS;
+    const cleaned = pool
+      .filter(item => item?.track?.id && Number(item.savedAt || 0) >= cutoff)
+      .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+      .slice(0, CANDIDATE_POOL_MAX_ITEMS);
+    localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify(cleaned));
+  } catch (err) {
+    console.warn("Nie udało się zapisać lokalnej puli kandydatów.", err);
+  }
+}
+
+function extractQuotedQueryValue(query, field) {
+  const re = new RegExp(`${field}:\\"([^\\"]+)\\"`, "i");
+  const match = String(query || "").match(re);
+  return match ? match[1] : "";
+}
+
+function queryMatchesTrack(query, track) {
+  const exactArtist = extractQuotedQueryValue(query, "artist");
+  if (exactArtist) {
+    const wanted = normalizeArtistName(exactArtist);
+    const actual = (track?.artists || []).map(a => normalizeArtistName(a?.name || ""));
+    if (!actual.includes(wanted)) return false;
+  }
+
+  const exactTrack = extractQuotedQueryValue(query, "track");
+  if (exactTrack) {
+    const wantedTitle = normalizeForSignature(exactTrack);
+    const actualTitle = normalizeForSignature(track?.name || "");
+    if (wantedTitle && actualTitle !== wantedTitle) return false;
+  }
+
+  return true;
+}
+
+function addToCandidatePool(query, items) {
+  if (!query || !Array.isArray(items) || !items.length) return;
+  const pool = loadCandidatePool();
+  const map = new Map(pool.map(item => [item.track.id, item]));
+  const now = Date.now();
+
+  for (const track of items) {
+    if (!track?.id || !track?.uri) continue;
+    if (!queryMatchesTrack(query, track)) continue;
+    const existing = map.get(track.id);
+    if (existing) {
+      existing.savedAt = now;
+      existing.track = slimTrack(track);
+      const mergedQueries = [...(existing.queries || []), query];
+      const seen = new Set();
+      existing.queries = mergedQueries.filter(item => {
+        const key = canonicalQuery(item);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    } else {
+      map.set(track.id, {
+        track: slimTrack(track),
+        queries: [query],
+        savedAt: now
+      });
+    }
+  }
+
+  saveCandidatePool([...map.values()]);
+  if (typeof historySummary !== "undefined" && historySummary) renderHistorySummary();
+}
+
+function candidatePoolForQueries(queries) {
+  const wanted = new Set((queries || []).map(canonicalQuery).filter(Boolean));
+  const byTrack = new Map();
+  for (const item of loadCandidatePool()) {
+    const validMatch = (item.queries || []).some(query =>
+      wanted.has(canonicalQuery(query)) && queryMatchesTrack(query, item.track)
+    );
+    if (validMatch) byTrack.set(item.track.id, item.track);
+  }
+  return [...byTrack.values()];
+}
+
+function candidatePoolSize() {
+  return loadCandidatePool().length;
+}
+
+function hasFreshSearchCache(query, offset) {
+  return readSearchCache(query, offset) !== null;
+}
+
+function searchOffsetsForQuery(query) {
+  const offsets = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90];
+  const uncached = offsets.filter(offset => !hasFreshSearchCache(query, offset));
+  const cached = offsets.filter(offset => hasFreshSearchCache(query, offset));
+  return [...shuffle(uncached), ...shuffle(cached)];
+}
+
+async function waitForSearchSlot() {
+  const elapsed = Date.now() - lastSearchRequestAt;
+  if (elapsed < SEARCH_REQUEST_GAP_MS) {
+    await sleep(SEARCH_REQUEST_GAP_MS - elapsed);
+  }
+  lastSearchRequestAt = Date.now();
+}
+
+async function parseJsonSafely(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function searchTracks(token, query, offset = 0) {
+  queriesAttemptedThisGeneration.add(canonicalQuery(query));
+  const cached = readSearchCache(query, offset);
+  if (cached) {
+    const validCached = cached.filter(track => queryMatchesTrack(query, track));
+    addToCandidatePool(query, validCached);
+    return validCached;
+  }
+
+  if (newSearchesThisGeneration >= maxNewSearchesThisGeneration) {
+    return [];
+  }
+  newSearchesThisGeneration++;
+
+  const url = new URL("https://api.spotify.com/v1/search");
+  url.search = new URLSearchParams({
+    q: query,
+    type: "track",
+    limit: "10",
+    offset: String(offset)
+  }).toString();
+
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+    await waitForSearchSlot();
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    const data = await parseJsonSafely(response);
+
+    if (response.ok) {
+      const items = (data?.tracks?.items || []).filter(track => queryMatchesTrack(query, track));
+      writeSearchCache(query, offset, items);
+      addToCandidatePool(query, items);
+      return items;
+    }
+
+    if (response.status === 429) {
+      const reason = data?.error?.reason;
+      if (reason === "QUOTA_EXCEEDED") {
+        throw new Error(
+          "Spotify: wyczerpano quota aplikacji w Development Mode. To nie jest chwilowy limit szybkości. Odczekaj do odnowienia limitu i spróbuj ponownie później."
+        );
+      }
+
+      const retryAfterHeader = Number(response.headers.get("Retry-After"));
+      const retrySeconds = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader
+        : Math.min(30, 2 ** attempt * 2);
+
+      if (attempt >= MAX_RATE_LIMIT_RETRIES) {
+        throw new Error(
+          `Spotify nadal ogranicza liczbę zapytań (429). Ostatnie Retry-After: ${retrySeconds} s.`
+        );
+      }
+
+      progressBox.textContent =
+        `Spotify zwolniło zapytania. Czekam ${retrySeconds} s i próbuję ponownie...`;
+      await sleep(retrySeconds * 1000 + 250);
+      continue;
+    }
+
+    console.error(data);
+    const message = data?.error?.message ? `: ${data.error.message}` : "";
+    throw new Error(`Błąd wyszukiwania Spotify: ${response.status}${message}`);
+  }
+
+  return [];
+}
+
+function normalizeArtistName(name) {
+  return (name || "")
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLocaleLowerCase("pl-PL")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeForSignature(value) {
+  return (value || "")
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLocaleLowerCase("pl-PL")
+    .replace(/\b(feat(?:uring)?|ft)\.?\s+.*$/i, "")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const HARD_VARIANT_WORDS = "remix|live|edit|acoustic|slowed|reverb|instrumental|reimagined|orchestra|variation(?:s)?|mono(?: version)?|studio version|new version|single remix|mix";
+const REMASTER_WORDS = "remaster(?:ed)?";
+
+function variantContextRegex(words) {
+  return new RegExp(`(?:\\([^)]*\\b(?:${words})\\b[^)]*\\)|\\[[^\\]]*\\b(?:${words})\\b[^\\]]*\\]|(?:\\s[-–—]\\s|\\s*;\\s*)[^\\n]*\\b(?:${words})\\b[^\\n]*$)`, "i");
+}
+
+function hasHardVariantMarker(text) {
+  return variantContextRegex(HARD_VARIANT_WORDS).test(text || "");
+}
+
+function hasRemasterMarker(text) {
+  return variantContextRegex(REMASTER_WORDS).test(text || "");
+}
+
+function normalizeTrackTitleForSignature(value) {
+  let text = (value || "")
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLocaleLowerCase("pl-PL")
+    .replace(/\b(feat(?:uring)?|ft)\.?\s+.*$/i, "");
+
+  // Usuwamy nawiasowe opisy wersji oraz całe końcowe segmenty po separatorze,
+  // jeśli zawierają marker wersji. Obsługuje też np. "- 2025 Remaster".
+  text = text
+    .replace(new RegExp(`\\s*[\\[(][^\\])]*\\b(?:${HARD_VARIANT_WORDS}|${REMASTER_WORDS})\\b[^\\])]*[\\])]`, "gi"), "")
+    .replace(new RegExp(`(?:\\s[-–—]\\s|\\s*;\\s*)[^\\n]*\\b(?:${HARD_VARIANT_WORDS}|${REMASTER_WORDS})\\b[^\\n]*$`, "i"), "")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text;
+}
+
+function trackSignatureFromParts(trackName, artistNames = []) {
+  const primaryArtist = normalizeForSignature(artistNames[0] || "");
+  const title = normalizeTrackTitleForSignature(trackName || "");
+  return primaryArtist && title ? `${primaryArtist}|${title}` : "";
+}
+
+function trackSignature(track) {
+  return trackSignatureFromParts(
+    track?.name || "",
+    (track?.artists || []).map(artist => artist?.name || "")
+  );
+}
+
+function trackDuplicateSignatures(track) {
+  const title = normalizeTrackTitleForSignature(track?.name || "");
+  if (!title) return [];
+  return [...new Set((track?.artists || [])
+    .map(artist => normalizeForSignature(artist?.name || ""))
+    .filter(Boolean)
+    .map(artist => `${artist}|${title}`))];
+}
+
+function historyDuplicateSignatures(item) {
+  const title = normalizeTrackTitleForSignature(item?.trackName || "");
+  if (!title) return [];
+  return [...new Set((item?.artistNames || [])
+    .map(name => normalizeForSignature(name || ""))
+    .filter(Boolean)
+    .map(artist => `${artist}|${title}`))];
+}
+
+function selectedBlockedArtistNames(selected) {
+  return new Set(
+    selected
+      .flatMap(profile => profile.blockedArtists || [])
+      .map(normalizeArtistName)
+      .filter(Boolean)
+  );
+}
+
+function containsNonLatinLetters(text) {
+  for (const char of text || "") {
+    if (/\p{Letter}/u.test(char) && !/\p{Script=Latin}/u.test(char)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+let canonicalCleanVariantSignatures = new Set();
+
+function rebuildCanonicalCleanVariantSignatures(rows) {
+  const clean = new Set();
+  for (const row of rows || []) {
+    const track = row?.track;
+    if (!track?.id) continue;
+    const title = track?.name || "";
+    if (hasHardVariantMarker(title) || hasHardVariantMarker(track?.album?.name || "") || hasRemasterMarker(title)) continue;
+    for (const sig of trackDuplicateSignatures(track)) clean.add(sig);
+  }
+  canonicalCleanVariantSignatures = clean;
+}
+
+function looksLikeUnwantedVariant(track) {
+  const languageText = [
+    track?.name || "",
+    track?.album?.name || "",
+    ...(track?.artists || []).map(artist => artist?.name || "")
+  ].join(" ");
+  if (avoidNonLatin.checked && containsNonLatinLetters(languageText)) return true;
+  if (!avoidRemixes.checked) return false;
+
+  const title = track?.name || "";
+  const album = track?.album?.name || "";
+  if (hasHardVariantMarker(title) || hasHardVariantMarker(album)) return true;
+
+  // Remaster sam w sobie nie musi być gorszy. Odrzucamy go wtedy, gdy w lokalnej
+  // puli mamy zwykłe wydanie tego samego utworu; canonical title pilnuje też deduplikacji.
+  if (hasRemasterMarker(title)) {
+    return trackDuplicateSignatures(track).some(sig => canonicalCleanVariantSignatures.has(sig));
+  }
+  return false;
+}
+
+function lastFmEvidenceForTrack(track) {
+  const signature = trackSignature(track);
+  const exact = loadLastFmTrackPool().find(item =>
+    trackSignatureFromParts(item.track, [item.artist]) === signature
+  );
+
+  const artistPool = loadLastFmArtistPool();
+  const artistRows = (track?.artists || []).map(a => {
+    const key = normalizeArtistName(a?.name || "");
+    return artistPool.find(item => normalizeArtistName(item.artist) === key) || null;
+  }).filter(Boolean);
+
+  const maxTags = artistRows.reduce((m, row) => Math.max(m, (row.tags || []).length), 0);
+  const recentCount = artistRows.reduce((m, row) => Math.max(m, Number(row.recentCount || 0)), 0);
+  const sources = new Set(artistRows.flatMap(row => row.sources || []));
+  const positiveFeedback = Number(loadFeedback()[signature]?.value || 0) > 0;
+
+  return { exact: Boolean(exact), maxTags, recentCount, sourceCount: sources.size, positiveFeedback };
+}
+
+function recognizabilityPass(track) {
+  const level = recognizabilityLevel?.value || "medium";
+  if (level === "low") return true;
+  const e = lastFmEvidenceForTrack(track);
+  if (e.positiveFeedback) return true;
+  if (level === "medium") return e.exact || e.maxTags >= 1 || e.recentCount > 0 || e.sourceCount >= 1;
+  return e.exact || e.recentCount > 0 || e.maxTags >= 2 || e.sourceCount >= 2;
+}
+
+function recognizabilityScore(track) {
+  const e = lastFmEvidenceForTrack(track);
+  let score = 0;
+  if (e.exact) score += 28;
+  score += Math.min(18, e.maxTags * 5);
+  if (e.recentCount > 0) score += 20;
+  if (e.sourceCount >= 2) score += 8;
+  if (e.positiveFeedback) score += 30;
+  return score;
+}
+
+function trackDiagnostic(track, groupDetail = null, selectedProfilesList = []) {
+  const poolItem = loadCandidatePool().find(item => item?.track?.id === track?.id);
+  const queries = (poolItem?.queries || []).slice(0, 3);
+  const lf = lastFmEvidenceForTrack(track);
+  const fb = feedbackScore(track);
+  const sourceBits = [];
+  if (queries.length) sourceBits.push(`Spotify: ${queries.join(" | ")}`);
+  if (lf.exact) sourceBits.push("Last.fm: utwór w bazie");
+  else if (lf.maxTags || lf.sourceCount) sourceBits.push("Last.fm: wykonawca w bazie");
+  if (lf.recentCount) sourceBits.push("Last.fm: wykonawca świeżo słuchany");
+  if (fb > 0) sourceBits.push(`feedback +${Math.round(fb)}`);
+  if (fb < 0) sourceBits.push(`feedback ${Math.round(fb)}`);
+
+  if (groupDetail) {
+    const people = (selectedProfilesList || []).map(profile => {
+      const score = Number(groupDetail.byUser?.[profile.id] || 0);
+      return `${profile.name} ${Math.round(score)}`;
+    }).join(", ");
+    sourceBits.push(
+      `model: ${people} · grupa ${Math.round(groupDetail.groupBase || 0)} ` +
+      `· least misery -${Math.round(groupDetail.leastMiseryPenalty || 0)} ` +
+      `· fairness +${Math.round(groupDetail.fairness || 0)} ` +
+      `· xQuAD +${Math.round(groupDetail.xquad || 0)} ` +
+      `· MMR -${Math.round(groupDetail.mmr || 0)}`
+    );
+  }
+
+  return sourceBits.length ? sourceBits.join(" · ") : "źródło: lokalna pula Spotify";
+}
+
+async function collectFromQueries(
+  token,
+  queries,
+  wanted,
+  usedTracks,
+  usedTrackSignatures,
+  usedArtistCounts,
+  blockedTracks,
+  blockedTrackSignatures,
+  blockedArtists,
+  blockedArtistNames,
+  options = {}
+) {
+  const result = [];
+  if (!queries.length || wanted <= 0) return result;
+
+  const {
+    maxArtistPerPlaylist = 1,
+    recognizabilityOverride = null,
+    preferredArtistNames = []
+  } = options;
+  const uniqueQueries = [...new Set(queries)];
+  const discovery = Number(discoveryLevel.value);
+  const perSearchCap = discovery >= 60 ? 3 : 2;
+
+  const tryCandidates = (candidates, cap = Infinity) => {
+    let added = 0;
+    let ordered = [...candidates];
+    // Feedback użytkownika wpływa wyłącznie na lokalny ranking kandydatów.
+    // Nie generuje dodatkowych zapytań do Spotify ani Last.fm.
+    const noise = discovery >= 70 ? 24 : discovery >= 40 ? 14 : 7;
+    ordered = ordered
+      .map(track => {
+        const randomPart = Math.random() * noise;
+        return {
+          track,
+          rank:
+            feedbackScore(track) +
+            recognizabilityScore(track) +
+            preferredArtistBonus(track, preferredArtistNames) +
+            randomPart
+        };
+      })
+      .sort((a, b) => b.rank - a.rank)
+      .map(item => item.track);
+
+    for (const track of ordered) {
+      if (result.length >= wanted || added >= cap) break;
+      if (!track?.id || !track?.uri) continue;
+      // v23: 👎 dla konkretnego utworu jest twardym wykluczeniem.
+      // Kara artysty nadal działa miękko na jego pozostałe utwory.
+      if (trackFeedbackValue(track) < 0) continue;
+      if (looksLikeUnwantedVariant(track)) continue;
+      if (recognizabilityOverride === "low" ? false : !recognizabilityPass(track)) continue;
+
+      const artistIds = (track.artists || [])
+        .map(a => a?.id || "")
+        .filter(Boolean);
+      // Liczymy wykonawców po znormalizowanej nazwie, nie wyłącznie po Spotify Artist ID.
+      // W katalogu zdarzają się duplikaty nazw pod różnymi ID, co wcześniej przepuszczało
+      // po kilka utworów tego samego wykonawcy.
+      const artistNameKeys = (track.artists || [])
+        .map(a => normalizeArtistName(a?.name || ""))
+        .filter(Boolean);
+      if (artistNameKeys.some(name => blockedArtistNames.has(name))) continue;
+
+      const signature = trackSignature(track);
+      const duplicateSignatures = trackDuplicateSignatures(track);
+      if (usedTracks.has(track.id)) continue;
+      if (signature && usedTrackSignatures.has(signature)) continue;
+      if (duplicateSignatures.some(key => usedTrackSignatures.has(key))) continue;
+      if (blockedTracks.has(track.id)) continue;
+      if (signature && blockedTrackSignatures.has(signature)) continue;
+      if (duplicateSignatures.some(key => blockedTrackSignatures.has(key))) continue;
+      if (artistIds.some(key => blockedArtists.has(key))) continue;
+      if (artistNameKeys.some(key => (usedArtistCounts.get(key) || 0) >= maxArtistPerPlaylist)) continue;
+
+      usedTracks.add(track.id);
+      if (signature) usedTrackSignatures.add(signature);
+      for (const duplicateSignature of duplicateSignatures) {
+        usedTrackSignatures.add(duplicateSignature);
+      }
+      for (const key of artistNameKeys) {
+        usedArtistCounts.set(key, (usedArtistCounts.get(key) || 0) + 1);
+      }
+      result.push(track);
+      added++;
+    }
+  };
+
+  // 1. Najpierw korzystamy z puli zbudowanej podczas wcześniejszych wyszukiwań.
+  // To nie zużywa quota Spotify.
+  tryCandidates(candidatePoolForQueries(uniqueQueries));
+  if (result.length >= wanted) return result;
+
+  // 2. Jeżeli lokalna pula jest za mała, pobieramy tylko kilka nowych stron.
+  // Offset jest zmieniany, żeby nie oglądać w kółko pierwszej dziesiątki wyników.
+  const queryOrder = shuffle(uniqueQueries);
+  const pagePlans = [];
+  // Najpierw jedna strona z wielu różnych zapytań, dopiero potem kolejne strony.
+  // W v13 trzy offsety pierwszego losowego artysty mogły zużyć połowę budżetu
+  // wyszukiwań i zalać pulę jednym wykonawcą.
+  const offsetsByQuery = new Map(
+    queryOrder.map(query => [query, searchOffsetsForQuery(query).slice(0, 3)])
+  );
+  for (let round = 0; round < 3; round++) {
+    for (const query of queryOrder) {
+      const offset = offsetsByQuery.get(query)?.[round];
+      if (offset !== undefined) pagePlans.push({ query, offset });
+    }
+  }
+
+  for (const { query, offset } of pagePlans) {
+    if (result.length >= wanted) break;
+    if (newSearchesThisGeneration >= maxNewSearchesThisGeneration && !hasFreshSearchCache(query, offset)) {
+      break;
+    }
+
+    const found = await searchTracks(token, query, offset);
+    tryCandidates(found, perSearchCap);
+  }
+
+  // 3. Nowo pobrane strony wzbogaciły pulę. Jeszcze raz próbujemy lokalnie,
+  // bo część kandydatów mogła nie wejść z powodu limitu per pojedyncze wyszukiwanie.
+  if (result.length < wanted) {
+    tryCandidates(candidatePoolForQueries(uniqueQueries));
+  }
+
+  return result;
+}
+
+function exactCommonGenreQueries(selected) {
+  const votes = new Map();
+
+  for (const profile of selected) {
+    for (const genre of new Set((profile.genres || []).map(normalizeGenreName).filter(Boolean))) {
+      votes.set(genre, (votes.get(genre) || 0) + 1);
+    }
+  }
+
+  const threshold = selected.length === 1 ? 1 : 2;
+  return [...votes.entries()]
+    .filter(([, count]) => count >= threshold)
+    .sort((a, b) => b[1] - a[1])
+    .map(([genre]) => `genre:"${genre}"`);
+}
+
+function queriesForCommonCategory(selected, category) {
+  const base = [...(commonCategoryQueries[category] || [])];
+  const tags = commonCategoryLastFmTags(category);
+  const lastFmArtists = lastFmArtistsForTags(tags, 14, { includeRecent: false });
+  const lastFmQueries = lastFmArtists.map(artist => `artist:"${artist}"`);
+
+  const manualShared = [];
+  const artistVotes = new Map();
+  for (const profile of selected) {
+    for (const artist of profile.artists || []) {
+      const key = normalizeArtistName(artist);
+      const current = artistVotes.get(key) || { artist, count: 0 };
+      current.count++;
+      artistVotes.set(key, current);
+    }
+  }
+  for (const item of artistVotes.values()) {
+    if (item.count >= 2) manualShared.push(`artist:"${item.artist}"`);
+  }
+
+  return [...manualShared, ...lastFmQueries, ...base];
+}
+
+function queriesForCommon(selected) {
+  const categories = commonCategories(selected);
+  const categoryBased = categories.flatMap(category => queriesForCommonCategory(selected, category));
+  const exactGenres = exactCommonGenreQueries(selected);
+  const tasteGenres = tasteCommonGenreQueries(selected);
+  return [...tasteGenres, ...categoryBased, ...exactGenres];
+}
+
+function queriesForProfile(profile) {
+  const artistQueries = (profile.artists || []).flatMap(
+    artist => Array(3).fill(`artist:"${artist}"`)
+  );
+  const directGenreQueries = (profile.genres || []).map(genre => `genre:"${genre}"`);
+  const categoryBased = (profile.categories || []).flatMap(
+    category => categoryQueries[category] || []
+  );
+
+  // Last.fm dostarcza różnorodnych wykonawców dla gatunków profilu. Jedno zapytanie
+  // Spotify po wykonawcy może potem zwrócić do 10 utworów, więc oszczędzamy quota.
+  const lastFmArtists = lastFmArtistsForTags(
+    [...(profile.genres || []), ...(profile.categories || []).flatMap(commonCategoryLastFmTags)],
+    18,
+    { includeRecent: profile.id === "bartek" }
+  );
+  const lastFmQueries = lastFmArtists.map(artist => `artist:"${artist}"`);
+  const lastFmTrackQueries = lastFmTracksForTags(
+    [...(profile.genres || []), ...(profile.categories || []).flatMap(commonCategoryLastFmTags)],
+    36
+  ).map(item => `track:"${item.track}" artist:"${item.artist}"`);
+
+  return [...artistQueries, ...lastFmTrackQueries, ...lastFmQueries, ...directGenreQueries, ...categoryBased];
+}
+
+const OFFICE_PLAYLIST_PREFIX = "Office Music Mixer - ";
+const OFFICE_PLAYLIST_MATCH_PREFIX = "Office Music Mixer";
+const OFFICE_PLAYLIST_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
+
+function officePlaylistTimestamp(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  }).formatToParts(date);
+  const obj = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${obj.year}-${obj.month}-${obj.day} ${obj.hour}:${obj.minute}`;
+}
+
+function officePlaylistCreatedAtFromName(name) {
+  const text = String(name || "").trim();
+  if (!text.startsWith(OFFICE_PLAYLIST_MATCH_PREFIX)) return null;
+  const suffix = text.slice(OFFICE_PLAYLIST_MATCH_PREFIX.length).replace(/^\s*-?\s*/, "");
+
+  let match = suffix.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2}))?/);
+  if (match) {
+    const [, year, month, day, hour = "23", minute = "59"] = match;
+    return new Date(`${year}-${month}-${day}T${hour}:${minute}:00+02:00`);
+  }
+
+  match = suffix.match(/^(\d{2})[.](\d{2})[.](\d{4})(?:[,\s]+(\d{2}):(\d{2}))?/);
+  if (match) {
+    const [, day, month, year, hour = "23", minute = "59"] = match;
+    return new Date(`${year}-${month}-${day}T${hour}:${minute}:00+02:00`);
+  }
+  return null;
+}
+
+async function cleanupOldOfficePlaylists(token) {
+  try {
+    const profile = await getProfile(token);
+    const profileIds = new Set([profile?.id, profile?.account_id].filter(Boolean));
+    const oldUris = [];
+    let unparseable = 0;
+    let offset = 0;
+
+    while (offset < 500) {
+      const response = await fetch(
+        `https://api.spotify.com/v1/me/playlists?limit=50&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await parseJsonSafely(response);
+      if (!response.ok) return { found: 0, removed: 0, remaining: 0, unparseable, skipped: `lista playlist: ${response.status}` };
+
+      const items = data?.items || [];
+      for (const playlist of items) {
+        if (!playlist?.name?.startsWith(OFFICE_PLAYLIST_MATCH_PREFIX) || !playlist?.uri) continue;
+        const ownerIds = new Set([playlist?.owner?.id, playlist?.owner?.account_id].filter(Boolean));
+        if (profileIds.size && ownerIds.size && ![...ownerIds].some(id => profileIds.has(id))) continue;
+        if (profileIds.size && !ownerIds.size) continue;
+
+        const createdAt = officePlaylistCreatedAtFromName(playlist.name);
+        if (!createdAt || Number.isNaN(createdAt.getTime())) {
+          unparseable++;
+          continue;
+        }
+        if (Date.now() - createdAt.getTime() > OFFICE_PLAYLIST_RETENTION_MS) oldUris.push(playlist.uri);
+      }
+
+      if (!data?.next || !items.length) break;
+      offset += items.length;
+    }
+
+    const uniqueOldUris = [...new Set(oldUris)];
+    let accepted = 0;
+    for (let i = 0; i < uniqueOldUris.length; i += 40) {
+      const batch = uniqueOldUris.slice(i, i + 40);
+      const response = await fetch(
+        `https://api.spotify.com/v1/me/library?uris=${encodeURIComponent(batch.join(","))}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.status === 403) {
+        return { found: uniqueOldUris.length, removed: accepted, remaining: uniqueOldUris.length - accepted, unparseable, skipped: "brak scope user-library-modify; wyloguj i połącz Spotify ponownie" };
+      }
+      if (!response.ok) return { found: uniqueOldUris.length, removed: accepted, remaining: uniqueOldUris.length - accepted, unparseable, skipped: `usuwanie z biblioteki: ${response.status}` };
+      accepted += batch.length;
+    }
+
+    // Kontrola po operacji na tym samym źródle, z którego czytamy boczną bibliotekę.
+    // Nie zakładamy już, że sam status 2xx oznacza, że użytkownik faktycznie przestał
+    // widzieć playlistę.
+    const target = new Set(uniqueOldUris);
+    const stillVisible = new Set();
+    if (target.size) {
+      await sleep(350);
+      let verifyOffset = 0;
+      while (verifyOffset < 500) {
+        const response = await fetch(
+          `https://api.spotify.com/v1/me/playlists?limit=50&offset=${verifyOffset}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await parseJsonSafely(response);
+        if (!response.ok) break;
+        const items = data?.items || [];
+        for (const playlist of items) if (target.has(playlist?.uri)) stillVisible.add(playlist.uri);
+        if (!data?.next || !items.length) break;
+        verifyOffset += items.length;
+      }
+    }
+
+    return {
+      found: uniqueOldUris.length,
+      removed: Math.max(0, uniqueOldUris.length - stillVisible.size),
+      remaining: stillVisible.size,
+      unparseable,
+      skipped: ""
+    };
+  } catch (err) {
+    console.warn("Nie udało się posprzątać starych playlist Office Music Mixer:", err);
+    return { found: 0, removed: 0, remaining: 0, unparseable: 0, skipped: err.message || "nieznany błąd" };
+  }
+}
+
+async function createPlaylist(token, selected, total) {
+  const names = selected.map(p => p.name).join(", ");
+  const stamp = officePlaylistTimestamp();
+
+  const response = await fetch("https://api.spotify.com/v1/me/playlists", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name: `${OFFICE_PLAYLIST_PREFIX}${stamp}`,
+      public: false,
+      description: names
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    console.error(data);
+    throw new Error(`Nie udało się utworzyć playlisty: ${response.status}`);
+  }
+
+  return data;
+}
+
+async function addItemsToPlaylist(token, playlistId, uris) {
+  // Spotify przyjmuje maksymalnie 100 pozycji w jednym żądaniu.
+  // v25 obsługuje długie, całodzienne playlisty przez porcjowanie.
+  let lastData = null;
+  for (let i = 0; i < uris.length; i += 100) {
+    const chunk = uris.slice(i, i + 100);
+    const response = await fetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/items`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ uris: chunk })
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error(data);
+      throw new Error(`Nie udało się dodać utworów: ${response.status}`);
+    }
+    lastData = data;
+  }
+
+  return lastData;
+}
+
+function hasMusicProfile(profile) {
+  return Boolean(profile?.taste?.hasSurvey) || (profile.genres || []).length > 0 || (profile.artists || []).length > 0;
+}
+
+function trackArtistKeys(track) {
+  return new Set((track?.artists || [])
+    .map(artist => normalizeArtistName(artist?.name || ""))
+    .filter(Boolean));
+}
+
+function tracksShareArtist(a, b) {
+  if (!a || !b) return false;
+  const aKeys = trackArtistKeys(a);
+  return [...trackArtistKeys(b)].some(key => aKeys.has(key));
+}
+
+// v27: układamy kolejność tak, by dwa utwory ze wspólnym wykonawcą
+// nie stały obok siebie. Jeśli matematycznie się nie da, dopiero wtedy odpuszczamy.
+function arrangeWithoutAdjacentArtist(tracks) {
+  const remaining = shuffle(tracks);
+  const arranged = [];
+
+  while (remaining.length) {
+    const previous = arranged[arranged.length - 1];
+    let choices = remaining
+      .map((track, index) => ({ track, index }))
+      .filter(row => !tracksShareArtist(previous, row.track));
+
+    if (!choices.length) choices = remaining.map((track, index) => ({ track, index }));
+
+    // Preferujemy teraz wykonawcę, którego trudniej będzie rozmieścić później.
+    choices.sort((a, b) => {
+      const countFor = row => remaining.filter(other => tracksShareArtist(row.track, other)).length;
+      return countFor(b) - countFor(a);
+    });
+    const bestCount = remaining.filter(other => tracksShareArtist(choices[0].track, other)).length;
+    const best = choices.filter(row =>
+      remaining.filter(other => tracksShareArtist(row.track, other)).length === bestCount
+    );
+    const picked = best[Math.floor(Math.random() * best.length)];
+    arranged.push(picked.track);
+    remaining.splice(picked.index, 1);
+  }
+
+  return arranged;
+}
+
+function genrePreferenceKey(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLocaleLowerCase("pl-PL")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function genreKeysRelated(aspect, preference) {
+  if (!aspect || !preference) return false;
+  if (aspect === preference) return true;
+  // A broad preference may match a more specific track tag (e.g. metal -> death metal),
+  // but a specific dislike must not poison every generic parent tag.
+  if (preference.length >= 5 && aspect.includes(preference)) return true;
+  return false;
+}
+
+function extractGenreQueryValue(query) {
+  const quoted = extractQuotedQueryValue(query, "genre");
+  if (quoted) return quoted;
+  const match = String(query || "").match(/\bgenre:([^\s"]+)/i);
+  return match ? match[1] : "";
+}
+
+function buildGroupRecommendationContext(selected) {
+  const tasteLabelToId = new Map();
+  for (const [id, def] of Object.entries(TASTE_GENRE_DEFS)) {
+    tasteLabelToId.set(genrePreferenceKey(def.label), id);
+  }
+
+  const profilePrefs = new Map();
+  for (const profile of selected || []) {
+    const liked = new Set((profile.taste?.likedGenres || []).map(genrePreferenceKey).filter(Boolean));
+    const ok = new Set((profile.taste?.okGenres || []).map(genrePreferenceKey).filter(Boolean));
+    const blocked = new Set((profile.taste?.blockedGenres || []).map(genrePreferenceKey).filter(Boolean));
+    const manual = new Set((profile.manualGenres || []).map(genrePreferenceKey).filter(Boolean));
+    const seeds = new Set((profile.artists || []).map(normalizeArtistName).filter(Boolean));
+    profilePrefs.set(profile.id, { liked, ok, blocked, manual, seeds });
+  }
+
+  const poolRows = loadCandidatePool();
+  const poolByTrack = new Map(poolRows.map(item => [item.track.id, item]));
+  const artistPool = new Map(
+    loadLastFmArtistPool().map(item => [normalizeArtistName(item.artist), item])
+  );
+  const trackPool = new Map(
+    loadLastFmTrackPool().map(item => [
+      `${normalizeArtistName(item.artist)}|${normalizeForSignature(item.track)}`,
+      item
+    ])
+  );
+
+  const aspectSupport = new Map();
+  for (const profile of selected || []) {
+    const prefs = profilePrefs.get(profile.id);
+    for (const key of prefs?.liked || []) {
+      aspectSupport.set(key, (aspectSupport.get(key) || 0) + (profile.id === "bartek" ? 2.4 : 2));
+    }
+    for (const key of prefs?.ok || []) {
+      aspectSupport.set(key, (aspectSupport.get(key) || 0) + 0.8);
+    }
+    for (const key of prefs?.manual || []) {
+      aspectSupport.set(key, (aspectSupport.get(key) || 0) + 1.2);
+    }
+  }
+
+  return {
+    selected,
+    profilePrefs,
+    poolByTrack,
+    artistPool,
+    trackPool,
+    tasteLabelToId,
+    aspectSupport,
+    featureCache: new Map(),
+    staticCache: new Map()
+  };
+}
+
+function addAspectAndParents(rawGenre, aspects, ctx, evidence = null, weight = 1, source = "unknown") {
+  const key = genrePreferenceKey(rawGenre);
+  if (!key) return;
+
+  const addWeighted = (aspectKey, aspectWeight, aspectSource) => {
+    if (!aspectKey) return;
+    aspects.add(aspectKey);
+    if (!evidence) return;
+    const current = evidence.get(aspectKey);
+    if (!current || aspectWeight > current.weight) {
+      evidence.set(aspectKey, { weight: aspectWeight, source: aspectSource });
+    }
+  };
+
+  addWeighted(key, weight, source);
+
+  let id = ctx.tasteLabelToId.get(key);
+  const visited = new Set();
+  let parentWeight = weight;
+  while (id && !visited.has(id)) {
+    visited.add(id);
+    const def = TASTE_GENRE_DEFS[id];
+    if (!def?.parent) break;
+    const parent = TASTE_GENRE_DEFS[def.parent];
+    if (!parent) break;
+    const parentKey = genrePreferenceKey(parent.label);
+    parentWeight *= 0.82;
+    addWeighted(parentKey, parentWeight, `${source}:parent`);
+    id = def.parent;
+  }
+}
+
+function groupTrackFeatures(track, ctx) {
+  const cacheKey = track?.id || trackSignature(track);
+  if (ctx.featureCache.has(cacheKey)) return ctx.featureCache.get(cacheKey);
+
+  const aspects = new Set();
+  const aspectEvidence = new Map();
+  const row = ctx.poolByTrack.get(track?.id);
+
+  // Spotify genre search is only a retrieval hint. It must not masquerade as
+  // reliable track metadata, because Search can return surprisingly loose matches.
+  for (const query of row?.queries || []) {
+    const genre = extractGenreQueryValue(query);
+    if (genre) addAspectAndParents(genre, aspects, ctx, aspectEvidence, 0.20, "spotify-genre-query");
+  }
+
+  let exactLastFm = false;
+  let recentCount = 0;
+  let sourceCount = 0;
+
+  const titleKey = normalizeForSignature(track?.name || "");
+  for (const artist of track?.artists || []) {
+    const artistKey = normalizeArtistName(artist?.name || "");
+    if (!artistKey) continue;
+
+    const artistRow = ctx.artistPool.get(artistKey);
+    if (artistRow) {
+      recentCount = Math.max(recentCount, Number(artistRow.recentCount || 0));
+      sourceCount = Math.max(sourceCount, (artistRow.sources || []).length);
+      for (const tag of artistRow.tags || []) {
+        addAspectAndParents(tag, aspects, ctx, aspectEvidence, 0.72, "lastfm-artist-tag");
+      }
+    }
+
+    const trackRow = ctx.trackPool.get(`${artistKey}|${titleKey}`);
+    if (trackRow) {
+      exactLastFm = true;
+      sourceCount = Math.max(sourceCount, (trackRow.sources || []).length);
+      for (const tag of trackRow.tags || []) {
+        addAspectAndParents(tag, aspects, ctx, aspectEvidence, 1.00, "lastfm-track-tag");
+      }
+    }
+  }
+
+  // Broad categories are derived evidence. Keep them useful for common-ground
+  // scoring, but weaker than the most reliable underlying tag that produced them.
+  const snapshot = [...aspects];
+  for (const category of genreCategories(snapshot)) {
+    const relatedWeights = snapshot
+      .map(aspect => aspectEvidence.get(aspect)?.weight || 0)
+      .filter(Boolean);
+    const inherited = relatedWeights.length ? Math.max(...relatedWeights) * 0.58 : 0.12;
+    addAspectAndParents(category, aspects, ctx, aspectEvidence, inherited, "derived-category");
+  }
+
+  const features = {
+    aspects,
+    aspectEvidence,
+    artists: trackArtistKeys(track),
+    exactLastFm,
+    recentCount,
+    sourceCount,
+    recognizability: recognizabilityScore(track),
+    feedback: feedbackScore(track),
+    discovery: !exactLastFm && recentCount <= 0
+  };
+  ctx.featureCache.set(cacheKey, features);
+  return features;
+}
+
+function preferenceMatchStrength(features, preferenceSet, ctx) {
+  const aspects = features?.aspects || new Set();
+  const evidence = features?.aspectEvidence || new Map();
+  let strength = 0;
+
+  for (const pref of preferenceSet || []) {
+    let best = 0;
+    if (aspects.has(pref)) {
+      const id = ctx.tasteLabelToId.get(pref);
+      const isBroadFamily = Boolean(id && TASTE_GENRE_DEFS[id]?.parent === null);
+      const evidenceWeight = evidence.get(pref)?.weight || 0.10;
+      best = (isBroadFamily ? 0.58 : 1) * evidenceWeight;
+    } else {
+      for (const aspect of aspects) {
+        if (!genreKeysRelated(aspect, pref)) continue;
+        const evidenceWeight = evidence.get(aspect)?.weight || 0.10;
+        best = Math.max(best, 0.42 * evidenceWeight);
+      }
+    }
+    strength += best;
+  }
+  return Math.min(1.6, strength);
+}
+
+function profileTrackSatisfaction(profile, track, features, ctx) {
+  const prefs = ctx.profilePrefs.get(profile.id) || {
+    liked: new Set(), ok: new Set(), blocked: new Set(), manual: new Set(), seeds: new Set()
+  };
+
+  const likedStrength = preferenceMatchStrength(features, prefs.liked, ctx);
+  const okStrength = preferenceMatchStrength(features, prefs.ok, ctx);
+  const blockedStrength = preferenceMatchStrength(features, prefs.blocked, ctx);
+  const manualStrength = preferenceMatchStrength(features, prefs.manual, ctx);
+  const seedMatch = [...features.artists].some(artist => prefs.seeds.has(artist));
+
+  let score = profile.taste?.hasSurvey ? 34 : 40;
+  if (likedStrength > 0) score += 38 * likedStrength;
+  else if (manualStrength > 0) score += 29 * manualStrength;
+  else if (okStrength > 0) score += 18 * okStrength;
+  if (seedMatch) score += 30;
+  if (blockedStrength > 0) score -= 46 * blockedStrength;
+
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    likedMatches: likedStrength,
+    okMatches: okStrength,
+    blockedMatches: blockedStrength,
+    manualMatches: manualStrength,
+    seedMatch
+  };
+}
+
+function groupCandidateStatic(track, ctx) {
+  const cacheKey = track?.id || trackSignature(track);
+  if (ctx.staticCache.has(cacheKey)) return ctx.staticCache.get(cacheKey);
+
+  const features = groupTrackFeatures(track, ctx);
+  const byUser = {};
+  let weightedSum = 0;
+  let totalWeight = 0;
+  let minScore = 100;
+  let maxScore = 0;
+  let likedByAny = false;
+  let seedByAny = false;
+
+  for (const profile of ctx.selected || []) {
+    const result = profileTrackSatisfaction(profile, track, features, ctx);
+    byUser[profile.id] = result;
+    const weight = profile.id === "bartek" ? 1.3 : 1;
+    weightedSum += result.score * weight;
+    totalWeight += weight;
+    minScore = Math.min(minScore, result.score);
+    maxScore = Math.max(maxScore, result.score);
+    likedByAny ||= result.likedMatches > 0;
+    seedByAny ||= result.seedMatch;
+  }
+
+  const weightedAverage = totalWeight ? weightedSum / totalWeight : 0;
+  const feedbackAdjustment = Math.max(-20, Math.min(16, features.feedback * 0.08));
+  const recognitionAdjustment = Math.min(12, features.recognizability * 0.12);
+  const seedRotationAdjustment = Math.min(
+    10,
+    Math.max(
+      0,
+      ...(ctx.selected || []).map(profile =>
+        preferredArtistBonus(track, profile.artists || []) * 0.1
+      )
+    )
+  );
+
+  const leastMiseryPenalty =
+    Math.max(0, 50 - minScore) * 0.65 +
+    Math.max(0, 35 - minScore) * 0.35;
+
+  const groupBase =
+    0.72 * weightedAverage +
+    0.28 * minScore +
+    feedbackAdjustment +
+    recognitionAdjustment +
+    seedRotationAdjustment -
+    leastMiseryPenalty;
+
+  const result = {
+    track,
+    features,
+    byUser,
+    weightedAverage,
+    minScore,
+    maxScore,
+    groupBase,
+    leastMiseryPenalty,
+    likedByAny,
+    seedByAny
+  };
+  ctx.staticCache.set(cacheKey, result);
+  return result;
+}
+
+function supportedAspectsForCandidate(staticInfo, ctx) {
+  return [...staticInfo.features.aspects]
+    .filter(aspect => (ctx.aspectSupport.get(aspect) || 0) > 0);
+}
+
+function xquadCoverageBonus(staticInfo, state, ctx) {
+  const values = supportedAspectsForCandidate(staticInfo, ctx)
+    .map(aspect => {
+      const support = ctx.aspectSupport.get(aspect) || 0;
+      const count = state.aspectCounts.get(aspect) || 0;
+      const evidenceWeight = staticInfo.features.aspectEvidence?.get(aspect)?.weight || 0.10;
+      return support * evidenceWeight / Math.pow(1 + count, 0.7);
+    })
+    .sort((a, b) => b - a)
+    .slice(0, 3);
+  return Math.min(14, values.reduce((sum, value) => sum + value, 0) * 1.15);
+}
+
+function fairnessBonus(staticInfo, state, ctx) {
+  if (!state.selected.length) return 0;
+  const means = [];
+  for (const profile of ctx.selected || []) {
+    const mean = (state.userSums.get(profile.id) || 0) / state.selected.length;
+    means.push({ profile, mean });
+  }
+  const groupMean = means.length
+    ? means.reduce((sum, row) => sum + row.mean, 0) / means.length
+    : 0;
+
+  let bonus = 0;
+  for (const row of means) {
+    const deficit = Math.max(0, groupMean - row.mean);
+    const candidateScore = staticInfo.byUser[row.profile.id]?.score || 0;
+    const gain = Math.max(0, candidateScore - 45) / 55;
+    const weight = row.profile.id === "bartek" ? 0.25 : 0.50;
+    bonus += deficit * gain * weight;
+
+    // Jeśli ktoś wyraźnie odstaje od reszty, mocniej premiuj utwór,
+    // który realnie podnosi jego dotychczasową średnią.
+    if (deficit >= 6 && candidateScore > row.mean) {
+      const improvement = Math.min(1, (candidateScore - row.mean) / 24);
+      bonus += Math.min(7, (deficit / 10) * improvement * 4.5);
+    }
+  }
+  return Math.min(18, bonus);
+}
+
+function trackGroupSimilarity(a, b, ctx) {
+  if (!a || !b) return 0;
+  if (tracksShareArtist(a, b)) return 1;
+
+  const aAspects = groupTrackFeatures(a, ctx).aspects;
+  const bAspects = groupTrackFeatures(b, ctx).aspects;
+  if (!aAspects.size || !bAspects.size) return 0;
+
+  let intersection = 0;
+  for (const value of aAspects) if (bAspects.has(value)) intersection++;
+  const union = new Set([...aAspects, ...bAspects]).size;
+  return union ? Math.min(1, intersection / union) : 0;
+}
+
+function mmrPenalty(track, state, ctx) {
+  const recent = state.selected.slice(-10);
+  if (!recent.length) return 0;
+  const similarity = Math.max(...recent.map(other => trackGroupSimilarity(track, other, ctx)));
+  return similarity * 18;
+}
+
+function discoveryBalanceBonus(staticInfo, state) {
+  const target = Math.max(0, Math.min(1, Number(discoveryLevel.value || 0) / 100));
+  if (!state.selected.length) return staticInfo.features.discovery ? target * 2 : 0;
+  const current = state.discoveryCount / state.selected.length;
+  if (staticInfo.features.discovery && current < target) return 1.5 + (target - current) * 6;
+  if (!staticInfo.features.discovery && current > target) return (current - target) * 4;
+  return 0;
+}
+
+function discoveryQuotaForTotal(total) {
+  const target = Math.max(0, Math.min(1, Number(discoveryLevel.value || 0) / 100));
+  const tolerance = target > 0 && target < 1 ? 0.05 : 0;
+  return {
+    target,
+    min: Math.max(0, Math.floor(total * Math.max(0, target - tolerance))),
+    max: Math.min(total, Math.ceil(total * Math.min(1, target + tolerance)))
+  };
+}
+
+const GROUP_HARD_MIN_BASE_SCORE = 44;
+
+function newRejectionStats(rawPoolCount = 0) {
+  return {
+    rawPool: rawPoolCount,
+    invalid: 0,
+    feedbackTrack: 0,
+    unwantedVariant: 0,
+    explicitBlockedArtist: 0,
+    feedbackBlockedArtist: 0,
+    artistCooldown: 0,
+    recentTrack: 0,
+    recognizability: 0,
+    lowGroupFit: 0,
+    eligible: 0,
+    artistLimitDuringSelection: 0,
+    duplicateDuringSelection: 0,
+    lowFinalScoreStop: 0
+  };
+}
+
+function eligibleGroupCandidates(selected, blocklists, ctx) {
+  const rows = loadCandidatePool();
+  rebuildCanonicalCleanVariantSignatures(rows);
+  const stats = newRejectionStats(rows.length);
+  const eligible = [];
+  const seenIds = new Set();
+
+  for (const row of rows) {
+    const track = row?.track;
+    if (!track?.id || !track?.uri || seenIds.has(track.id)) {
+      stats.invalid++;
+      continue;
+    }
+    seenIds.add(track.id);
+
+    if (trackFeedbackValue(track) < 0) {
+      stats.feedbackTrack++;
+      continue;
+    }
+    if (looksLikeUnwantedVariant(track)) {
+      stats.unwantedVariant++;
+      continue;
+    }
+
+    const artistIds = (track.artists || []).map(a => a?.id || "").filter(Boolean);
+    const artistNames = (track.artists || []).map(a => normalizeArtistName(a?.name || "")).filter(Boolean);
+
+    if (artistNames.some(name => blocklists.explicitBlockedNames.has(name))) {
+      stats.explicitBlockedArtist++;
+      continue;
+    }
+    if (artistNames.some(name => blocklists.feedbackBlockedNames.has(name))) {
+      stats.feedbackBlockedArtist++;
+      continue;
+    }
+    if (
+      artistIds.some(id => blocklists.blockedArtists.has(id)) ||
+      artistNames.some(name => blocklists.historyBlockedNames.has(name))
+    ) {
+      stats.artistCooldown++;
+      continue;
+    }
+
+    const signature = trackSignature(track);
+    const duplicateSignatures = trackDuplicateSignatures(track);
+    if (
+      blocklists.blockedTracks.has(track.id) ||
+      (signature && blocklists.blockedTrackSignatures.has(signature)) ||
+      duplicateSignatures.some(key => blocklists.blockedTrackSignatures.has(key))
+    ) {
+      stats.recentTrack++;
+      continue;
+    }
+
+    const staticInfo = groupCandidateStatic(track, ctx);
+    const strongTasteDiscovery =
+      Number(discoveryLevel.value || 0) > 0 &&
+      staticInfo.maxScore >= 72 &&
+      (staticInfo.likedByAny || staticInfo.seedByAny);
+
+    if (!recognizabilityPass(track) && !strongTasteDiscovery) {
+      stats.recognizability++;
+      continue;
+    }
+
+    if (staticInfo.groupBase < 34 || staticInfo.maxScore < 45) {
+      stats.lowGroupFit++;
+      continue;
+    }
+
+    eligible.push(staticInfo);
+    stats.eligible++;
+  }
+
+  return { eligible, stats };
+}
+
+function dynamicCandidateScore(staticInfo, state, ctx) {
+  const fairness = fairnessBonus(staticInfo, state, ctx);
+  const xquad = xquadCoverageBonus(staticInfo, state, ctx);
+  const mmr = mmrPenalty(staticInfo.track, state, ctx);
+  const discovery = discoveryBalanceBonus(staticInfo, state);
+  const noise = (Number(discoveryLevel.value || 0) / 100) * 2.5 * Math.random();
+  return {
+    final: staticInfo.groupBase + fairness + xquad + discovery - mmr + noise,
+    fairness,
+    xquad,
+    mmr,
+    discovery
+  };
+}
+
+function shuffleArray(items) {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function sequencePlaylistForListening(tracks, minArtistGap = 5) {
+  const remaining = shuffleArray(tracks);
+  const ordered = [];
+  const lastArtistPosition = new Map();
+
+  while (remaining.length) {
+    const position = ordered.length;
+    const valid = [];
+
+    for (let i = 0; i < remaining.length; i++) {
+      const artistKeys = [...trackArtistKeys(remaining[i])];
+      const tooClose = artistKeys.some(key => {
+        const lastPos = lastArtistPosition.get(key);
+        return Number.isInteger(lastPos) && position - lastPos <= minArtistGap;
+      });
+      if (!tooClose) valid.push(i);
+    }
+
+    let pickedIndex;
+    if (valid.length) {
+      pickedIndex = valid[Math.floor(Math.random() * valid.length)];
+    } else {
+      // Awaryjnie wybierz utwór, którego wykonawca był najdawniej.
+      // Przy limicie 2 utworów na wykonawcę ta gałąź powinna być rzadka.
+      let bestDistance = -1;
+      const best = [];
+      for (let i = 0; i < remaining.length; i++) {
+        const artistKeys = [...trackArtistKeys(remaining[i])];
+        const nearest = artistKeys.length
+          ? Math.min(...artistKeys.map(key => {
+              const lastPos = lastArtistPosition.get(key);
+              return Number.isInteger(lastPos) ? position - lastPos : Number.POSITIVE_INFINITY;
+            }))
+          : Number.POSITIVE_INFINITY;
+        if (nearest > bestDistance) {
+          bestDistance = nearest;
+          best.length = 0;
+          best.push(i);
+        } else if (nearest === bestDistance) {
+          best.push(i);
+        }
+      }
+      pickedIndex = best[Math.floor(Math.random() * best.length)];
+    }
+
+    const [track] = remaining.splice(pickedIndex, 1);
+    ordered.push(track);
+    for (const key of trackArtistKeys(track)) {
+      lastArtistPosition.set(key, position);
+    }
+  }
+
+  return ordered;
+}
+
+function selectGroupPlaylist(eligible, total, ctx, stats) {
+  const requestedDiscoveryQuota = discoveryQuotaForTotal(total);
+  const state = {
+    selected: [],
+    selectedIds: new Set(),
+    selectedSignatures: new Set(),
+    artistCounts: new Map(),
+    userSums: new Map((ctx.selected || []).map(profile => [profile.id, 0])),
+    aspectCounts: new Map(),
+    discoveryCount: 0,
+    details: new Map()
+  };
+
+  const remaining = [...eligible];
+
+  while (state.selected.length < total && remaining.length) {
+    let choices = [];
+
+    for (let i = 0; i < remaining.length; i++) {
+      const item = remaining[i];
+      const track = item.track;
+      const signature = trackSignature(track);
+      const duplicateSignatures = trackDuplicateSignatures(track);
+      const artists = [...trackArtistKeys(track)];
+
+      if (
+        state.selectedIds.has(track.id) ||
+        (signature && state.selectedSignatures.has(signature)) ||
+        duplicateSignatures.some(key => state.selectedSignatures.has(key))
+      ) {
+        stats.duplicateDuringSelection++;
+        continue;
+      }
+      if (artists.some(key => (state.artistCounts.get(key) || 0) >= 2)) {
+        stats.artistLimitDuringSelection++;
+        continue;
+      }
+
+      const previous = state.selected[state.selected.length - 1];
+      if (previous && tracksShareArtist(previous, track)) continue;
+
+      const projectedLength = state.selected.length + 1;
+      const projectedQuota = discoveryQuotaForTotal(projectedLength);
+      if (item.features.discovery && state.discoveryCount + 1 > projectedQuota.max) continue;
+
+      choices.push({ index: i, item, dynamic: dynamicCandidateScore(item, state, ctx) });
+    }
+
+    if (!choices.length) {
+      for (let i = 0; i < remaining.length; i++) {
+        const item = remaining[i];
+        const track = item.track;
+        const signature = trackSignature(track);
+        const duplicateSignatures = trackDuplicateSignatures(track);
+        const artists = [...trackArtistKeys(track)];
+
+        if (
+          state.selectedIds.has(track.id) ||
+          (signature && state.selectedSignatures.has(signature)) ||
+          duplicateSignatures.some(key => state.selectedSignatures.has(key)) ||
+          artists.some(key => (state.artistCounts.get(key) || 0) >= 2)
+        ) continue;
+        const projectedLength = state.selected.length + 1;
+        const projectedQuota = discoveryQuotaForTotal(projectedLength);
+        if (item.features.discovery && state.discoveryCount + 1 > projectedQuota.max) continue;
+
+        choices.push({ index: i, item, dynamic: dynamicCandidateScore(item, state, ctx) });
+      }
+    }
+
+    if (!choices.length) break;
+
+    // MMR ma zmieniać kolejność preferencji, a nie kończyć playlistę tylko dlatego,
+    // że po wielu podobnych utworach dynamiczny wynik został chwilowo mocno obniżony.
+    // Twardy stop opieramy na jakości samego dopasowania grupowego.
+    const qualityChoices = choices.filter(choice => choice.item.groupBase >= GROUP_HARD_MIN_BASE_SCORE);
+    if (!qualityChoices.length) {
+      stats.lowFinalScoreStop = remaining.length;
+      break;
+    }
+    qualityChoices.sort((a, b) => b.dynamic.final - a.dynamic.final);
+    const picked = qualityChoices[0];
+    const track = picked.item.track;
+
+    state.selected.push(track);
+    state.selectedIds.add(track.id);
+    const signature = trackSignature(track);
+    if (signature) state.selectedSignatures.add(signature);
+    for (const duplicateSignature of trackDuplicateSignatures(track)) {
+      state.selectedSignatures.add(duplicateSignature);
+    }
+    for (const key of trackArtistKeys(track)) {
+      state.artistCounts.set(key, (state.artistCounts.get(key) || 0) + 1);
+    }
+    for (const profile of ctx.selected || []) {
+      const score = picked.item.byUser[profile.id]?.score || 0;
+      state.userSums.set(profile.id, (state.userSums.get(profile.id) || 0) + score);
+    }
+    for (const aspect of supportedAspectsForCandidate(picked.item, ctx)) {
+      state.aspectCounts.set(aspect, (state.aspectCounts.get(aspect) || 0) + 1);
+    }
+    if (picked.item.features.discovery) state.discoveryCount++;
+
+    state.details.set(track.id, {
+      byUser: Object.fromEntries(
+        (ctx.selected || []).map(profile => [
+          profile.id,
+          picked.item.byUser[profile.id]?.score || 0
+        ])
+      ),
+      groupBase: picked.item.groupBase,
+      leastMiseryPenalty: picked.item.leastMiseryPenalty,
+      fairness: picked.dynamic.fairness,
+      xquad: picked.dynamic.xquad,
+      mmr: picked.dynamic.mmr,
+      discovery: picked.item.features.discovery,
+      final: picked.dynamic.final
+    });
+
+    remaining.splice(picked.index, 1);
+  }
+
+  const satisfaction = {};
+  for (const profile of ctx.selected || []) {
+    const scores = state.selected.map(track =>
+      groupCandidateStatic(track, ctx).byUser[profile.id]?.score || 0
+    );
+    satisfaction[profile.id] = {
+      average: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0,
+      strong: scores.filter(score => score >= 65).length,
+      weak: scores.filter(score => score < 35).length
+    };
+  }
+
+  return {
+    tracks: state.selected,
+    details: state.details,
+    satisfaction,
+    discoveryCount: state.discoveryCount,
+    discoveryQuota: discoveryQuotaForTotal(state.selected.length),
+    requestedDiscoveryQuota,
+    aspectCounts: state.aspectCounts,
+    rejectionStats: stats
+  };
+}
+
+async function primeCommonGroupQueries(token, selected, maxNewSearches = 3) {
+  const common = [...tasteCommonGenreQueries(selected), ...exactCommonGenreQueries(selected)];
+  const unique = [];
+  const seen = new Set();
+
+  for (const query of common) {
+    const key = canonicalQuery(query);
+    if (!key || seen.has(key) || wasQueryAttempted(query)) continue;
+    seen.add(key);
+    unique.push({
+      query,
+      pool: candidatePoolForQueries([query]).length
+    });
+  }
+
+  unique.sort((a, b) => a.pool - b.pool);
+  const before = newSearchesThisGeneration;
+  for (const item of unique) {
+    if (newSearchesThisGeneration - before >= maxNewSearches) break;
+    if (newSearchesThisGeneration >= maxNewSearchesThisGeneration) break;
+    const offsets = searchOffsetsForQuery(item.query);
+    if (!offsets.length) continue;
+    await searchTracks(token, item.query, offsets[0]);
+  }
+}
+
+async function generateOfficePlaylist() {
+  try {
+    generateButton.disabled = true;
+    newSearchesThisGeneration = 0;
+    queriesAttemptedThisGeneration = new Set();
+    playlistBox.style.display = "none";
+    playlistResult.textContent = "";
+    progressBox.textContent = "Przygotowuję profile...";
+
+    const token = await getValidAccessToken();
+    if (!token) throw new Error("Brak aktywnej sesji Spotify.");
+
+    const total = Number(playlistLength.value);
+    maxNewSearchesThisGeneration = searchBudgetForTarget(total);
+
+    progressBox.textContent = "Sprzątam playlisty Office Music Mixer starsze niż 72 godziny...";
+    const playlistCleanupResult = await cleanupOldOfficePlaylists(token);
+
+    const selected = selectedProfiles();
+    const bartek = selected.find(profile => profile.id === "bartek");
+    if (!bartek) {
+      throw new Error("Profil Bartka musi być aktywny. Jest głównym profilem tej aplikacji.");
+    }
+    if (!hasMusicProfile(bartek)) {
+      throw new Error("Profil Bartka nie ma danych muzycznych. Wypełnij ankietę gustu lub dodaj gatunki/artystów wzorcowych.");
+    }
+
+    const mixProfiles = selected.filter(hasMusicProfile);
+    const ignoredProfiles = selected.filter(profile => !hasMusicProfile(profile));
+
+    progressBox.textContent = "Odświeżam źródła Last.fm (z cache, jeśli są świeże)...";
+    await syncLastFmSources(mixProfiles, { maxTagCalls: lastFmTagBudgetForTarget(total) });
+
+    progressBox.textContent = "Synchronizuję historię odtworzeń...";
+    await syncSpotifyRecentHistory(token);
+
+    progressBox.textContent =
+      `Odświeżam artystów wzorcowych (budżet ${maxNewSearchesThisGeneration} nowych wyszukiwań)...`;
+    await primeManualSeedArtists(token, mixProfiles, 3);
+
+    const genrePrimeBudget = genrePrimeBudgetForTarget(total);
+    progressBox.textContent =
+      `Rozszerzam słabo reprezentowane gatunki (do ${genrePrimeBudget} nowych wyszukiwań)...`;
+    await primeProfileGenres(token, mixProfiles, genrePrimeBudget);
+
+    const remainingSearchBudget = Math.max(0, maxNewSearchesThisGeneration - newSearchesThisGeneration);
+    if (remainingSearchBudget > 0) {
+      progressBox.textContent = "Szukam wspólnego mianownika gustów...";
+      await primeCommonGroupQueries(token, mixProfiles, Math.min(3, remainingSearchBudget));
+    }
+
+    const {
+      blockedTracks,
+      blockedTrackSignatures,
+      blockedArtists,
+      blockedArtistNamesFromHistory
+    } = buildHistoryBlocklists();
+
+    const blocklists = {
+      blockedTracks,
+      blockedTrackSignatures,
+      blockedArtists,
+      historyBlockedNames: new Set(blockedArtistNamesFromHistory),
+      explicitBlockedNames: selectedBlockedArtistNames(selected),
+      feedbackBlockedNames: feedbackBlockedArtistNames()
+    };
+
+    progressBox.textContent = "Buduję model grupowy: satysfakcja, fairness, xQuAD i MMR...";
+    const ctx = buildGroupRecommendationContext(mixProfiles);
+    const { eligible, stats } = eligibleGroupCandidates(mixProfiles, blocklists, ctx);
+
+    if (!eligible.length) {
+      throw new Error("Po filtrach nie został żaden kandydat. Diagnostyka będzie wymagała poluzowania źródeł lub filtrów.");
+    }
+
+    const groupResult = selectGroupPlaylist(eligible, total, ctx, stats);
+    const finalTracks = sequencePlaylistForListening(groupResult.tracks, 5);
+    groupResult.tracks = finalTracks;
+
+    if (!finalTracks.length) {
+      throw new Error("Algorytm grupowy nie wybrał żadnego utworu.");
+    }
+
+    progressBox.textContent =
+      `Tworzę playlistę i zapisuję ${finalTracks.length} utworów...`;
+
+    const playlist = await createPlaylist(token, selected, finalTracks.length);
+    await addItemsToPlaylist(
+      token,
+      playlist.id,
+      finalTracks.map(track => track.uri)
+    );
+
+    recordSeedArtistSelections(finalTracks, selected);
+    saveRecentPlaylistSnapshot(playlist, finalTracks, selected, total, groupResult);
+    renderPlaylistResult(
+      playlist,
+      finalTracks,
+      selected,
+      ignoredProfiles,
+      total,
+      playlistCleanupResult,
+      groupResult
+    );
+    progressBox.textContent = "";
+
+  } catch (err) {
+    console.error(err);
+    playlistResult.textContent = err.message;
+    playlistBox.style.display = "block";
+    progressBox.textContent = "";
+  } finally {
+    generateButton.disabled = false;
+  }
+}
+
+function seedArtistDiagnosticText(selectedProfilesList, tracks) {
+  const rows = [];
+  const seen = new Set();
+  for (const profile of selectedProfilesList || []) {
+    for (const artist of profile.artists || []) {
+      const key = normalizeArtistName(artist);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const query = `artist:"${artist}"`;
+      const poolCount = candidatePoolForQueries([query]).length;
+      const selectedCount = (tracks || []).filter(track =>
+        (track.artists || []).some(a => normalizeArtistName(a?.name || "") === key)
+      ).length;
+      const searched = wasQueryAttempted(query) ? "tak" : "nie";
+      rows.push(`${artist}: pula ${poolCount}, szukano: ${searched}, wynik ${selectedCount ? `tak (${selectedCount})` : "nie"}`);
+    }
+  }
+  return rows.join(" · ");
+}
+
+function tasteGenreDiagnosticText(selectedProfilesList) {
+  const rows = [];
+  for (const profile of selectedProfilesList || []) {
+    if (!profile.taste?.hasSurvey) continue;
+    const liked = [...new Set((profile.taste.likedGenres || []).map(normalizeGenreName).filter(Boolean))];
+    if (!liked.length) continue;
+    const details = liked
+      .map(genre => {
+        const query = `genre:"${genre}"`;
+        const poolCount = candidatePoolForQueries([query]).length;
+        const searched = wasQueryAttempted(query) ? "tak" : "nie";
+        return { genre, poolCount, searched };
+      })
+      .sort((a, b) => Number(b.searched === "tak") - Number(a.searched === "tak") || a.poolCount - b.poolCount || a.genre.localeCompare(b.genre, "pl"));
+    rows.push(`${profile.name}: ${details.map(item => `${item.genre}: pula ${item.poolCount}, szukano: ${item.searched}`).join(" · ")}`);
+  }
+  return rows.join(" | ");
+}
+
+function compactTrackForRecent(track, diagnostic = "") {
+  return {
+    id: track?.id || "",
+    uri: track?.uri || "",
+    name: track?.name || "",
+    artists: (track?.artists || []).map(a => ({ id: a?.id || "", name: a?.name || "" })).filter(a => a.name),
+    external_urls: { spotify: track?.external_urls?.spotify || "" },
+    diagnostic
+  };
+}
+
+function loadRecentPlaylists() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(RECENT_PLAYLISTS_KEY) || "[]");
+    return Array.isArray(rows) ? rows.slice(0, RECENT_PLAYLISTS_MAX) : [];
+  } catch { return []; }
+}
+
+function saveRecentPlaylistSnapshot(playlist, tracks, selected, requestedTotal, groupResult) {
+  const snapshot = {
+    id: playlist?.id || `local-${Date.now()}`,
+    name: playlist?.name || "Office Music Mixer",
+    generatedAt: new Date().toISOString(),
+    url: playlist?.external_urls?.spotify || (playlist?.id ? `https://open.spotify.com/playlist/${playlist.id}` : ""),
+    uri: playlist?.uri || (playlist?.id ? `spotify:playlist:${playlist.id}` : ""),
+    selectedNames: (selected || []).map(p => p.name),
+    requestedTotal: Number(requestedTotal || tracks?.length || 0),
+    tracks: (tracks || []).map(track => compactTrackForRecent(
+      track,
+      trackDiagnostic(track, groupResult?.details?.get?.(track.id) || null, selected)
+    ))
+  };
+  const rows = loadRecentPlaylists().filter(row => row?.id !== snapshot.id);
+  rows.unshift(snapshot);
+  safeSetSmallStorageItem(RECENT_PLAYLISTS_KEY, JSON.stringify(rows.slice(0, RECENT_PLAYLISTS_MAX)), "ostatnich playlist");
+  return snapshot;
+}
+
+function recentPlaylistButtonLabel(snapshot, index) {
+  const dt = snapshot?.generatedAt ? new Date(snapshot.generatedAt) : null;
+  const when = dt && !Number.isNaN(dt.getTime())
+    ? dt.toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : `#${index + 1}`;
+  return `${index === 0 ? "Bieżąca" : `${index + 1}. poprzednia`} · ${when}`;
+}
+
+function renderRecentPlaylistNav(activeId = "") {
+  if (!recentPlaylists) return;
+  recentPlaylists.textContent = "";
+  const rows = loadRecentPlaylists();
+  if (!rows.length) return;
+  const label = document.createElement("span");
+  label.textContent = "Ostatnie playlisty: ";
+  recentPlaylists.append(label);
+  rows.forEach((snapshot, index) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "secondary";
+    btn.style.margin = "3px 6px 3px 0";
+    btn.textContent = recentPlaylistButtonLabel(snapshot, index);
+    if (snapshot.id === activeId) btn.disabled = true;
+    btn.addEventListener("click", () => renderStoredPlaylistSnapshot(snapshot));
+    recentPlaylists.append(btn);
+  });
+}
+
+function buildRatedTrackList(tracks, diagnosticProvider) {
+  const list = document.createElement("ol");
+  list.className = "result-list";
+  const feedback = loadFeedback();
+
+  for (const track of tracks || []) {
+    const li = document.createElement("li");
+    const row = document.createElement("div");
+    row.className = "track-row";
+    const label = document.createElement("span");
+    const titleLine = document.createElement("span");
+    titleLine.textContent = `${(track.artists || []).map(a => a.name).join(", ")} - ${track.name}`;
+    const meta = document.createElement("span");
+    meta.className = "track-meta";
+    meta.textContent = diagnosticProvider ? (diagnosticProvider(track) || "") : (track.diagnostic || "");
+    label.append(titleLine, meta);
+
+    const votes = document.createElement("span");
+    votes.className = "track-votes";
+    const signature = trackSignature(track);
+    const current = Number(feedback[signature]?.value || 0);
+    const up = document.createElement("button");
+    up.type = "button";
+    up.className = `vote-btn${current > 0 ? " active-up" : ""}`;
+    up.textContent = "👍";
+    up.title = "Podoba mi się. Premiuje ten utwór i lekko tego wykonawcę.";
+    const down = document.createElement("button");
+    down.type = "button";
+    down.className = `vote-btn${current < 0 ? " active-down" : ""}`;
+    down.textContent = "👎";
+    down.title = "Nie podoba mi się. Bardzo mocno obniża ten utwór i obniża wykonawcę.";
+    const block = document.createElement("button");
+    block.type = "button";
+    block.textContent = "🚫";
+    const primaryArtistName = track?.artists?.[0]?.name || "wykonawca";
+    block.title = `Zablokuj/odblokuj głównego wykonawcę: ${primaryArtistName}`;
+    const yt = document.createElement("button");
+    yt.type = "button";
+    yt.textContent = "▶ YT";
+    yt.title = "Otwórz wyszukiwanie utworu w małym oknie YouTube";
+    yt.addEventListener("click", () => {
+      const q = `${(track.artists || []).map(a => a.name).join(" ")} ${track.name}`;
+      window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, "officeMusicYouTube", "popup=yes,width=900,height=650,resizable=yes,scrollbars=yes");
+    });
+    const refreshButtons = () => {
+      const value = Number(loadFeedback()[signature]?.value || 0);
+      up.classList.toggle("active-up", value > 0);
+      down.classList.toggle("active-down", value < 0);
+      const primaryKey = normalizeArtistName(track?.artists?.[0]?.name || "");
+      block.className = `vote-btn${loadFeedbackBlockedArtists()[primaryKey] ? " active-block" : ""}`;
+    };
+    up.addEventListener("click", () => { setTrackFeedback(track, 1); refreshButtons(); });
+    down.addEventListener("click", () => { setTrackFeedback(track, -1); refreshButtons(); });
+    block.addEventListener("click", () => { togglePrimaryArtistBlock(track); refreshButtons(); });
+    refreshButtons();
+    votes.append(up, down, block, yt);
+    row.append(label, votes);
+    li.append(row);
+    list.append(li);
+  }
+  return list;
+}
+
+function appendSpotifyPlaylistLinks(container, playlist) {
+  const httpsUrl = playlist?.external_urls?.spotify || playlist?.url || (playlist?.id ? `https://open.spotify.com/playlist/${playlist.id}` : "");
+  if (httpsUrl) {
+    const link = document.createElement("a");
+    link.href = httpsUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Otwórz playlistę w Spotify";
+    container.append(link);
+  }
+  const appUri = playlist?.uri || (playlist?.id ? `spotify:playlist:${playlist.id}` : "");
+  if (appUri) {
+    const appLink = document.createElement("a");
+    appLink.href = appUri;
+    appLink.textContent = "↗ Spróbuj otworzyć w aplikacji";
+    appLink.style.marginLeft = "12px";
+    container.append(appLink);
+  }
+}
+
+function renderStoredPlaylistSnapshot(snapshot) {
+  playlistResult.textContent = "";
+  renderRecentPlaylistNav(snapshot?.id || "");
+  const summary = document.createElement("p");
+  const people = (snapshot?.selectedNames || []).join(", ") || "zapisane profile";
+  summary.textContent = `Zapisana playlista: ${(snapshot?.tracks || []).length} utworów dla: ${people}. Możesz nadal oceniać utwory; oceny wpływają na kolejne generowania.`;
+  playlistResult.append(summary);
+  playlistResult.append(buildRatedTrackList(snapshot?.tracks || [], track => track.diagnostic || ""));
+  appendSpotifyPlaylistLinks(playlistResult, snapshot || {});
+  playlistBox.style.display = "block";
+}
+
+function restoreMostRecentPlaylist() {
+  const rows = loadRecentPlaylists();
+  renderRecentPlaylistNav(rows[0]?.id || "");
+  if (rows.length) renderStoredPlaylistSnapshot(rows[0]);
+}
+
+function renderPlaylistResult(
+  playlist,
+  tracks,
+  selected,
+  ignoredProfiles = [],
+  requestedTotal = tracks.length,
+  playlistCleanupResult = null,
+  groupResult = null
+) {
+  playlistResult.textContent = "";
+
+  const summary = document.createElement("p");
+  summary.textContent = tracks.length < requestedTotal
+    ? `Utworzono ${tracks.length} z ${requestedTotal} utworów dla: ${selected.map(p => p.name).join(", ")}. Algorytm nie dobija wyniku przypadkowymi utworami tylko po to, żeby zgadzał się licznik.`
+    : `Utworzono ${tracks.length} utworów dla: ${selected.map(p => p.name).join(", ")}.`;
+
+  const model = document.createElement("p");
+  model.className = "small";
+  model.textContent =
+    `Model grupowy v36: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. ` +
+    `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
+    `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
+    `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); quota jest pilnowana dynamicznie względem faktycznej długości wyniku, a nie nominalnego celu. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
+    `Wyszukiwania Spotify są buforowane przez 24 h, lokalna pula żyje 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS}), a budżet tego generowania wynosił maks. ${maxNewSearchesThisGeneration} nowych wyszukiwań. ` +
+    `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(requestedTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami.`;
+
+  playlistResult.append(summary, model);
+
+  const tasteProfiles = selected.filter(profile => profile.taste?.hasSurvey);
+  if (tasteProfiles.length) {
+    const tasteDiag = document.createElement("p");
+    tasteDiag.className = "small";
+    tasteDiag.textContent = `Ankieta gustu: ` + tasteProfiles.map(profile => {
+      const liked = profile.taste?.likedGenres?.length || 0;
+      const ok = profile.taste?.okGenres?.length || 0;
+      const no = profile.taste?.blockedGenres?.length || 0;
+      const manualSet = new Set((profile.manualGenres || []).map(normalizeGenreName));
+      const added = (profile.taste?.likedGenres || []).filter(g => !manualSet.has(normalizeGenreName(g))).length;
+      return `${profile.name} ❤️ ${liked}, 🙂 ${ok}, 🚫 ${no}; +${added} gatunków do aktywnego discovery`;
+    }).join(" · ") + ".";
+    playlistResult.append(tasteDiag);
+  }
+
+  if (groupResult) {
+    const satisfaction = document.createElement("p");
+    satisfaction.className = "small";
+    const satParts = selected
+      .filter(profile => groupResult.satisfaction?.[profile.id])
+      .map(profile => {
+        const row = groupResult.satisfaction[profile.id];
+        return `${profile.name}: średnia ${Math.round(row.average)}/100, mocne dopasowanie ${row.strong}/${tracks.length}, słabe ${row.weak}`;
+      });
+    const discoveryPct = tracks.length
+      ? Math.round((Number(groupResult.discoveryCount || 0) / tracks.length) * 100)
+      : 0;
+    satisfaction.textContent =
+      `Dopasowanie grupowe: ${satParts.join(" · ")}. Odkrycia w wyniku: ${groupResult.discoveryCount || 0}/${tracks.length} (${discoveryPct}%). ` +
+      `Quota discovery dla celu ${discoveryLevel.value}%: ${groupResult.discoveryQuota?.min ?? 0}–${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}.`;
+    playlistResult.append(satisfaction);
+
+    const r = groupResult.rejectionStats || {};
+    const rejection = document.createElement("p");
+    rejection.className = "small";
+    rejection.textContent =
+      `Diagnostyka filtrów: pula ${r.rawPool || 0} → kwalifikowalne ${r.eligible || 0} → wybrane ${tracks.length}. ` +
+      `Odrzucono: 👎 utwór ${r.feedbackTrack || 0}, wariant/live/remix ${r.unwantedVariant || 0}, ` +
+      `jawnie blokowany wykonawca ${r.explicitBlockedArtist || 0}, 🚫 wykonawca z feedbacku ${r.feedbackBlockedArtist || 0}, ` +
+      `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, ` +
+      `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}` +
+      (r.lowFinalScoreStop ? `, zatrzymanie na twardym progu jakości bazowej: ${r.lowFinalScoreStop} kandydatów pozostało` : "") + `.`;
+    playlistResult.append(rejection);
+  }
+
+  const genreDiagText = tasteGenreDiagnosticText(selected);
+  if (genreDiagText) {
+    const genreDiag = document.createElement("p");
+    genreDiag.className = "small";
+    genreDiag.textContent = `Diagnostyka gatunków ❤️: ${genreDiagText}`;
+    playlistResult.append(genreDiag);
+  }
+
+  const seedDiagText = seedArtistDiagnosticText(selected, tracks);
+  if (seedDiagText) {
+    const seedDiag = document.createElement("p");
+    seedDiag.className = "small";
+    seedDiag.textContent = `Diagnostyka artystów wzorcowych: ${seedDiagText}`;
+    playlistResult.append(seedDiag);
+  }
+
+  if (playlistCleanupResult) {
+    const cleanupInfo = document.createElement("p");
+    cleanupInfo.className = "small";
+    if (playlistCleanupResult.skipped) {
+      cleanupInfo.textContent = `Porządki Spotify: znaleziono ${playlistCleanupResult.found || 0} playlist starszych niż 72 h; ${playlistCleanupResult.skipped}.`;
+    } else {
+      cleanupInfo.textContent = `Porządki Spotify: znaleziono ${playlistCleanupResult.found || 0} playlist starszych niż 72 h, usunięto ${playlistCleanupResult.removed || 0}, nadal widoczne ${playlistCleanupResult.remaining || 0}.` +
+        (playlistCleanupResult.unparseable ? ` Pominięto ${playlistCleanupResult.unparseable} playlist Office Music Mixer bez daty możliwej do odczytania z nazwy.` : "");
+    }
+    playlistResult.append(cleanupInfo);
+  }
+
+  if (ignoredProfiles.length) {
+    const warning = document.createElement("p");
+    warning.className = "small";
+    warning.textContent =
+      `Bez wpływu na dobór muzyki (profil jeszcze pusty): ${ignoredProfiles
+        .map(profile => profile.name)
+        .join(", ")}.`;
+    playlistResult.append(warning);
+  }
+
+  const list = buildRatedTrackList(
+    tracks,
+    track => trackDiagnostic(track, groupResult?.details?.get?.(track.id) || null, selected)
+  );
+  playlistResult.append(list);
+  appendSpotifyPlaylistLinks(playlistResult, playlist);
+  renderRecentPlaylistNav(playlist?.id || "");
+  playlistBox.style.display = "block";
+}
+
+function clearTokens() {
+  localStorage.removeItem("spotify_access_token");
+  localStorage.removeItem("spotify_refresh_token");
+  localStorage.removeItem("spotify_token_expires");
+  localStorage.removeItem("spotify_code_verifier");
+  sessionStorage.removeItem("spotify_auth_state");
+}
+
+function logout() {
+  clearTokens();
+  window.location.href = redirectUri;
+}
+
+async function init() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  const returnedState = params.get("state");
+  const error = params.get("error");
+
+  if (error) {
+    statusBox.innerHTML =
+      `<span class="error">Spotify zwrócił błąd: ${error}</span>`;
+    return;
+  }
+
+  if (code) {
+    const expectedState = sessionStorage.getItem("spotify_auth_state");
+
+    if (!expectedState || returnedState !== expectedState) {
+      clearTokens();
+      statusBox.innerHTML =
+        '<span class="error">Błąd weryfikacji logowania.</span>';
+      return;
+    }
+
+    try {
+      statusBox.textContent = "Kończę logowanie...";
+      const token = await exchangeCodeForToken(code);
+      sessionStorage.removeItem("spotify_auth_state");
+
+      window.history.replaceState({}, document.title, redirectUri);
+      await showLoggedIn(token);
+      return;
+    } catch (err) {
+      console.error(err);
+      statusBox.innerHTML = `<span class="error">${err.message}</span>`;
+      return;
+    }
+  }
+
+  try {
+    const token = await getValidAccessToken();
+
+    if (token) {
+      await showLoggedIn(token);
+    } else {
+      statusBox.textContent = "Niepołączony";
+    }
+  } catch (err) {
+    console.error(err);
+    clearTokens();
+    statusBox.innerHTML =
+      '<span class="error">Sesja Spotify wygasła. Zaloguj się ponownie.</span>';
+  }
+}
+
+migrateHistoryStorage();
+migrateStorageV34();
+purgeExpiredCaches();
+loadRmfSettings();
+renderFeedbackSummary();
+renderRmfDiagnostics();
+updateRmfStatus();
+restoreMostRecentPlaylist();
+init();
+</script>
+</body>
+</html>
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Office Music Mixer v35</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
