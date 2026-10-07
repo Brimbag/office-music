@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v40</title>
+  <title>Office Music Mixer v41</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,12 +366,13 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v40 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v41 beta</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
         <span id="status">Niepołączony</span>
         <span id="profileBox" style="display:none;">Spotify: <span id="profile"></span></span>
+        <span id="cloudStatus">Chmura: czeka na Spotify</span>
       </div>
     </div>
     <div class="connection-actions">
@@ -466,7 +467,7 @@
     </div>
 
     <p class="small">
-      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm. v38 rozszerza diagnostykę zatrzymania selekcji. v39 wykorzystuje te dane: awaryjny próg 35–43 wymaga już tylko, by żadna obecna osoba nie miała wyniku poniżej 35, a podczas końcowego fallbacku górna quota discovery jest liczona względem docelowej długości playlisty, aby krótki wynik nie blokował sam siebie.
+      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm. v38 rozszerza diagnostykę zatrzymania selekcji. v39 wykorzystuje te dane: awaryjny próg 35–43 wymaga już tylko, by żadna obecna osoba nie miała wyniku poniżej 35, a podczas końcowego fallbacku górna quota discovery jest liczona względem docelowej długości playlisty, aby krótki wynik nie blokował sam siebie. v40 blokuje w końcowym fallbacku kandydatów z mocno negatywnym feedbackiem. v41 dodaje ręczną synchronizację trwałych preferencji z Cloudflare D1; algorytm doboru muzyki pozostaje bez zmian.
       Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
       Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
     </p>
@@ -505,9 +506,12 @@
       <button id="clearHistoryButton" class="secondary">Wyczyść historię aplikacji</button>
       <button id="exportStateButton" type="button" class="secondary">Eksportuj bazę</button>
       <button id="importStateButton" type="button" class="secondary">Importuj bazę</button>
+      <button id="cloudUploadButton" type="button" class="secondary">Wyślij dane do chmury</button>
+      <button id="cloudDownloadButton" type="button" class="secondary">Pobierz dane z chmury</button>
       <input id="importStateFile" type="file" accept="application/json,.json" style="display:none;">
     </div>
     <div class="small lastfm-note">Eksport obejmuje lokalną bazę, cache, historię, feedback, blokady, profile i ustawienia RMF. Tokeny logowania Spotify nie są eksportowane.</div>
+    <div class="small lastfm-note">Cloudflare D1 synchronizuje tylko trwałe preferencje: ankietę gustu, ręczne profile, feedback, blokady, ustawienia RMF/Last.fm, rotacje rekomendacji i trzy ostatnie playlisty. Duże cache Spotify/Last.fm oraz historia odsłuchań pozostają lokalne i mogą zostać odbudowane z API.</div>
     <div id="historySummary" class="history-summary"></div>
     <div id="progress" class="progress"></div>
   </div>
@@ -757,6 +761,9 @@ const clearHistoryButton = document.getElementById("clearHistoryButton");
 const exportStateButton = document.getElementById("exportStateButton");
 const importStateButton = document.getElementById("importStateButton");
 const importStateFile = document.getElementById("importStateFile");
+const cloudUploadButton = document.getElementById("cloudUploadButton");
+const cloudDownloadButton = document.getElementById("cloudDownloadButton");
+const cloudStatus = document.getElementById("cloudStatus");
 const historySummary = document.getElementById("historySummary");
 const progressBox = document.getElementById("progress");
 const playlistBox = document.getElementById("playlistBox");
@@ -784,6 +791,8 @@ clearHistoryButton.addEventListener("click", clearAppHistory);
 exportStateButton.addEventListener("click", exportLocalState);
 importStateButton.addEventListener("click", () => importStateFile.click());
 importStateFile.addEventListener("change", importLocalStateFromFile);
+cloudUploadButton.addEventListener("click", uploadDurableStateToCloud);
+cloudDownloadButton.addEventListener("click", downloadDurableStateFromCloud);
 
 clearFeedbackButton.addEventListener("click", clearFeedback);
 clearBlockedFeedbackButton.addEventListener("click", clearFeedbackArtistBlocks);
@@ -876,6 +885,132 @@ const APP_STORAGE_PREFIX = "office_";
 const STATE_EXPORT_FORMAT = "office-music-state";
 const STATE_EXPORT_VERSION = 1;
 
+const CLOUD_STATE_ENDPOINT = "/api/state";
+const CLOUD_EXACT_KEYS = [
+  TASTE_STORAGE_KEY,
+  FEEDBACK_KEY,
+  FEEDBACK_BLOCKED_ARTISTS_KEY,
+  SEED_ARTIST_ROTATION_KEY,
+  RMF_SETTINGS_KEY,
+  RECENT_PLAYLISTS_KEY,
+  LASTFM_USER_KEY,
+  LASTFM_TAG_ROTATION_KEY,
+  POLISH_TAG_ROTATION_KEY
+];
+
+function cloudStateKeys() {
+  const keys = new Set(CLOUD_EXACT_KEYS.filter(Boolean));
+  for (const id of Object.keys(profiles)) {
+    keys.add(`office_genres_${id}`);
+    keys.add(`office_seed_${id}`);
+    keys.add(`office_blocked_${id}`);
+  }
+  // GENRE_PRIME_STATE_KEY jest zadeklarowany niżej w pliku, więc dokładamy go
+  // dynamicznie dopiero w momencie wywołania tej funkcji.
+  if (typeof GENRE_PRIME_STATE_KEY !== "undefined") keys.add(GENRE_PRIME_STATE_KEY);
+  return [...keys];
+}
+
+function durableLocalStateForCloud() {
+  const state = {};
+  for (const key of cloudStateKeys()) {
+    const value = localStorage.getItem(key);
+    // Null jest celowy: pozwala chmurze zapamiętać również usunięcie danego klucza.
+    state[key] = value === null ? null : value;
+  }
+  return state;
+}
+
+function setCloudStatus(text, kind = "") {
+  if (!cloudStatus) return;
+  cloudStatus.textContent = `Chmura: ${text}`;
+  cloudStatus.classList.remove("ok", "error");
+  if (kind) cloudStatus.classList.add(kind);
+}
+
+async function cloudApiRequest(token, options = {}) {
+  const response = await fetch(CLOUD_STATE_ENDPOINT, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+      ...(options.body ? { "Content-Type": "application/json" } : {})
+    }
+  });
+  const data = await parseJsonSafely(response);
+  if (!response.ok) {
+    throw new Error(data?.error || `Cloudflare D1 HTTP ${response.status}`);
+  }
+  return data;
+}
+
+async function uploadDurableStateToCloud() {
+  try {
+    cloudUploadButton.disabled = true;
+    cloudDownloadButton.disabled = true;
+    setCloudStatus("zapisuję…");
+    const token = await getValidAccessToken();
+    if (!token) throw new Error("najpierw połącz Spotify");
+    const state = durableLocalStateForCloud();
+    const result = await cloudApiRequest(token, {
+      method: "PUT",
+      body: JSON.stringify({ state })
+    });
+    setCloudStatus(`zapisano ${result?.saved ?? Object.keys(state).length} kluczy`, "ok");
+  } catch (err) {
+    console.error("Cloud upload:", err);
+    setCloudStatus(err.message, "error");
+  } finally {
+    cloudUploadButton.disabled = false;
+    cloudDownloadButton.disabled = false;
+  }
+}
+
+async function downloadDurableStateFromCloud() {
+  try {
+    cloudUploadButton.disabled = true;
+    cloudDownloadButton.disabled = true;
+    setCloudStatus("pobieram…");
+    const token = await getValidAccessToken();
+    if (!token) throw new Error("najpierw połącz Spotify");
+    const result = await cloudApiRequest(token, { method: "GET" });
+    const state = result?.state && typeof result.state === "object" ? result.state : {};
+    const allowed = new Set(cloudStateKeys());
+    let applied = 0;
+    for (const [key, value] of Object.entries(state)) {
+      if (!allowed.has(key)) continue;
+      if (value === null) localStorage.removeItem(key);
+      else if (typeof value === "string") localStorage.setItem(key, value);
+      else localStorage.setItem(key, JSON.stringify(value));
+      applied++;
+    }
+    setCloudStatus(`pobrano ${applied} kluczy`, "ok");
+    if (applied) {
+      window.alert(`Pobrano ${applied} wpisów z Cloudflare D1. Strona zostanie odświeżona.`);
+      window.location.reload();
+    }
+  } catch (err) {
+    console.error("Cloud download:", err);
+    setCloudStatus(err.message, "error");
+  } finally {
+    cloudUploadButton.disabled = false;
+    cloudDownloadButton.disabled = false;
+  }
+}
+
+async function probeCloudState(token) {
+  try {
+    setCloudStatus("sprawdzam…");
+    const result = await cloudApiRequest(token, { method: "GET" });
+    const count = Object.keys(result?.state || {}).length;
+    setCloudStatus(count ? `${count} zapisanych kluczy` : "pusta, gotowa do pierwszej migracji", "ok");
+  } catch (err) {
+    console.error("Cloud probe:", err);
+    setCloudStatus(err.message, "error");
+  }
+}
+
+
 function exportedStorageState() {
   const storage = {};
   for (let i = 0; i < localStorage.length; i += 1) {
@@ -892,7 +1027,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v40",
+      source: "Office Music Mixer v41",
       storage: exportedStorageState()
     };
 
@@ -1651,6 +1786,7 @@ async function showLoggedIn(token) {
   lastFmUserInput.value = localStorage.getItem(LASTFM_USER_KEY) || "";
   renderLastFmStatus();
   renderHistorySummary();
+  await probeCloudState(token);
   startRmfWatcher();
 }
 
@@ -4807,7 +4943,7 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v40: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v41: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
     `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v40 dodatkowo nie pozwala, aby końcowy fallback dobierał wykonawcę z mocną karą feedbacku (<= -40); normalna ścieżka nadal może go wybrać, jeśli mimo kary ma wystarczająco dobry wynik. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
