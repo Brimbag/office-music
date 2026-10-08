@@ -42,10 +42,8 @@ function memoryDB() {
 }
 
 for (const [name, profile, expected] of [
-  ['standardowe id', { id: 'standard' }, 'standard'],
-  ['dotychczasowe account_id', { account_id: 'legacy' }, 'legacy'],
-  ['oba pola zachowują dotychczasową partycję', { id: 'standard', account_id: 'legacy' }, 'legacy'],
-  ['nieprawidłowe account_id z prawidłowym id', { id: 'standard', account_id: {} }, 'standard']
+  ['niezmienne account_id', { account_id: 'immutable' }, 'immutable'],
+  ['publiczne id nie przesłania account_id', { id: 'public', account_id: 'immutable' }, 'immutable']
 ]) {
   test(`API: ${name}`, async t => {
     authenticate(t, profile);
@@ -56,7 +54,7 @@ for (const [name, profile, expected] of [
   });
 }
 
-for (const profile of [{}, { id: '' }, { id: {} }, { id: 'bad\nidentifier' }]) {
+for (const profile of [{}, { id: 'public-only' }, { account_id: '' }, { account_id: {} }, { account_id: 'bad\nidentifier' }, { account_id: {}, id: 'public' }]) {
   test(`API: nieprawidłowy identyfikator ${JSON.stringify(profile)}`, async t => {
     authenticate(t, profile);
     const response = await api.onRequestGet({ request: request('GET'), env: {} });
@@ -84,7 +82,7 @@ for (const key of ['spotify_access_token', 'office_unknown', '__proto__', 'offic
 }
 
 test('API: dwa zweryfikowane konta, upsert i null nie przeciekają między kontami', async t => {
-  t.mock.method(globalThis, 'fetch', async (_url, { headers }) => Response.json({ id: headers.Authorization === 'Bearer first' ? 'first-account' : 'second-account' }));
+  t.mock.method(globalThis, 'fetch', async (_url, { headers }) => Response.json({ account_id: headers.Authorization === 'Bearer first' ? 'first-account' : 'second-account' }));
   const DB = memoryDB();
   for (const [token, value] of [['first', 'Queen'], ['second', 'ABBA'], ['first', null]]) {
     const response = await api.onRequestPut({ request: request('PUT', { state: { office_seed_bartek: value } }, token), env: { DB } });

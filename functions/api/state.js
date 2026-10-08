@@ -53,10 +53,10 @@ async function getSpotifyAccountId(request) {
   try { user = await response.json(); }
   catch { return { ok: false, status: 502, error: "Invalid Spotify profile response" }; }
 
-  // Preserve existing D1 partitions when the verified response has account_id.
-  // Official Spotify SDK UserProfile exposes id. Support that response too;
-  // never accept an identity sent by the browser or silently migrate old rows.
-  const accountId = validAccountId(user?.account_id) ? user.account_id : user?.id;
+  // Spotify's current /me contract requires immutable account_id for account
+  // linking and explicitly forbids using the mutable public id for that purpose.
+  // Never fall back to id or accept an identity supplied by the browser.
+  const accountId = user?.account_id;
   if (!validAccountId(accountId)) {
     return { ok: false, status: 502, error: "Spotify account identifier missing" };
   }
