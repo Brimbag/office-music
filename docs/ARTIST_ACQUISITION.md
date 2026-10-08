@@ -1,4 +1,4 @@
-# Pozyskiwanie kwalifikowalnych wykonawców — v43.13.D
+# Pozyskiwanie kwalifikowalnych wykonawców — v43.16.D
 
 ## Problem i zakres
 
@@ -12,7 +12,7 @@ Trzy etapy pozostają: artyści wzorcowi (do 3 nowych wyszukiwań), gatunki (do 
 
 Najpierw odczytywane są świeże strony cache offsetów 0–90, raz dla zapytania w generowaniu, bez API. Działa to także przy zerowym pozostałym budżecie. Pusta strona nie zatrzymuje przeglądania kolejnych. Cache ma niezmienione TTL 24 h. Do puli z cache trafiają nowe kandydaty przechodzące rzeczywiste filtry i istniejącą bramkę normalną lub fallbackową. Zostają najwyżej dwie różne sygnatury na wykonawcę, z uwzględnieniem wcześniej kwalifikowalnych utworów. Warianty, blokady i duplikaty nie udają różnorodności. Pominięte rekordy pozostają w cache do oceny przy przyszłych profilach.
 
-Podczas tego ponownego użycia cache dotychczas kwalifikowalne rekordy są chronione przed wyparciem z puli 2000. Przy pełnej puli odrzucane są stare niekwalifikowalne rekordy; jeśli nie ma wolnego miejsca poza chronionymi rekordami, nie dodajemy nowych z cache. Dotychczasowa polityka zapisu wyników świeżych wywołań API pozostaje bez zmian. Cache nie usuwa ocen ani preferencji, a quota zachowuje poprzednią zapisaną pulę.
+Po kwalifikacji nowych rekordów cache pełny zbiór trafia do wspólnej retencji D.2, bez wcześniejszego przycinania. Ochrona obejmuje pokrycie wszystkich zapisanych profili, także nieobecnych. Redundantne nagrania mogą ustąpić miejsca innym wykonawcom przy pełnej puli; nie gwarantujemy zachowania każdego dotychczas kwalifikowalnego rekordu, gdy sam zbiór wartościowy przekracza limit. Wiek nowego rekordu pochodzi z oryginalnej odpowiedzi cache, nie z czasu ponownego użycia. Quota zachowuje poprzednią zapisaną pulę.
 
 Pozostały budżet kierowany jest najpierw do zapytań o najmniejszej liczbie użytecznych miejsc: sumie maksymalnie dwóch różnych sygnatur na znormalizowaną nazwę wykonawcy. W obrębie remisu zachowano wcześniejszą kolejność źródeł, preferencje gustu i rotację. Zapytania konkretnego wykonawcy są pomijane, gdy ma już dwie kwalifikowalne sygnatury lub obowiązuje twarda blokada nazwy/cooldown albo kara <=−40. Blokada Spotify ID nie służy do blokowania zapytania całej nazwy: inny homonim nadal może być wyszukany.
 
@@ -26,11 +26,11 @@ Diagnostyka pokazuje liczbę kwalifikowalnych wykonawców przed/po pozyskiwaniu,
 
 ## Regresje i wpływ
 
-Pełne testy zawierają 142 wcześniejsze regresje oraz porównanie z zamrożonymi funkcjami pozyskiwania z main `9169cf2` w `tests/fixtures/acquisition-v43.12.json`. Fixture jest zapisany w repo, aby CI nie potrzebowało pełnej historii git.
+Pełne testy zawierają 180 wcześniejszych regresji oraz porównanie z zamrożonymi funkcjami pozyskiwania z main po D.2 `e7a7b21` w `tests/fixtures/acquisition-v43.15.json`. Fixture jest zapisany w repo, aby CI nie potrzebowało pełnej historii git.
 
 Dla dwóch i czterech profili na identycznych danych oraz przy jednym wywołaniu API:
 
-| Wynik | v43.12.F3 | PR D |
+| Wynik | v43.15.D2 | PR D |
 |---|---:|---:|
 | Kwalifikowalni wykonawcy | 1 | 3 |
 | Utwory przy celu 6 | 2 | 6 |
@@ -49,4 +49,4 @@ Wycofać przy przekroczeniu budżetu, utracie kwalifikowalnych rekordów wskutek
 
 [Audyt limitów i rotacji pul](POOL_RETENTION_AUDIT.md) dokumentuje pełne pule, przestarzałe `recentCount`, ograniczoną rotację Last.fm oraz wyparcie wartościowych rekordów przez świeże API i cloud merge. Ochrona cache w tym PR nie rozwiązuje dwóch ostatnich ścieżek. Dodano testy charakteryzujące i prototyp retencji wyłącznie na kopii danych; nie zmieniono aplikacji ani limitów w ramach audytu.
 
-Zalecana aktualizacja kolejności: osobny D.1 (aktualność historii), osobny D.2 (retencja/rotacja), następnie odświeżenie i ponowna weryfikacja tego PR. #13 pozostaje niescalony. Cele poprawy, wpływ na długość i warunki rollbacku wymagają zatwierdzenia zgodnie z audytem; nie są deklaracją wyników produkcyjnych.
+D.1 i D.2 zostały scalone i wdrożone. Ten PR odświeżono na `e7a7b21`; pozostaje niescalony. Historyczne testy audytowe zastąpiono oczekiwaniami po naprawach: malejące liczniki, brak top 40, ochrona przed Rework i pełna rotacja. Dodano trzy regresje integracyjne: czas pozyskania cache, ochrona nieobecnego profilu i pełna pula kwalifikowalnych nagrań jednego wykonawcy. Kolejna wersja wdrożenia to v43.16.D, mimo zachowania numeru PR #13.

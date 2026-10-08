@@ -1,5 +1,7 @@
 # Audyt limitów i rotacji pul — uzupełnienie PR D
 
+**Stan po wdrożeniu D.1/D.2:** poniżej zachowano historyczną diagnozę sprzed tych poprawek. Obie naprawy są już na main `e7a7b21`; testy charakteryzujące zastąpiono oczekiwaniami poprawnego zachowania. #13 jest ponownie weryfikowany na tej bazie. Aktualne polityki: [D.1](LASTFM_RECENT_WINDOW.md), [D.2](POOL_RETENTION.md).
+
 Audyt kodu v43.12.F3 (`9169cf2`) oraz proponowanego v43.13.D (`9bd51a8`). Pomiary dotyczą kontrolowanych danych w Chromium, nie produkcyjnych baz. Nie zmieniono limitów, aplikacji ani danych produkcyjnych w ramach tego uzupełnienia. PR #13 pozostaje do zatwierdzenia; poniższe naprawy nie są zaimplementowane.
 
 ## 1. Bilans rekordów

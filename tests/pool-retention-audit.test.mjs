@@ -36,7 +36,7 @@ for (const pool of ['spotify', 'artists', 'tracks']) test(`audyt pełnej puli ${
   t.diagnostic(JSON.stringify({ pool, ...r }));
 });
 
-test('charakterystyka błędu: recentCount nie maleje, nieobecny artysta utrzymuje wartość po sync i odświeżeniu tagów', async () => {
+test('po D.1: legacy nie jest dowodem, pełne okno zastępuje licznik, tagi nie odnawiają historii', async () => {
   const r = await evaluate(async () => {
     const now = Date.now();
     localStorage.setItem(LASTFM_ARTIST_POOL_KEY, JSON.stringify([{ artist: 'Old', tags: ['rock'], sources: ['recent'], recentCount: 99, savedAt: now - 30 * 86400000 }, { artist: 'Seen', tags: ['rock'], sources: ['recent'], recentCount: 20, savedAt: now - 86400000 }]));
@@ -47,30 +47,30 @@ test('charakterystyka błędu: recentCount nie maleje, nieobecny artysta utrzymu
     addLastFmArtists(['Old'], { tags: ['rock'] });
     return loadLastFmArtistPool().map(r => ({ artist: r.artist, count: r.recentCount, refreshed: r.savedAt >= now }));
   });
-  assert.deepEqual(r, [{ artist: 'Old', count: 99, refreshed: true }, { artist: 'Seen', count: 20, refreshed: true }]);
+  assert.deepEqual(r, [{ artist: 'Old', count: 0, refreshed: true }, { artist: 'Seen', count: 1, refreshed: true }]);
 });
 
-test('pełna pula wykonawców z dawnym recentCount odrzuca wszystkich nowych wykonawców z tagów', async t => {
+test('po D.1/D.2: pełna pula dopuszcza nowych kwalifikowalnych wykonawców mimo legacy', async t => {
   const r = await evaluate(({ auditSource }) => {
     const now = Date.now(), audit = eval(`(${auditSource})`);
     const old = Array.from({ length: 1800 }, (_, i) => ({ artist: `Old ${i}`, tags: ['rock'], sources: ['recent'], recentCount: 10, savedAt: now - 86400000 }));
     localStorage.setItem(LASTFM_ARTIST_POOL_KEY, JSON.stringify(old));
     const offered = Array.from({ length: 20 }, (_, i) => `New ${i}`);
-    addLastFmArtists(offered, { tags: ['jazz'] });
+    addLastFmArtists(offered, { tags: ['rock'] });
     const after = loadLastFmArtistPool();
     return audit(old.map(value => ({ key: normalizeArtistName(value.artist), value })), after.map(value => ({ key: normalizeArtistName(value.artist), value })), offered.map(normalizeArtistName));
   }, { auditSource: auditPool.toString() });
-  assert.equal(r.added, 0); assert.equal(r.rejectedNew, 20); assert.equal(r.removed, 0); t.diagnostic(JSON.stringify(r));
+  assert.equal(r.added, 20); assert.equal(r.rejectedNew, 0); assert.equal(r.removed, 20); t.diagnostic(JSON.stringify(r));
 });
 
-test('limit trzech stron i top 40: recentCount dotyczy części obserwacji, nie całego okna 14 dni', async () => {
+test('limit trzech stron bez top 40: częściowa obserwacja 600 odrębnych odsłuchów', async () => {
   const r = await evaluate(async () => {
     lastFmUserInput.value = 'test'; const original = lastFmRequest; let calls = 0;
-    lastFmRequest = async () => { calls++; return { recenttracks: { '@attr': { totalPages: '4' }, track: Array.from({ length: 200 }, (_, i) => ({ name: 'Song', artist: { '#text': `Artist ${i}` }, date: { uts: String(Math.floor(Date.now() / 1000) - i) } })) } }; };
+    lastFmRequest = async (_method, params) => { calls++; return { recenttracks: { '@attr': { totalPages: '4' }, track: Array.from({ length: 200 }, (_, i) => ({ name: 'Song', artist: { '#text': `Artist ${i + (params.page - 1) * 200}` }, date: { uts: String(Math.floor(Date.now() / 1000) - i - (params.page - 1) * 200) } })) } }; };
     try { await syncLastFmSources([], { includeTags: false, includeRecent: true }); return { calls, artists: loadLastFmArtistPool().length, observed: lastFmRecentCount() }; }
     finally { lastFmRequest = original; }
   });
-  assert.deepEqual(r, { calls: 3, artists: 40, observed: 600 });
+  assert.deepEqual(r, { calls: 3, artists: 600, observed: 600 });
 });
 
 test('prototyp na kopii: retencja po wykonawcach ogranicza koncentrację bez zmiany limitów', t => {
@@ -112,7 +112,7 @@ for (const multiplier of [1, 1.5, 2]) test(`symulacja rozmiaru ${multiplier}×: 
   t.diagnostic(JSON.stringify(r));
 });
 
-test('sortowanie świeżych wyników Spotify usuwa najstarszy kwalifikowalny rekord mimo niekwalifikowalnego floodu', async () => {
+test('po D.2: świeże wyniki nie wypierają kwalifikowalnego rekordu przez flood wariantów', async () => {
   const r = await evaluate(() => {
     const now = Date.now(), selected = [{ id: 'bartek', genres: ['rock'], artists: [], categories: [], taste: { hasSurvey: true, likedGenres: ['Rock'], okGenres: [], blockedGenres: [] } }];
     const good = { id: 'valuable', uri: 'spotify:track:valuable', name: 'Song', artists: [{ id: '1111111111111111111111', name: 'Good' }] };
@@ -123,20 +123,20 @@ test('sortowanie świeżych wyników Spotify usuwa najstarszy kwalifikowalny rek
     addToCandidatePool('genre:"rock"', [bad(2000)]);
     return { before, after: acquisitionCoverage(selected, blocks).artists, retained: loadCandidatePool().some(r => r.track.id === 'valuable') };
   });
-  assert.deepEqual(r, { before: 1, after: 0, retained: false });
+  assert.deepEqual(r, { before: 1, after: 1, retained: true });
 });
 
-test('cloud merge również wypiera stare rekordy: limit 2000 nie jest ochroną różnorodności', async () => {
+test('cloud merge przestrzega 2000 przy 2001 różnych wykonawcach', async () => {
   const r = await evaluate(() => {
     const row = (id, savedAt) => ({ track: { id, uri: `spotify:track:${id}`, name: id, artists: [{ name: id }] }, queries: [], savedAt });
     const now = Date.now(), local = Array.from({ length: 2000 }, (_, i) => row(`old${i}`, now - 1000)), remote = [row('new', now)];
     const merged = mergedCandidatePool(JSON.stringify(local), JSON.stringify(remote));
     return { length: merged.length, added: merged.some(r => r.track.id === 'new'), removed: local.filter(r => !merged.some(m => m.track.id === r.track.id)).map(r => r.track.id) };
   });
-  assert.deepEqual(r, { length: 2000, added: true, removed: ['old1999'] });
+  assert.equal(r.length, 2000); assert.equal(r.added, true); assert.equal(r.removed.length, 1);
 });
 
-test('rotacja tagów obejmuje całą kolejkę, ale wykonawcy spoza head 3×18 nigdy nie są proponowani', async () => {
+test('po D.2: rotacja tagów i wykonawców obejmuje całą kolejkę', async () => {
   const r = await evaluate(() => {
     localStorage.removeItem(LASTFM_TAG_ROTATION_KEY); localStorage.removeItem(POLISH_TAG_ROTATION_KEY);
     const tags = Array.from({ length: 60 }, (_, i) => `tag${i}`), picked = new Set();
@@ -146,5 +146,5 @@ test('rotacja tagów obejmuje całą kolejkę, ale wykonawcy spoza head 3×18 ni
     const artists = new Set(); for (let i = 0; i < 20; i++) lastFmArtistsForTags(['rock'], 18).forEach(a => artists.add(Number(a.split(' ')[1])));
     return { tags: picked.size, polish: polish.size, maxArtistIndex: Math.max(...artists), uniqueArtists: artists.size };
   });
-  assert.equal(r.tags, 60); assert.equal(r.polish, 5); assert.ok(r.maxArtistIndex < 54); assert.ok(r.uniqueArtists <= 54);
+  assert.equal(r.tags, 60); assert.equal(r.polish, 5); assert.ok(r.maxArtistIndex >= 54); assert.equal(r.uniqueArtists, 360);
 });

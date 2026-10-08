@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { startBrowserHarness } from './helpers/browser.mjs';
 // Replay the deployed acquisition policy on the very same fixture and API responses.
-const { sources: baselineSources } = JSON.parse(readFileSync(new URL('./fixtures/acquisition-v43.12.json', import.meta.url), 'utf8'));
+const { sources: baselineSources } = JSON.parse(readFileSync(new URL('./fixtures/acquisition-v43.15.json', import.meta.url), 'utf8'));
 let harness;
 before(async () => { harness = await startBrowserHarness(); });
 after(async () => { await harness?.close(); });
@@ -174,7 +174,7 @@ test('pełna ścieżka generowania: źródła, selekcja, kolejność, zapis i di
     } finally { [getValidAccessToken, cleanupOldOfficePlaylists, selectedProfiles, refreshLastFmBeforeGeneration, syncSpotifyRecentHistory, searchTracks, createPlaylist, addItemsToPlaylist, uploadCloudStateIfChanged] = originals; }
   }, { ids });
   assert.equal(result.written.length, 4); assert.ok(result.written.every(uri => !uri.includes(':B')));
-  assert.equal(result.snapshot.length, 4); assert.match(result.text, /Pozyskiwanie: kwalifikowalni wykonawcy/); assert.match(result.text, /v43.13.D/); assert.equal(result.disabled, false);
+  assert.equal(result.snapshot.length, 4); assert.match(result.text, /Pozyskiwanie: kwalifikowalni wykonawcy/); assert.match(result.text, /v43.16.D/); assert.equal(result.disabled, false);
 });
 
 test('istniejące blokady historii, duplikaty i wersje nie są liczone jako kwalifikowalna różnorodność', async () => {
@@ -218,4 +218,40 @@ test('quota przy reuse cache zachowuje pulę i preferencje', async () => {
     finally { Storage.prototype.setItem = original; }
   }, { ids });
   assert.equal(result, true);
+});
+test('D po D.2: nowy kandydat cache zachowuje czas pozyskania, bez API i odnawiania TTL', async () => {
+  const r = await evaluate(async () => {
+    const now = Date.now(), acquiredAt = now - 10000, track = { id: 'cache-new', uri: 'spotify:track:cache-new', name: 'Song', artists: [{ id: '1111111111111111111111', name: 'Good' }] };
+    addLastFmArtists(['Good'], { tags: ['rock'] });
+    localStorage.setItem(searchCacheKey('genre:"rock"', 0), JSON.stringify({ savedAt: acquiredAt, items: [track] }));
+    const selected = [{ id: 'bartek', genres: ['rock'], artists: [], taste: { hasSurvey: true, likedGenres: ['Rock'], okGenres: [], blockedGenres: [] } }];
+    await primeDiverseQueries('test', [{ query: 'genre:"rock"' }], 0, createCandidateAcquisition(selected));
+    const row = loadCandidatePool()[0]; return { age: row.savedAt === acquiredAt, used: row.lastUsedAt >= now, calls: newSearchesThisGeneration };
+  });
+  assert.deepEqual(r, { age: true, used: true, calls: 0 });
+});
+test('D po D.2: cache nie przycina przedstawiciela nieobecnego profilu przed wspólną retencją', async () => {
+  const r = await evaluate(async () => {
+    localStorage.setItem('office_genres_monika', 'classical');
+    const now = Date.now(), row = (id, artist, title, at) => ({ track: { id, uri: `spotify:track:${id}`, name: title, artists: [{ id: artist.padEnd(22, '0'), name: artist }] }, queries: ['genre:"rock"'], savedAt: at });
+    addLastFmArtists(['Rare'], { tags: ['classical'] }); addLastFmArtists(['Good'], { tags: ['rock'] });
+    localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify([...Array.from({ length: 1999 }, (_, i) => row(`bad${i}`, 'Bad', `Bad ${i} - Rework`, now - 1000)), row('rare', 'Rare', 'Rare song', now - 2000)]));
+    writeSearchCache('genre:"rock"', 0, [row('new1', 'Good', 'Good one', now).track, row('new2', 'Good', 'Good two', now).track]);
+    const selected = [{ id: 'bartek', genres: ['rock'], artists: [], taste: { hasSurvey: true, likedGenres: ['Rock'], okGenres: [], blockedGenres: [] } }];
+    await primeDiverseQueries('test', [{ query: 'genre:"rock"' }], 0, createCandidateAcquisition(selected));
+    const rows = loadCandidatePool(); return { size: rows.length, rare: rows.some(r => r.track.id === 'rare'), added: rows.filter(r => r.track.id.startsWith('new')).length, calls: newSearchesThisGeneration };
+  });
+  assert.deepEqual(r, { size: 2000, rare: true, added: 2, calls: 0 });
+});
+test('D po D.2: pełna pula kwalifikowalnych utworów jednego artysty nie blokuje różnorodności z cache', async () => {
+  const r = await evaluate(async () => {
+    const now = Date.now(), track = (id, artist) => ({ id, uri: `spotify:track:${id}`, name: `Song ${id}`, artists: [{ id: artist.padEnd(22, '0'), name: artist }] });
+    addLastFmArtists(['Old', 'New'], { tags: ['rock'] });
+    localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify(Array.from({ length: 2000 }, (_, i) => ({ track: track(`old${i}`, 'Old'), queries: ['genre:"rock"'], savedAt: now - 1000 }))));
+    writeSearchCache('genre:"rock"', 0, [track('new1', 'New'), track('new2', 'New')]);
+    const selected = [{ id: 'bartek', genres: ['rock'], artists: [], taste: { hasSurvey: true, likedGenres: ['Rock'], okGenres: [], blockedGenres: [] } }];
+    const a = createCandidateAcquisition(selected); await primeDiverseQueries('test', [{ query: 'genre:"rock"' }], 0, a);
+    const pool = loadCandidatePool(); return { size: pool.length, artists: acquisitionCoverage(selected, a.blocklists).artists, added: pool.filter(r => r.track.artists[0].name === 'New').length, calls: newSearchesThisGeneration };
+  });
+  assert.deepEqual(r, { size: 2000, artists: 2, added: 2, calls: 0 });
 });
