@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43</title>
+  <title>Office Music Mixer v43.7.E</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.7.E</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -1199,7 +1199,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43",
+      source: "Office Music Mixer v43.7.E",
       storage: exportedStorageState()
     };
 
@@ -3355,6 +3355,35 @@ function hasRemasterMarker(text) {
   return variantContextRegex(REMASTER_WORDS).test(text || "");
 }
 
+function hasAlternativeVersionMarker(track) {
+  const title = track?.name || "";
+  const album = track?.album?.name || "";
+  // Keep signature normalization unchanged: adding markers there would change
+  // keys of existing feedback/history. These new markers are filter-only.
+  const hardWords = HARD_VARIANT_WORDS.replace("|orchestra|variation(?:s)?", "") + "|rework(?:ed)?";
+  const hardContext = text => text.replace(/\b(orchestra(?:l)?)\s+(?:version|arrangement|recording|mix)\b/gi, "$1");
+  if ([title, album].some(text => variantContextRegex(hardWords).test(hardContext(text)))) return true;
+
+  const primaryName = normalizeArtistName(track?.artists?.[0]?.name || "");
+  const artistRow = loadLastFmArtistPool().find(row => normalizeArtistName(row.artist) === primaryName);
+  const tags = (artistRow?.tags || []).map(normalizeGenreName);
+  const classicalTags = new Set(["classical", "classical music", "contemporary classical", "modern classical", "baroque", "opera", "orchestral", "symphonic"]);
+  const classicalWork = /\b(?:symphony|concerto|sonata|suite|variation(?:s)?)\s+(?:no\.?\s*)?\d|\b(?:op\.?|bwv|kv|hob\.?)\s*\d/i.test(`${title} ${album}`);
+  if (classicalWork || tags.some(tag => classicalTags.has(tag))) return false;
+
+  if ([title, album].some(text => variantContextRegex("orchestra|orchestral|variation(?:s)?").test(text))) return true;
+  if (/^(?:orchestral|orchestra)\s+(?:version|arrangement|rework|recording)$/i.test(album.trim())) return true;
+
+  // An orchestra credit alone is not proof of an alternative recording.
+  // Require strong Last.fm evidence for a modern primary performer; no genre
+  // query fallback, popularity heuristic or rejection of orchestra-led work.
+  const modernTags = new Set(["rock", "pop", "metal", "punk", "blues", "hip hop", "hip-hop", "electronic", "dance", "reggae", "soul", "r&b"]);
+  const orchestraCredit = name => /\b(?:philharmonic|symphony)\s+orchestra\b/i.test(name || "");
+  return !orchestraCredit(track?.artists?.[0]?.name) &&
+    tags.some(tag => modernTags.has(tag)) &&
+    (track?.artists || []).slice(1).some(artist => orchestraCredit(artist?.name));
+}
+
 function normalizeTrackTitleForSignature(value) {
   let text = (value || "")
     .normalize("NFKD")
@@ -3430,7 +3459,7 @@ function rebuildCanonicalCleanVariantSignatures(rows) {
     const track = row?.track;
     if (!track?.id) continue;
     const title = track?.name || "";
-    if (hasHardVariantMarker(title) || hasHardVariantMarker(track?.album?.name || "") || hasRemasterMarker(title)) continue;
+    if (hasAlternativeVersionMarker(track) || hasRemasterMarker(title)) continue;
     for (const sig of trackDuplicateSignatures(track)) clean.add(sig);
   }
   canonicalCleanVariantSignatures = clean;
@@ -3446,8 +3475,7 @@ function looksLikeUnwantedVariant(track) {
   if (!avoidRemixes.checked) return false;
 
   const title = track?.name || "";
-  const album = track?.album?.name || "";
-  if (hasHardVariantMarker(title) || hasHardVariantMarker(album)) return true;
+  if (hasAlternativeVersionMarker(track)) return true;
 
   // Remaster sam w sobie nie musi być gorszy. Odrzucamy go wtedy, gdy w lokalnej
   // puli mamy zwykłe wydanie tego samego utworu; canonical title pilnuje też deduplikacji.
@@ -5206,7 +5234,7 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.7.E: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
     `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
