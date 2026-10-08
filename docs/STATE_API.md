@@ -10,6 +10,6 @@ Przed wdrożeniem wykonać smoke odczytu/zapisu z działającym kontem oraz spra
 
 PUT przyjmuje `{ "state": { ... } }`, maksymalnie 2 MiB UTF-8 całego żądania, 1,5 MiB pojedynczej wartości i 32 klucze. Dozwolone są 23 klucze aktualnego `cloudStateKeys()`; nie są dozwolone tokeny, PKCE ani dowolne klucze `office_*`. Null jako wartość klucza pozostaje znacznikiem usunięcia, zgodnym z frontendem. Puste `{state:{}}` jest poprawnym zapisem bez zmian. Wartości JSON zachowują zgodność ze starszym API; stringi localStorage nie są przepisywane.
 
-Walidacja całego payloadu kończy się przed zapisami. GET zwraca wyłącznie dozwolone klucze; pozostałe istniejące rekordy pozostają w bazie. Błędy danych: 400, przekroczenie rozmiaru: 413, brak/odrzucenie tokenu: 401, niedostępny Spotify: 502 lub 503 (429 zachowuje liczbowy Retry-After), niedostępna baza: 503.
+Walidacja całego payloadu kończy się przed zapisami. Zbyt głęboki JSON, którego nie da się bezpiecznie zserializować, jest odrzucany jako 400, bez częściowego zapisu. GET zwraca wyłącznie dozwolone klucze; pozostałe istniejące rekordy pozostają w bazie. Błędy danych: 400, przekroczenie rozmiaru: 413, brak/odrzucenie tokenu: 401, niedostępny Spotify: 502 lub 503 (429 zachowuje liczbowy Retry-After), niedostępna baza: 503.
 
 Nie ma migracji SQL ani zmian bindingu DB. Rollback to powrót do poprzedniej funkcji; układ `app_state` i istniejące rekordy pozostają bez zmian. Testy uruchamiają atrapę interfejsu D1 i rozdzielenie kont w pamięci; nie potwierdzają danych ani dostępności produkcyjnego D1.

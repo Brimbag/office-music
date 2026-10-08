@@ -164,3 +164,14 @@ test('API: brak tokenu, pusty Bearer i inne schematy nie wywołują Spotify', as
   }
   assert.equal(mock.mock.calls.length, 0);
 });
+
+
+test('API: bardzo głęboki JSON daje 400 zamiast wyjątku i nic nie zapisuje', async t => {
+  authenticate(t);
+  const DB = memoryDB();
+  const body = '{"state":{"office_seed_bartek":' + '['.repeat(12000) + '0' + ']'.repeat(12000) + '}}';
+  const response = await api.onRequestPut({ request: new Request('https://local/api/state', {
+    method: 'PUT', headers: { Authorization: 'Bearer test-only' }, body
+  }), env: { DB } });
+  assert.equal(response.status, 400); assert.equal(DB.writes.length, 0);
+});

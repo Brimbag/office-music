@@ -121,21 +121,26 @@ export async function onRequestPut(context) {
   }
   const entries = Object.entries(body.state);
   if (entries.length > MAX_STATE_KEYS) return errorResponse("Too many state keys", 400);
+  const serialized = [];
   for (const [key, value] of entries) {
     if (!STATE_KEYS.has(key)) return errorResponse("Unsupported state key", 400);
-    if (new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_VALUE_BYTES) {
+    let valueJson;
+    try { valueJson = JSON.stringify(value); }
+    catch { return errorResponse("State value is too deeply nested", 400); }
+    if (new TextEncoder().encode(valueJson).byteLength > MAX_VALUE_BYTES) {
       return errorResponse("State value too large", 413);
     }
+    serialized.push([key, valueJson]);
   }
 
   const now = new Date().toISOString();
   try {
-    const statements = entries.map(([key, value]) => context.env.DB.prepare(`
+    const statements = serialized.map(([key, valueJson]) => context.env.DB.prepare(`
       INSERT INTO app_state (account_id, state_key, value_json, updated_at)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(account_id, state_key)
       DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-    `).bind(auth.accountId, key, JSON.stringify(value), now));
+    `).bind(auth.accountId, key, valueJson, now));
     if (statements.length) await context.env.DB.batch(statements);
     return Response.json({ ok: true, saved: statements.length, updated_at: now });
   } catch { return errorResponse("State database unavailable", 503); }
