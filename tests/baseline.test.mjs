@@ -48,6 +48,8 @@ for (const count of [2, 4]) {
       localStorage.setItem(LASTFM_TRACK_POOL_KEY, JSON.stringify(tracks.map(track => ({
         artist: track.artists[0].name, track: track.name, tags: ['rock'], sources: ['tag'], savedAt: now
       }))));
+      // F requires an explicit Last.fm bridge; this fixture models confirmed metadata.
+      for (let i = 0; i < 6; i++) writeIdentityDecision(linkCell('lastfm', `Artist ${i}`), { id: `a${i}`, name: `Artist ${i}` });
       const ctx = buildGroupRecommendationContext(selected);
       const empty = () => new Set();
       const { eligible, stats } = eligibleGroupCandidates(selected, {
