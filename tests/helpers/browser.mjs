@@ -6,11 +6,11 @@ import { chromium } from 'playwright-core';
 export async function startBrowserHarness() {
   const server = createServer(async (request, response) => {
     const path = new URL(request.url, 'http://local').pathname;
-    const file = ({ '/': 'index.html', '/index.html': 'index.html', '/taste': 'taste.html', '/taste.html': 'taste.html' })[path];
+    const file = (/^\/[A-Za-z0-9_-]+\.js$/.test(path) ? path.slice(1) : null) || ({ '/': 'index.html', '/index.html': 'index.html', '/taste': 'taste.html', '/taste.html': 'taste.html' })[path];
     if (!file) { response.writeHead(404).end(); return; }
     try {
       const html = await readFile(new URL(`../../${file}`, import.meta.url));
-      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(html);
+      response.writeHead(200, { 'Content-Type': file.endsWith('.js') ? 'text/javascript; charset=utf-8' : 'text/html; charset=utf-8' }).end(html);
     } catch { response.writeHead(500).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
