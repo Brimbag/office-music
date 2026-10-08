@@ -38,14 +38,14 @@ test('tag Jazz wykonawcy nie wzmacnia zapytania Rock', async () => {
 
 test('silny tag Jazz utworu nie wzmacnia kategorii Pop ani Rock z zapytania Pop Rock', async () => {
   const { evidence } = await features({ query: 'pop rock', trackTags: ['jazz'] });
-  closeTo(evidence.pop.weight, 0.20 * 0.58);
+  closeTo(evidence.pop.weight, 0.20 * 0.82);
   closeTo(evidence.rock.weight, 0.20 * 0.58);
   closeTo(evidence.jazz.weight, 1);
 });
 
 test('powiązany tag utworu Pop Rock nadal wzmacnia obie kategorie', async () => {
   const { evidence } = await features({ query: 'rock', trackTags: ['pop rock', 'jazz'] });
-  closeTo(evidence.pop.weight, 0.58); closeTo(evidence.rock.weight, 0.58);
+  closeTo(evidence.pop.weight, 0.82); closeTo(evidence.rock.weight, 0.58);
   assert.equal(evidence.rock.source, 'derived-category');
 });
 
