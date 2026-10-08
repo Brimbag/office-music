@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.12.F3</title>
+  <title>Office Music Mixer v43.14.D1</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.12.F3</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.14.D1</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -846,6 +846,7 @@ lastFmUserInput.addEventListener("change", () => {
   const next = lastFmUserInput.value.trim();
   localStorage.setItem(LASTFM_USER_KEY, next);
   renderLastFmStatus();
+  renderHistorySummary();
 });
 
 // Trwałe ustawienia zmieniają się głównie przez formularze i feedback.
@@ -864,6 +865,7 @@ const LASTFM_CACHE_TTL_MS = 60 * 60 * 1000;
 const LASTFM_RECENT_CACHE_TTL_MS = 10 * 60 * 1000;
 const LASTFM_HISTORY_WINDOW_DAYS = 14;
 const LASTFM_RECENT_COUNT_KEY = "office_lastfm_recent_count_v1";
+const LASTFM_RECENT_OBSERVATION_KEY = "office_lastfm_recent_observation_v1";
 const LASTFM_ARTIST_POOL_KEY = "office_lastfm_artist_pool_v1";
 const LASTFM_TRACK_POOL_KEY = "office_lastfm_track_pool_v1";
 const LASTFM_ARTIST_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
@@ -1241,7 +1243,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.12.F3",
+      source: "Office Music Mixer v43.14.D1",
       storage: exportedStorageState()
     };
 
@@ -2521,12 +2523,46 @@ async function lastFmRequest(method, params = {}, ttlMs = LASTFM_CACHE_TTL_MS) {
   return data;
 }
 
+// History evidence is local, owned by a Last.fm account, and never renewed by tags.
+function lastFmRecentEvidenceCount(item, now = Date.now()) {
+  const observation = item?.recentObservation;
+  const user = String(localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase();
+  if (!user || observation?.user !== user || !Array.isArray(observation.plays)) return 0;
+  const cutoff = now / 1000 - LASTFM_HISTORY_WINDOW_DAYS * 86400;
+  return observation.plays.filter(uts => Number.isFinite(uts) && uts >= cutoff && uts <= now / 1000).length;
+}
+
+function applyLastFmRecentObservation(names, plays, observation) {
+  const pool = loadLastFmArtistPool();
+  const map = new Map(pool.map(item => [normalizeArtistName(item.artist), item]));
+  if (observation.complete) {
+    for (const item of map.values()) {
+      item.recentCount = 0;
+      item.recentObservation = { ...observation, plays: [] };
+    }
+  }
+  for (const [key, timestamps] of plays) {
+    const item = map.get(key) || { artist: names.get(key), tags: [], sources: [], savedAt: observation.observedAt };
+    item.sources = [...new Set([...(item.sources || []), "recent"])];
+    const validPlays = timestamps.filter(uts => Number.isFinite(uts) && uts >= observation.observedAt / 1000 - LASTFM_HISTORY_WINDOW_DAYS * 86400 && uts <= observation.observedAt / 1000).slice(0, 600);
+    item.recentCount = validPlays.length;
+    item.recentObservation = { ...observation, plays: validPlays };
+    item.savedAt = observation.observedAt;
+    map.set(key, item);
+  }
+  return saveLastFmArtistPool([...map.values()]);
+}
+
 function loadLastFmArtistPool() {
   try {
     const parsed = JSON.parse(localStorage.getItem(LASTFM_ARTIST_POOL_KEY) || "[]");
     if (!Array.isArray(parsed)) return [];
     const cutoff = Date.now() - LASTFM_ARTIST_POOL_MAX_AGE_MS;
-    return parsed.filter(item => item?.artist && Number(item.savedAt || 0) >= cutoff);
+    return parsed.filter(item => item?.artist && Number(item.savedAt || 0) >= cutoff)
+      .map(item => {
+        const recentCount = lastFmRecentEvidenceCount(item);
+        return { ...item, recentCount, sources: (item.sources || []).filter(source => source !== "recent" || recentCount > 0) };
+      });
   } catch {
     return [];
   }
@@ -2537,15 +2573,17 @@ function saveLastFmArtistPool(pool) {
     const cutoff = Date.now() - LASTFM_ARTIST_POOL_MAX_AGE_MS;
     const cleaned = pool
       .filter(item => item?.artist && Number(item.savedAt || 0) >= cutoff)
-      .sort((a, b) => Number(b.recentCount || 0) - Number(a.recentCount || 0) || Number(b.savedAt || 0) - Number(a.savedAt || 0))
+      .sort((a, b) => lastFmRecentEvidenceCount(b) - lastFmRecentEvidenceCount(a) || Number(b.savedAt || 0) - Number(a.savedAt || 0))
       .slice(0, 1800);
     localStorage.setItem(LASTFM_ARTIST_POOL_KEY, JSON.stringify(cleaned));
+    return true;
   } catch (err) {
     console.warn("Nie udało się zapisać puli Last.fm.", err);
+    return false;
   }
 }
 
-function addLastFmArtists(items, { tags = [], source = "tag", recentCounts = null } = {}) {
+function addLastFmArtists(items, { tags = [], source = "tag" } = {}) {
   if (!Array.isArray(items) || !items.length) return;
   const pool = loadLastFmArtistPool();
   const map = new Map(pool.map(item => [normalizeArtistName(item.artist), item]));
@@ -2572,7 +2610,7 @@ function addLastFmArtists(items, { tags = [], source = "tag", recentCounts = nul
     }
     current.tags = [...new Set([...(current.tags || []), ...tags.map(normalizeGenreName).filter(Boolean)])];
     current.sources = [...new Set([...(current.sources || []), source])];
-    current.recentCount = Math.max(Number(current.recentCount || 0), Number(recentCounts?.get?.(key) || 0));
+    current.recentCount = lastFmRecentEvidenceCount(current);
     current.savedAt = now;
     map.set(key, current);
   }
@@ -2707,7 +2745,7 @@ function commonCategoryLastFmTags(category) {
 function lastFmArtistsForTags(tags, limit = 12, { includeRecent = false } = {}) {
   const wanted = new Set((tags || []).map(normalizeGenreName).filter(Boolean));
   const candidates = loadLastFmArtistPool().filter(item => {
-    if (includeRecent && (item.sources || []).includes("recent")) return true;
+    if (includeRecent && item.recentCount > 0) return true;
     return (item.tags || []).some(tag => lastFmTagMatchesWanted(tag, wanted));
   });
 
@@ -2721,7 +2759,11 @@ function lastFmArtistsForTags(tags, limit = 12, { includeRecent = false } = {}) 
 }
 
 function lastFmRecentCount() {
-  const value = Number(localStorage.getItem(LASTFM_RECENT_COUNT_KEY) || 0);
+  let observation;
+  try { observation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
+  const user = String(localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase();
+  if (!observation || observation.user !== user || Date.now() - observation.observedAt > LASTFM_RECENT_CACHE_TTL_MS) return 0;
+  const value = Number(observation.count || 0);
   return Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
@@ -2733,7 +2775,10 @@ function renderLastFmStatus(extra = "") {
   const parts = [`Baza Last.fm: ${pool} wykonawców, ${trackPool} utworów`];
   if (user) {
     parts.push(`konto: ${user}`);
-    parts.push(`scrobble ${LASTFM_HISTORY_WINDOW_DAYS} dni: ${lastFmRecentCount()}`);
+    let observation;
+    try { observation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
+    const valid = observation?.user === user.trim().toLowerCase() && Date.now() - observation.observedAt <= LASTFM_RECENT_CACHE_TTL_MS;
+    parts.push(valid ? `scrobble zaobserwowane: ${lastFmRecentCount()} · okno ${LASTFM_HISTORY_WINDOW_DAYS} dni, ${observation.complete ? "pełne" : "częściowe (maks. 3 strony)"}` : "historia Last.fm: brak świeżej obserwacji");
   }
   if (extra) parts.push(extra);
   lastFmStatus.textContent = parts.join(" · ");
@@ -2813,9 +2858,13 @@ async function syncLastFmSources(
       // Zaokrąglamy początek do pełnej godziny, żeby 10-minutowy cache Last.fm był użyteczny.
       const rawFrom = Date.now() - LASTFM_HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
       const fromSeconds = Math.floor(rawFrom / 1000 / 3600) * 3600;
+      const observedAt = Date.now();
       const historyEntries = [];
       const recentPoolItems = [];
-      const counts = new Map();
+      const plays = new Map();
+      const seenPlays = new Set();
+      let validPagination = true;
+      let expectedPages = null;
       const names = new Map();
 
       let page = 1;
@@ -2827,9 +2876,16 @@ async function syncLastFmSources(
           { user, limit: 200, from: fromSeconds, extended: 0, page },
           forceApi ? -1 : LASTFM_RECENT_CACHE_TTL_MS
         );
-        const tracks = data?.recenttracks?.track || [];
+        if (!data?.recenttracks || !Array.isArray(data.recenttracks.track)) throw new Error("nieprawidłowa odpowiedź historii");
+        const tracks = data.recenttracks.track;
         const attr = data?.recenttracks?.["@attr"] || {};
-        totalPages = Math.max(1, Number(attr.totalPages || 1));
+        const reportedPages = Number(attr.totalPages);
+        validPagination = validPagination && Number.isInteger(reportedPages) && reportedPages >= 0
+          && (expectedPages === null || expectedPages === reportedPages)
+          && (!attr.page || Number(attr.page) === page)
+          && (reportedPages !== 0 || tracks.length === 0);
+        expectedPages = reportedPages;
+        totalPages = Math.max(1, Number.isFinite(reportedPages) ? reportedPages : 1);
 
         for (const track of tracks) {
           const name = track?.artist?.["#text"] || track?.artist?.name || "";
@@ -2838,10 +2894,14 @@ async function syncLastFmSources(
           if (!key) continue;
 
           const uts = Number(track?.date?.uts || 0);
-          if (!title || uts <= 0) continue;
+          if (!title || uts < observedAt / 1000 - LASTFM_HISTORY_WINDOW_DAYS * 86400 || uts > observedAt / 1000) continue;
+          const playKey = JSON.stringify([key, title, uts]);
+          if (seenPlays.has(playKey)) { validPagination = false; continue; }
+          seenPlays.add(playKey);
 
           recentScrobbleCount++;
-          counts.set(key, (counts.get(key) || 0) + 1);
+          if (!plays.has(key)) plays.set(key, []);
+          plays.get(key).push(uts);
           names.set(key, name);
 
           historyEntries.push({
@@ -2859,13 +2919,16 @@ async function syncLastFmSources(
         page++;
       } while (page <= totalPages && page <= maxPages);
 
+      if (String(localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase() !== user.toLowerCase()) throw new Error("konto Last.fm zmieniło się podczas synchronizacji");
+      let latestObservation;
+      try { latestObservation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
+      if (latestObservation?.user === user.toLowerCase() && Number(latestObservation.observedAt) > observedAt) throw new Error("nowsza obserwacja historii jest już zapisana");
       if (historyEntries.length) mergeHistoryEntries(historyEntries);
       if (recentPoolItems.length) addLastFmTracks(recentPoolItems, { source: "recent" });
-      const recentArtists = [...counts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 40)
-        .map(([key]) => names.get(key));
-      addLastFmArtists(recentArtists, { source: "recent", recentCounts: counts });
+      // Do not publish an observation if the account changed while awaiting the API.
+      const complete = validPagination && page > totalPages;
+      if (!applyLastFmRecentObservation(names, plays, { user: user.toLowerCase(), from: fromSeconds, to: Math.floor(observedAt / 1000), observedAt, complete })) throw new Error("nie udało się zapisać obserwacji historii");
+      safeSetSmallStorageItem(LASTFM_RECENT_OBSERVATION_KEY, JSON.stringify({ user: user.toLowerCase(), observedAt, complete, count: recentScrobbleCount }), "obserwacji historii Last.fm");
 
       localStorage.setItem(LASTFM_RECENT_COUNT_KEY, String(recentScrobbleCount));
       safeSetSmallStorageItem(LASTFM_AUTO_RECENT_SYNC_KEY, String(Date.now()), "czasu synchronizacji historii Last.fm");
@@ -2883,6 +2946,7 @@ async function syncLastFmSources(
   const bits = [];
   if (includeTags) bits.push(`tagi ${syncTags.length}, w tym ${polishTags.length} PL`);
   if (includeRecent) bits.push(user ? (recentOk ? "historia świeża" : "błąd historii") : "brak konta historii");
+  renderHistorySummary();
   renderLastFmStatus(bits.length ? `odświeżono: ${bits.join(" · ")}` : "cache aktualny");
 }
 
@@ -2891,7 +2955,11 @@ async function refreshLastFmBeforeGeneration(selected, total) {
   const lastTags = Number(localStorage.getItem(LASTFM_AUTO_TAG_SYNC_KEY) || 0);
   const lastRecent = Number(localStorage.getItem(LASTFM_AUTO_RECENT_SYNC_KEY) || 0);
   const tagsDue = !lastTags || now - lastTags >= LASTFM_AUTO_TAG_SYNC_TTL_MS;
-  const recentDue = !lastRecent || now - lastRecent >= LASTFM_AUTO_RECENT_SYNC_TTL_MS;
+  let observation;
+  try { observation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
+  const user = String(lastFmUserInput?.value || localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase();
+  const ownerChanged = Boolean(user) && observation?.user !== user;
+  const recentDue = ownerChanged || !lastRecent || now - lastRecent >= LASTFM_AUTO_RECENT_SYNC_TTL_MS;
 
   if (!tagsDue && !recentDue) {
     renderLastFmStatus("automatyka: cache aktualny");
@@ -3153,8 +3221,8 @@ function renderHistorySummary() {
   const lastFmPoolCount = lastFmArtistPoolSize();
   const lastFmTrackCount = lastFmTrackPoolSize();
   historySummary.textContent = history.length
-    ? `Historia lokalna: ${history.length} wpisów (${lastFmCount} z Last.fm, ${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji). Last.fm: ${lastFmRecentCount()} scrobbli z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`
-    : `Historia lokalna jest jeszcze pusta. Last.fm: ${lastFmRecentCount()} scrobbli z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`;
+    ? `Historia lokalna: ${history.length} wpisów (${lastFmCount} z Last.fm, ${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji). Last.fm: ${lastFmRecentCount()} zaobserwowanych scrobbli (maks. 3 strony) z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`
+    : `Historia lokalna jest jeszcze pusta. Last.fm: ${lastFmRecentCount()} zaobserwowanych scrobbli (maks. 3 strony) z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`;
 }
 
 function clearAppHistory() {
@@ -5500,7 +5568,7 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.12.F3: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.14.D1: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
     `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
