@@ -1,0 +1,55 @@
+{
+  "note": "Chromium; fixed full pools 2000/1800/3000; 100 qualified artists; target60; 10 alternating samples plus warmup, computations only, no API latency",
+  "results": [
+    {
+      "people": 2,
+      "samples": 10,
+      "p95BaselineMs": 1228,
+      "p95CurrentMs": 1384.4000000022352,
+      "ratio": 1.1273615635197354,
+      "output": {
+        "baseline": {
+          "length": 60,
+          "averages": [
+            56.03999999999997,
+            56.03999999999997
+          ]
+        },
+        "current": {
+          "length": 60,
+          "averages": [
+            56.03999999999997,
+            56.03999999999997
+          ]
+        }
+      }
+    },
+    {
+      "people": 4,
+      "samples": 10,
+      "p95BaselineMs": 1220.4000000022352,
+      "p95CurrentMs": 1385.9000000022352,
+      "ratio": 1.1356112749915577,
+      "output": {
+        "baseline": {
+          "length": 60,
+          "averages": [
+            56.03999999999997,
+            56.03999999999997,
+            56.03999999999997,
+            56.03999999999997
+          ]
+        },
+        "current": {
+          "length": 60,
+          "averages": [
+            56.03999999999997,
+            56.03999999999997,
+            56.03999999999997,
+            56.03999999999997
+          ]
+        }
+      }
+    }
+  ]
+}
