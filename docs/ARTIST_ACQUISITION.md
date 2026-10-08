@@ -44,3 +44,9 @@ To kontrolowana pula, nie prognoza wyniku live. Zmiana wyboru źródeł może po
 Brak nowych kluczy, tabel, migracji D1, konfiguracji i zależności. Używane są istniejące cache, pula Spotify i rotacja gatunków. Nie zmienia się budżet Last.fm. Dodatkowe ocenianie lokalnej puli może wydłużyć obliczenia; indeks pojemności zapytań powstaje wspólnie, bez odczytywania całej puli osobno dla każdego zapytania.
 
 Wycofać przy przekroczeniu budżetu, utracie kwalifikowalnych rekordów wskutek ponownego użycia cache, obejściu blokad/progów/limitu dwóch utworów, istotnym pogorszeniu wyników dla 2/4 profili lub blokowaniu interfejsu przez obliczenia. Rollback: revert tego PR-a i nadanie nowego numeru nagłówkom/modelowi/eksportowi. Istniejącą pulę i preferencje zachować; starszy kod nadal je rozumie. Bez kasowania D1. Każde scalenie wymaga osobnego zatwierdzenia użytkownika.
+
+## Uzupełniony audyt i warunek dalszej pracy
+
+[Audyt limitów i rotacji pul](POOL_RETENTION_AUDIT.md) dokumentuje pełne pule, przestarzałe `recentCount`, ograniczoną rotację Last.fm oraz wyparcie wartościowych rekordów przez świeże API i cloud merge. Ochrona cache w tym PR nie rozwiązuje dwóch ostatnich ścieżek. Dodano testy charakteryzujące i prototyp retencji wyłącznie na kopii danych; nie zmieniono aplikacji ani limitów w ramach audytu.
+
+Zalecana aktualizacja kolejności: osobny D.1 (aktualność historii), osobny D.2 (retencja/rotacja), następnie odświeżenie i ponowna weryfikacja tego PR. #13 pozostaje niescalony. Cele poprawy, wpływ na długość i warunki rollbacku wymagają zatwierdzenia zgodnie z audytem; nie są deklaracją wyników produkcyjnych.
