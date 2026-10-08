@@ -1,0 +1,4 @@
+{
+  "commit": "4b094377b1f6eb988a357b22e308b723870d6280",
+  "saveCandidatePool": "function saveCandidatePool(pool) {\n  try {\n    const cutoff = Date.now() - CANDIDATE_POOL_MAX_AGE_MS;\n    const cleaned = pool\n      .filter(item => item?.track?.id && Number(item.savedAt || 0) >= cutoff)\n      .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))\n      .slice(0, CANDIDATE_POOL_MAX_ITEMS);\n    localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify(cleaned));\n  } catch (err) {\n    console.warn(\"Nie uda\u0142o si\u0119 zapisa\u0107 lokalnej puli kandydat\u00f3w.\", err);\n  }\n}"
+}
