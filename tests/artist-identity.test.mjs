@@ -335,7 +335,7 @@ test('zmiana lokalna podczas PUT pozostaje do kolejnego autosync, nie jest oznac
       return { saved: 1 };
     };
     try {
-      await uploadCloudStateIfChanged('test');
+      await autoSyncCloudState('test');
       const pending = lastCloudFingerprint !== cloudStateFingerprint();
       await uploadCloudStateIfChanged('test');
       return { pending, puts, uploaded: OfficeArtistIdentity.read(OfficeArtistIdentity.parse(remote), linkCell('seed:asia', 'Days of the New')).value.id };

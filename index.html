@@ -1204,8 +1204,8 @@ async function autoSyncCloudState(token) {
     // Po scaleniu wysyłamy stan z powrotem. Dzięki temu istniejąca chmura v41
     // dostanie od razu nowy klucz z pulą Spotify, a brakujące lokalne dane nie zginą.
     const uploadResult = await uploadCloudStateIfChanged(token, { force: true, status: false });
-    lastCloudFingerprint = cloudStateFingerprint();
-    saveCloudShadow(durableLocalStateForCloud());
+    // The upload keeps the fingerprint/shadow of the snapshot actually sent.
+    // Local edits made during PUT must remain pending for the next sync.
     cloudAutoSyncReady = true;
     setCloudStatus(`zsynchronizowano ${uploadResult?.saved ?? cloudStateKeys().length} kluczy · pula Spotify ${candidatePoolSize()}`, "ok");
   } catch (err) {
