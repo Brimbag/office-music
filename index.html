@@ -2920,6 +2920,9 @@ async function syncLastFmSources(
       } while (page <= totalPages && page <= maxPages);
 
       if (String(localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase() !== user.toLowerCase()) throw new Error("konto Last.fm zmieniło się podczas synchronizacji");
+      let latestObservation;
+      try { latestObservation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
+      if (latestObservation?.user === user.toLowerCase() && Number(latestObservation.observedAt) > observedAt) throw new Error("nowsza obserwacja historii jest już zapisana");
       if (historyEntries.length) mergeHistoryEntries(historyEntries);
       if (recentPoolItems.length) addLastFmTracks(recentPoolItems, { source: "recent" });
       // Do not publish an observation if the account changed while awaiting the API.

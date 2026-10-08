@@ -20,7 +20,7 @@ Starszy kod ignoruje nowe pola, rozumie dotychczasowe rekordy i `recentCount`. E
 
 ## Regresje i wpływ na playlisty
 
-16 nowych testów w prawdziwym Chromium: pełna/częściowa obserwacja, 99 → 1, zerowanie nieobecnych, indywidualne wygasanie, tagi, legacy, inne konto, awaria drugiej strony, malformed, pusty wynik, quota, 55 wykonawców, duplikaty, zmieniającą się paginację i niepoprawne daty, zmiana konta podczas await oraz wymuszenie nowej historii po zmianie konta. Istniejące testy obejmują API/state, import/export, feedback, blokady, wersje, RMF i oba HTML.
+17 nowych testów w prawdziwym Chromium: pełna/częściowa obserwacja, 99 → 1, zerowanie nieobecnych, indywidualne wygasanie, tagi, legacy, inne konto, awaria drugiej strony, malformed, pusty wynik, quota, 55 wykonawców, duplikaty, zmieniającą się paginację i niepoprawne daty, zmiana konta podczas await ochronę nowszej obserwacji przed wolniejszą odpowiedzią oraz wymuszenie nowej historii po zmianie konta. Istniejące testy obejmują API/state, import/export, feedback, blokady, wersje, RMF i oba HTML.
 
 Porównanie kontrolowanej puli ośmiu nagrań, celu 6, identycznych odpowiedzi i ziarna:
 

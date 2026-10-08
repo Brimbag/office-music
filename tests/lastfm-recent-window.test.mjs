@@ -135,3 +135,16 @@ test('zmiana liczby stron w trakcie pobrania nie uprawnia do zerowania nieobserw
   });
   assert.deepEqual(r, { count: 1, complete: false });
 });
+test('wolniejsza odpowiedź nie nadpisuje nowszej obserwacji tego samego konta', async () => {
+  const r = await run(async () => {
+    localStorage.setItem(LASTFM_USER_KEY, 'alice'); lastFmUserInput.value = 'alice'; const now = Date.now(), original = lastFmRequest;
+    lastFmRequest = async () => {
+      applyLastFmRecentObservation(new Map([['newer', 'Newer']]), new Map([['newer', [now / 1000 - 10]]]), { user: 'alice', observedAt: now + 1000, complete: true });
+      localStorage.setItem(LASTFM_RECENT_OBSERVATION_KEY, JSON.stringify({ user: 'alice', observedAt: now + 1000, complete: true, count: 1 }));
+      return { recenttracks: { '@attr': { totalPages: '1' }, track: [] } };
+    };
+    try { await syncLastFmSources([], { includeTags: false }); } finally { lastFmRequest = original; }
+    return loadLastFmArtistPool().map(r => ({ artist: r.artist, count: r.recentCount }));
+  });
+  assert.deepEqual(r, [{ artist: 'Newer', count: 1 }]);
+});
