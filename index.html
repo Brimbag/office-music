@@ -4879,10 +4879,10 @@ function analyzeSelectionStop(remaining, state, requestedTotal) {
 }
 
 function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidatePool()) {
-  rebuildCanonicalCleanVariantSignatures(rows);
+  rebuildCanonicalCleanVariantSignatures(rows, ctx.acquisitionVariantArtists || null);
   const stats = newRejectionStats(rows.length);
   const eligible = [];
-  const artistFeedback = feedbackArtistStats();
+  const artistFeedback = ctx.retentionFeedback?.artistStats || feedbackArtistStats();
   const seenIds = new Set();
 
   for (const row of rows) {
@@ -4897,11 +4897,11 @@ function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidate
       stats.artistIdExcluded++;
       continue;
     }
-    if (trackFeedbackValue(track) < 0) {
+    if ((ctx.retentionSnapshot ? Number(ctx.retentionSnapshot.feedback[trackSignature(track)]?.value || 0) : trackFeedbackValue(track)) < 0) {
       stats.feedbackTrack++;
       continue;
     }
-    if (looksLikeUnwantedVariant(track)) {
+    if (looksLikeUnwantedVariant(track, ctx.acquisitionVariantArtists || null)) {
       stats.unwantedVariant++;
       continue;
     }
@@ -4946,7 +4946,7 @@ function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidate
       staticInfo.maxScore >= 72 &&
       (staticInfo.likedByAny || staticInfo.seedByAny);
 
-    if (!recognizabilityPass(track) && !strongTasteDiscovery) {
+    if (!recognizabilityPass(track, ctx.retentionSnapshot) && !strongTasteDiscovery) {
       stats.recognizability++;
       continue;
     }
@@ -5270,8 +5270,18 @@ function acquisitionQualifying(item) {
   );
 }
 
+function acquisitionContext(selected, rows = loadCandidatePool()) {
+  const ctx = buildGroupRecommendationContext(selected, rows);
+  const artists = loadLastFmArtistPool(), feedback = loadFeedback();
+  ctx.retentionSnapshot = { artists, exact: new Set(loadLastFmTrackPool().map(row => trackSignatureFromParts(row.track, [row.artist]))), feedback };
+  ctx.retentionFeedback = { data: feedback, artistStats: feedbackArtistStats(feedback), hardBlocked: feedbackBlockedArtistNames() };
+  // Match the original first-row lookup even for duplicate legacy imports.
+  ctx.acquisitionVariantArtists = new Map([...artists].reverse().map(row => [normalizeArtistName(row.artist), row]));
+  return ctx;
+}
+
 function acquisitionCoverage(selected, blocklists) {
-  const ctx = buildGroupRecommendationContext(selected);
+  const ctx = acquisitionContext(selected);
   const { eligible } = eligibleGroupCandidates(selected, blocklists, ctx);
   // These are the existing normal/fallback gates, not the future PR B rule.
   const qualifying = eligible.filter(acquisitionQualifying);
@@ -5304,7 +5314,7 @@ function reuseQualifyingCache(cachedRows, acquisition) {
   const additions = [...cachedRows.values()].filter(row => !existingIds.has(row.track.id));
   if (!additions.length) return;
   const prospective = [...existing, ...additions];
-  const ctx = buildGroupRecommendationContext(acquisition.selected, prospective);
+  const ctx = acquisitionContext(acquisition.selected, prospective);
   const { eligible } = eligibleGroupCandidates(acquisition.selected, acquisition.blocklists, ctx, prospective);
   const counts = new Map([...before.byArtist].map(([artist, signatures]) => [artist, new Set(signatures)]));
   let slots = CANDIDATE_POOL_MAX_ITEMS;

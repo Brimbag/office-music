@@ -255,3 +255,17 @@ test('D po D.2: pełna pula kwalifikowalnych utworów jednego artysty nie blokuj
   });
   assert.deepEqual(r, { size: 2000, artists: 2, added: 2, calls: 0 });
 });
+test('snapshot pozyskiwania zachowuje filtry i oceny, także przy duplikatach legacy', async () => {
+  const r = await evaluate(() => {
+    const now = Date.now(), selected = [{ id: 'bartek', genres: ['rock'], artists: [], taste: { hasSurvey: true, likedGenres: ['Rock'], okGenres: [], blockedGenres: [] } }];
+    localStorage.setItem(LASTFM_ARTIST_POOL_KEY, JSON.stringify([{ artist: 'Artist', tags: ['classical'], savedAt: now }, { artist: 'Artist', tags: ['rock'], savedAt: now }]));
+    const tracks = ['Song', 'Song - Rework', 'Symphony No. 5 (Orchestra)', 'Other - 2025 Remaster'].map((name, i) => ({ id: String(i), uri: `spotify:track:${i}`, name, artists: [{ name: 'Artist' }] }));
+    saveCandidatePool(tracks.map(track => ({ track, queries: ['genre:"rock"'], savedAt: now })));
+    const blocks = generationBlocklists(selected);
+    const a = eligibleGroupCandidates(selected, blocks, buildGroupRecommendationContext(selected));
+    const b = eligibleGroupCandidates(selected, blocks, acquisitionContext(selected));
+    const summary = result => ({ stats: result.stats, rows: result.eligible.map(r => ({ id: r.track.id, base: r.groupBase, byUser: r.byUser })) });
+    return { a: summary(a), b: summary(b) };
+  });
+  assert.deepEqual(r.a, r.b);
+});
