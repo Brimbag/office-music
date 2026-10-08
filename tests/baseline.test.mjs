@@ -40,7 +40,7 @@ for (const count of [2, 4]) {
         id, artists: [], manualGenres: [], taste: { hasSurvey: true, likedGenres: ['Rock'], okGenres: [], blockedGenres: [] }
       }));
       const tracks = Array.from({ length: 18 }, (_, i) => ({
-        id: `t${i}`, uri: `spotify:track:t${i}`, name: `Song ${i}`,
+        id: `t${i}`, uri: `spotify:track:t${i}`, name: `Song ${i % 3 === 1 ? i - 1 : i}`,
         artists: [{ id: `a${Math.floor(i / 3)}`, name: `Artist ${Math.floor(i / 3)}` }], album: { name: 'Album' }
       }));
       const now = Date.now();
@@ -58,10 +58,11 @@ for (const count of [2, 4]) {
       const ordered = sequencePlaylistForListening(result.tracks);
       const counts = {};
       for (const track of ordered) for (const key of trackArtistKeys(track)) counts[key] = (counts[key] || 0) + 1;
-      return { length: ordered.length, ids: ordered.map(t => t.id), counts, satisfaction: result.satisfaction };
+      return { length: ordered.length, ids: ordered.map(t => t.id), signatures: ordered.map(trackSignature), counts, satisfaction: result.satisfaction };
     }, count);
     assert.equal(result.length, 12);
     assert.equal(new Set(result.ids).size, 12);
+    assert.equal(new Set(result.signatures).size, 12);
     assert.ok(Object.values(result.counts).every(value => value <= 2));
     assert.equal(Object.keys(result.satisfaction).length, count);
     assert.ok(Object.values(result.satisfaction).every(row => row.average >= 35));
