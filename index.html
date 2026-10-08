@@ -467,7 +467,7 @@
     </div>
 
     <p class="small">
-      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm. v38 rozszerza diagnostykę zatrzymania selekcji. v39 wykorzystuje te dane: awaryjny próg 35–43 wymaga już tylko, by żadna obecna osoba nie miała wyniku poniżej 35, a podczas końcowego fallbacku górna quota discovery jest liczona względem docelowej długości playlisty, aby krótki wynik nie blokował sam siebie. v40 blokuje w końcowym fallbacku kandydatów z mocno negatywnym feedbackiem. v41 dodał ręczną synchronizację trwałych preferencji z Cloudflare D1. v42 automatyzuje synchronizację po zalogowaniu i po zmianach, przenosi do D1 także skompaktowaną pulę kandydatów Spotify oraz warunkowo odświeża Last.fm przed generowaniem; algorytm doboru muzyki pozostaje bez zmian.
+      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm. v38 rozszerza diagnostykę zatrzymania selekcji. v39 wykorzystuje te dane: awaryjny próg 35–43 wymaga już tylko, by żadna obecna osoba nie miała wyniku poniżej 35, a podczas końcowego fallbacku górna quota discovery jest liczona względem docelowej długości playlisty, aby krótki wynik nie blokował sam siebie. v43 wyklucza we wszystkich ścieżkach utwór, gdy dowolny wykonawca ma karę feedbacku <= -40; nie tworzy trwałej blokady ani nie przenosi kary na współwykonawców. v41 dodał ręczną synchronizację trwałych preferencji z Cloudflare D1. v42 automatyzuje synchronizację po zalogowaniu i po zmianach, przenosi do D1 także skompaktowaną pulę kandydatów Spotify oraz warunkowo odświeża Last.fm przed generowaniem; algorytm doboru muzyki pozostaje bez zmian.
       Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
       Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
     </p>
@@ -880,6 +880,7 @@ const HISTORY_MAX_AGE_DAYS = 90;
 
 const FEEDBACK_KEY = "office_music_feedback_v1";
 const FEEDBACK_BLOCKED_ARTISTS_KEY = "office_music_feedback_blocked_artists_v1";
+const ARTIST_FEEDBACK_EXCLUSION_SCORE = -40;
 const SEED_ARTIST_ROTATION_KEY = "office_seed_artist_rotation_v1";
 const RMF_SHOW_ID = "2BeZqsvzZUSldlZWvjeGe3";
 const RMF_SETTINGS_KEY = "office_rmf_settings_v2";
@@ -1325,6 +1326,22 @@ function feedbackArtistTotals(data = loadFeedback()) {
   return totals;
 }
 
+function artistFeedbackScore(row = { ups: 0, downs: 0, balance: 0 }) {
+  let score = 0;
+  if (row.balance > 0) score += Math.min(90, row.balance * 18);
+  if (row.balance < 0) score += Math.max(-220, row.balance * 55);
+  if (row.downs >= 2 && row.ups === 0) score -= 140 + (row.downs - 2) * 45;
+  if (row.ups >= 2 && row.downs === 0) score += 30 + (row.ups - 2) * 12;
+  return score;
+}
+
+function hasStrongNegativeArtistFeedback(track, artistStats = feedbackArtistStats()) {
+  return (track?.artists || []).some(artist => {
+    const key = normalizeArtistName(artist?.name || "");
+    return key && artistFeedbackScore(artistStats.get(key)) <= ARTIST_FEEDBACK_EXCLUSION_SCORE;
+  });
+}
+
 function feedbackScore(track) {
   const data = loadFeedback();
   const signature = trackSignature(track);
@@ -1340,12 +1357,7 @@ function feedbackScore(track) {
     if (!key) continue;
     if (hardBlocked.has(key)) return -100000;
 
-    const row = artistStats.get(key) || { ups: 0, downs: 0, balance: 0 };
-    if (row.balance > 0) score += Math.min(90, row.balance * 18);
-    if (row.balance < 0) score += Math.max(-220, row.balance * 55);
-
-    if (row.downs >= 2 && row.ups === 0) score -= 140 + (row.downs - 2) * 45;
-    if (row.ups >= 2 && row.downs === 0) score += 30 + (row.ups - 2) * 12;
+    score += artistFeedbackScore(artistStats.get(key));
   }
   return score;
 }
@@ -3539,6 +3551,7 @@ async function collectFromQueries(
     preferredArtistNames = []
   } = options;
   const uniqueQueries = [...new Set(queries)];
+  const artistFeedback = feedbackArtistStats();
   const discovery = Number(discoveryLevel.value);
   const perSearchCap = discovery >= 60 ? 3 : 2;
 
@@ -3567,8 +3580,8 @@ async function collectFromQueries(
       if (result.length >= wanted || added >= cap) break;
       if (!track?.id || !track?.uri) continue;
       // v23: 👎 dla konkretnego utworu jest twardym wykluczeniem.
-      // Kara artysty nadal działa miękko na jego pozostałe utwory.
       if (trackFeedbackValue(track) < 0) continue;
+      if (hasStrongNegativeArtistFeedback(track, artistFeedback)) continue;
       if (looksLikeUnwantedVariant(track)) continue;
       if (recognizabilityOverride === "low" ? false : !recognizabilityPass(track)) continue;
 
@@ -4363,6 +4376,7 @@ function newRejectionStats(rawPoolCount = 0) {
     unwantedVariant: 0,
     explicitBlockedArtist: 0,
     feedbackBlockedArtist: 0,
+    strongNegativeArtistFeedback: 0,
     artistCooldown: 0,
     recentTrack: 0,
     recognizability: 0,
@@ -4451,6 +4465,7 @@ function eligibleGroupCandidates(selected, blocklists, ctx) {
   rebuildCanonicalCleanVariantSignatures(rows);
   const stats = newRejectionStats(rows.length);
   const eligible = [];
+  const artistFeedback = feedbackArtistStats();
   const seenIds = new Set();
 
   for (const row of rows) {
@@ -4479,6 +4494,10 @@ function eligibleGroupCandidates(selected, blocklists, ctx) {
     }
     if (artistNames.some(name => blocklists.feedbackBlockedNames.has(name))) {
       stats.feedbackBlockedArtist++;
+      continue;
+    }
+    if (hasStrongNegativeArtistFeedback(track, artistFeedback)) {
+      stats.strongNegativeArtistFeedback++;
       continue;
     }
     if (
@@ -4618,7 +4637,14 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     details: new Map()
   };
 
-  const remaining = [...eligible];
+  // Recheck at selection entry: cached/static candidates and direct callers
+  // must obey the same per-artist rule in every normal/fallback branch.
+  const artistFeedback = feedbackArtistStats();
+  const remaining = eligible.filter(item => {
+    if (!hasStrongNegativeArtistFeedback(item.track, artistFeedback)) return true;
+    stats.strongNegativeArtistFeedback = (stats.strongNegativeArtistFeedback || 0) + 1;
+    return false;
+  });
 
   while (state.selected.length < total && remaining.length) {
     let choices = [];
@@ -4710,8 +4736,8 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
           if (item.features.discovery && state.discoveryCount + 1 > targetDiscoveryMax) continue;
           if (item.groupBase < GROUP_FALLBACK_MIN_BASE_SCORE) continue;
           if (item.minScore < GROUP_FALLBACK_MIN_USER_SCORE) continue;
-          // v40: mocno negatywny feedback wykonawcy nie może ratować długości playlisty.
-          // Normalna ścieżka nadal może go wybrać, jeśli mimo kary ma groupBase >=44.
+          // Preserve the existing aggregate feedback guard in fallback.
+          // The per-artist exclusion already applies to every branch above.
           if (item.features.feedback <= GROUP_FALLBACK_MIN_FEEDBACK) continue;
 
           fallbackChoices.push({ index: i, item, dynamic: dynamicCandidateScore(item, state, ctx) });
@@ -5182,7 +5208,7 @@ function renderPlaylistResult(
   model.textContent =
     `Model grupowy v43: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v40 dodatkowo nie pozwala, aby końcowy fallback dobierał wykonawcę z mocną karą feedbacku (<= -40); normalna ścieżka nadal może go wybrać, jeśli mimo kary ma wystarczająco dobry wynik. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, a dopiero końcowy fallback może wykorzystać górny limit odpowiadający docelowej długości playlisty. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -5232,6 +5258,7 @@ function renderPlaylistResult(
       `Diagnostyka filtrów: pula ${r.rawPool || 0} → kwalifikowalne ${r.eligible || 0} → wybrane ${tracks.length}. ` +
       `Odrzucono: 👎 utwór ${r.feedbackTrack || 0}, wariant/live/remix ${r.unwantedVariant || 0}, ` +
       `jawnie blokowany wykonawca ${r.explicitBlockedArtist || 0}, 🚫 wykonawca z feedbacku ${r.feedbackBlockedArtist || 0}, ` +
+      `kara wykonawcy <= -40 ${r.strongNegativeArtistFeedback || 0}, ` +
       `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, ` +
       `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}, ` +
       `dobrane przez próg awaryjny ${r.fallbackSelections || 0}` +
