@@ -1,9 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { loadStateApi } from './helpers/state-api.mjs';
 
-const source = readFileSync(new URL('../functions/api/state.js', import.meta.url), 'utf8');
-const api = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const api = await loadStateApi();
 const request = (method = 'PUT', body = { state: {} }, token = 'test-only') => new Request('https://local/api/state', {
   method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   ...(method === 'GET' ? {} : { body: JSON.stringify(body) })

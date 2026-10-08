@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.10.R</title>
+  <title>Office Music Mixer v43.11.F2</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.10.R</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.11.F2</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -525,10 +525,27 @@
       <button id="clearFeedbackButton" type="button" class="secondary">Wyczyść oceny</button>
       <button id="clearBlockedFeedbackButton" type="button" class="secondary">Wyczyść blokady wykonawców</button>
     </div>
-    <div class="small">👍 premiuje utwór i wykonawcę, 👎 mocno obniża ich ranking, 🚫 blokuje głównego wykonawcę, a ▶ YT otwiera małe okno wyszukiwania YouTube. Samo pojawienie się utworu na wcześniejszej wygenerowanej playliście nie wpływa na kolejne losowanie.</div>
+    <div class="small">👍 premiuje utwór i wykonawcę, 👎 mocno obniża ich ranking, 🚫 pozwala wybrać wykonawcę i powód blokady, a ▶ YT otwiera małe okno wyszukiwania YouTube. Samo pojawienie się utworu na wcześniejszej wygenerowanej playliście nie wpływa na kolejne losowanie.</div>
   </div>
 
+<dialog id="artistExclusionDialog" aria-labelledby="artistExclusionHeading" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;max-width:520px;width:calc(100% - 40px);">
+  <h2 id="artistExclusionHeading">Dlaczego blokujesz wykonawcę?</h2>
+  <p id="artistExclusionTrack"></p>
+  <label>Wykonawca <select id="artistExclusionArtist"></select></label>
+  <p><a id="artistExclusionLink" target="_blank" rel="noopener noreferrer">Sprawdź wykonawcę na Spotify</a></p>
+  <p id="artistExclusionCurrent" class="small" aria-live="polite"></p>
+  <p class="small">Blokada dotyczy wskazanego katalogu Spotify i kolejnych generowań. Nie zmienia obecnej playlisty.</p>
+  <div class="toolbar">
+    <button id="artistExclusionDislike" type="button">Nie lubię</button>
+    <button id="artistExclusionWrong" type="button">Nie ten wykonawca</button>
+    <button id="artistExclusionRevoke" type="button" class="secondary">Odwołaj blokadę</button>
+    <button id="artistExclusionCancel" type="button" class="secondary">Anuluj</button>
+  </div>
+  <div id="artistExclusionCandidates" class="small"></div>
+  <p id="artistExclusionError" class="error" role="alert"></p>
+</dialog>
 <script src="taste-state.js"></script>
+<script src="artist-exclusions.js"></script>
 <script>
 const clientId = "d207523201ce4426923cda4cc893f76f";
 const redirectUri = "https://office-music.pages.dev/";
@@ -901,6 +918,7 @@ const STATE_EXPORT_VERSION = 1;
 const CLOUD_STATE_ENDPOINT = "/api/state";
 const CLOUD_EXACT_KEYS = [
   TASTE_STORAGE_KEY,
+  OfficeArtistExclusions.KEY,
   FEEDBACK_KEY,
   FEEDBACK_BLOCKED_ARTISTS_KEY,
   SEED_ARTIST_ROTATION_KEY,
@@ -1017,6 +1035,11 @@ function applyCloudStateWithMerge(remoteState) {
     if (!remoteHas) continue;
     const cloudValue = remote[key];
 
+    if (key === OfficeArtistExclusions.KEY) {
+      saveArtistExclusions(OfficeArtistExclusions.merge(localStorage.getItem(key), cloudValue));
+      applied++;
+      continue;
+    }
     if (key === "office_candidate_pool_v1") {
       const merged = mergedCandidatePool(localStorage.getItem(key), cloudValue);
       if (merged.length) localStorage.setItem(key, JSON.stringify(merged));
@@ -1080,23 +1103,35 @@ async function cloudApiRequest(token, options = {}) {
   });
   const data = await parseJsonSafely(response);
   if (!response.ok) {
-    throw new Error(data?.error || `Cloudflare D1 HTTP ${response.status}`);
+    const error = new Error(data?.error || `Cloudflare D1 HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
 
 async function uploadCloudStateIfChanged(token, { force = false, status = true } = {}) {
-  const state = durableLocalStateForCloud();
-  const fingerprint = cloudStateFingerprint(state);
-  if (!force && fingerprint === lastCloudFingerprint) return { saved: 0, skipped: true };
-
+  if (!force && cloudStateFingerprint() === lastCloudFingerprint) return { saved: 0, skipped: true };
   if (status) setCloudStatus("zapisuję…");
-  const result = await cloudApiRequest(token, {
-    method: "PUT",
-    body: JSON.stringify({ state })
-  });
+  let result, state, fingerprint;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let base;
+    if (localStorage.getItem(OfficeArtistExclusions.KEY) !== null) {
+      const remote = await cloudApiRequest(token, { method: "GET" });
+      base = remote?.state?.[OfficeArtistExclusions.KEY] ?? null;
+      saveArtistExclusions(OfficeArtistExclusions.merge(localStorage.getItem(OfficeArtistExclusions.KEY), base));
+    }
+    state = durableLocalStateForCloud();
+    fingerprint = cloudStateFingerprint(state);
+    if (state[OfficeArtistExclusions.KEY] === null) delete state[OfficeArtistExclusions.KEY];
+    const body = JSON.stringify({ state, artistExclusionsBase: base });
+    if (new TextEncoder().encode(body).byteLength > 2 * 1024 * 1024) throw new Error("Stan przekracza limit synchronizacji 2 MiB; dane lokalne zachowano.");
+    try { result = await cloudApiRequest(token, { method: "PUT", body }); break; }
+    catch (err) { if (err.status !== 409 || attempt === 2) throw err; }
+  }
   lastCloudFingerprint = fingerprint;
   saveCloudShadow(state);
+  refreshArtistExclusionUi();
   const poolCount = candidatePoolSize();
   if (status) setCloudStatus(`zsynchronizowano ${result?.saved ?? Object.keys(state).length} kluczy · pula Spotify ${poolCount}`, "ok");
   return result;
@@ -1171,8 +1206,6 @@ async function autoSyncCloudState(token) {
     // Po scaleniu wysyłamy stan z powrotem. Dzięki temu istniejąca chmura v41
     // dostanie od razu nowy klucz z pulą Spotify, a brakujące lokalne dane nie zginą.
     const uploadResult = await uploadCloudStateIfChanged(token, { force: true, status: false });
-    lastCloudFingerprint = cloudStateFingerprint();
-    saveCloudShadow(durableLocalStateForCloud());
     cloudAutoSyncReady = true;
     setCloudStatus(`zsynchronizowano ${uploadResult?.saved ?? cloudStateKeys().length} kluczy · pula Spotify ${candidatePoolSize()}`, "ok");
   } catch (err) {
@@ -1199,7 +1232,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.10.R",
+      source: "Office Music Mixer v43.11.F2",
       storage: exportedStorageState()
     };
 
@@ -1248,7 +1281,7 @@ async function importLocalStateFromFile(event) {
     }
 
     const confirmed = window.confirm(
-      `Import zastąpi obecną lokalną bazę danymi z pliku (${entries.length} wpisów). Logowanie Spotify pozostanie bez zmian. Kontynuować?`
+      `Import zastąpi obecną lokalną bazę danymi z pliku (${entries.length} wpisów). Nowe blokady wykonawców zostaną scalone, aby stara kopia nie odtworzyła odwołanych decyzji. Logowanie Spotify pozostanie bez zmian. Kontynuować?`
     );
     if (!confirmed) return;
 
@@ -1257,8 +1290,20 @@ async function importLocalStateFromFile(event) {
       const key = localStorage.key(i);
       if (key?.startsWith(APP_STORAGE_PREFIX)) appKeys.push(key);
     }
-    for (const key of appKeys) localStorage.removeItem(key);
-    for (const [key, value] of entries) localStorage.setItem(key, value);
+    const before = exportedStorageState(), incoming = Object.fromEntries(entries);
+    const archivedIdentityKey = 'office_artist_identity_v2';
+    if (before[archivedIdentityKey] !== undefined && incoming[archivedIdentityKey] === undefined) incoming[archivedIdentityKey] = before[archivedIdentityKey];
+    if (before[OfficeArtistExclusions.KEY] !== undefined || incoming[OfficeArtistExclusions.KEY] !== undefined) {
+      incoming[OfficeArtistExclusions.KEY] = JSON.stringify(OfficeArtistExclusions.merge(before[OfficeArtistExclusions.KEY], incoming[OfficeArtistExclusions.KEY]));
+    }
+    try {
+      for (const key of appKeys) localStorage.removeItem(key);
+      for (const [key, value] of Object.entries(incoming)) localStorage.setItem(key, value);
+    } catch (err) {
+      for (const key of Object.keys(incoming)) localStorage.removeItem(key);
+      for (const [key, value] of Object.entries(before)) localStorage.setItem(key, value);
+      throw err;
+    }
 
     window.alert(`Zaimportowano ${entries.length} wpisów. Strona zostanie odświeżona.`);
     window.location.reload();
@@ -1269,6 +1314,117 @@ async function importLocalStateFromFile(event) {
 }
 
 
+
+let artistExclusionCacheRaw, artistExclusionCacheState;
+function loadArtistExclusions() {
+  const raw = localStorage.getItem(OfficeArtistExclusions.KEY);
+  if (raw !== artistExclusionCacheRaw || !artistExclusionCacheState) {
+    artistExclusionCacheState = OfficeArtistExclusions.parse(raw);
+    artistExclusionCacheRaw = raw;
+  }
+  return artistExclusionCacheState;
+}
+function saveArtistExclusions(state) {
+  const raw = JSON.stringify(OfficeArtistExclusions.merge(state, null));
+  if (new TextEncoder().encode(JSON.stringify(raw)).byteLength > 1536 * 1024) throw new Error("Blokady przekraczają limit zapisu; wyeksportuj bazę.");
+  localStorage.setItem(OfficeArtistExclusions.KEY, raw);
+}
+function artistExclusionStatus(id) {
+  return OfficeArtistExclusions.status(loadArtistExclusions(), id || "");
+}
+function trackHasArtistExclusion(track) {
+  const state = loadArtistExclusions();
+  return (track?.artists || []).some(a => a?.id && OfficeArtistExclusions.status(state, a.id).blocked);
+}
+function setArtistExclusion(track, artistId, reason) {
+  const artist = (track?.artists || []).find(a => a?.id === artistId);
+  if (!artist || !OfficeArtistExclusions.validId(artistId)) throw new Error("Brakuje poprawnego Spotify Artist ID wskazanego wykonawcy.");
+  if (reason !== null && !['dislike', 'wrong_artist'].includes(reason)) throw new Error("Nieprawidłowy powód blokady.");
+  const value = reason === null ? null : {
+    artistId, name: artist.name || "", reason,
+    trackId: track.id || "", trackName: track.name || "",
+    artists: track.artists.map(a => ({ id: a?.id || "", name: a?.name || "" })),
+    source: "playlist_block", updatedAt: new Date().toISOString()
+  };
+  saveArtistExclusions(OfficeArtistExclusions.decide(loadArtistExclusions(), artistId, value));
+  scheduleAutomaticCloudSync();
+  refreshArtistExclusionUi();
+}
+function artistExclusionReasonText(status) {
+  const reasons = [...new Set(status.entries.map(e => e.reason === 'wrong_artist' ? 'nie ten wykonawca' : 'nie lubię'))];
+  return status.conflict ? `konflikt decyzji (${reasons.join(' / ')}); blokada aktywna do rozstrzygnięcia` : reasons.join(' / ');
+}
+function refreshArtistExclusionUi() {
+  renderFeedbackSummary();
+  for (const row of document.querySelectorAll('[data-artist-exclusion-row]')) row.refreshArtistExclusion?.();
+  if (document.getElementById('artistExclusionDialog').open) refreshArtistExclusionDialog();
+}
+function cachedArtistCatalogAlternatives(name, excludedId) {
+  const tracks = [...loadCandidatePool().map(row => row.track), ...loadRecentPlaylists().flatMap(row => row.tracks || [])];
+  const candidates = new Map();
+  for (const track of tracks) for (const artist of track.artists || []) {
+    if (!OfficeArtistExclusions.validId(artist?.id) || artist.id === excludedId || normalizeArtistName(artist.name) !== normalizeArtistName(name)) continue;
+    if (!candidates.has(artist.id)) candidates.set(artist.id, { id: artist.id, name: artist.name, track: track.name || "" });
+  }
+  return [...candidates.values()];
+}
+let artistExclusionDialogTrack = null;
+function openArtistExclusionDialog(track) {
+  const dialog = document.getElementById('artistExclusionDialog');
+  const select = document.getElementById('artistExclusionArtist');
+  artistExclusionDialogTrack = track;
+  select.replaceChildren();
+  const seen = new Set();
+  for (const artist of track?.artists || []) {
+    if (!OfficeArtistExclusions.validId(artist?.id) || seen.has(artist.id)) continue;
+    seen.add(artist.id);
+    select.add(new Option(`${artist.name || 'Wykonawca'} [${artist.id}]`, artist.id));
+  }
+  document.getElementById('artistExclusionTrack').textContent = track?.name || "";
+  document.getElementById('artistExclusionError').textContent = "";
+  document.getElementById('artistExclusionCancel').textContent = 'Anuluj';
+  refreshArtistExclusionDialog();
+  if (!dialog.open) dialog.showModal();
+}
+function refreshArtistExclusionDialog() {
+  const id = document.getElementById('artistExclusionArtist').value;
+  const artist = artistExclusionDialogTrack?.artists?.find(a => a.id === id);
+  const link = document.getElementById('artistExclusionLink');
+  link.hidden = !artist;
+  if (artist) link.href = `https://open.spotify.com/artist/${encodeURIComponent(id)}`;
+  const current = document.getElementById('artistExclusionCurrent');
+  const candidates = document.getElementById('artistExclusionCandidates');
+  candidates.replaceChildren();
+  let status;
+  try { status = artistExclusionStatus(id); }
+  catch (err) { document.getElementById('artistExclusionError').textContent = err.message; }
+  const ready = Boolean(artist && status);
+  document.getElementById('artistExclusionDislike').disabled = !ready;
+  document.getElementById('artistExclusionWrong').disabled = !ready;
+  document.getElementById('artistExclusionRevoke').disabled = !ready || !status.blocked;
+  current.textContent = !artist ? 'Brakuje Spotify Artist ID — nie zapisujemy blokady po samej nazwie.' : status?.blocked ? `Obecna blokada: ${artistExclusionReasonText(status)}.` : 'Brak blokady tego katalogu Spotify.';
+  if (artist && loadFeedbackBlockedArtists()[normalizeArtistName(artist.name)]) current.textContent += ' Istnieje również dawna blokada nazwy; odwołanie blokady ID jej nie usuwa.';
+  if (status?.entries.some(e => e.reason === 'wrong_artist')) {
+    const alternatives = cachedArtistCatalogAlternatives(artist.name, id);
+    const explanation = document.createElement('p');
+    explanation.textContent = alternatives.length ? 'Inne katalogi o tej nazwie z lokalnej bazy — wymagają sprawdzenia, nie są automatycznie dopasowane:' : 'Brak innego katalogu w lokalnej bazie. Zgłoszony ID pozostaje zablokowany. Automatyczne dopasowanie nie zostało wykonane.';
+    candidates.append(explanation);
+    for (const option of alternatives) {
+      const p = document.createElement('p'), a = document.createElement('a');
+      a.href = `https://open.spotify.com/artist/${encodeURIComponent(option.id)}`;
+      a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.textContent = `${option.name} [${option.id}] · np. ${option.track}`;
+      p.append(a); candidates.append(p);
+    }
+  }
+}
+function submitArtistExclusion(reason) {
+  try {
+    setArtistExclusion(artistExclusionDialogTrack, document.getElementById('artistExclusionArtist').value, reason);
+    if (reason === 'wrong_artist') document.getElementById('artistExclusionCancel').textContent = 'Zamknij';
+    else document.getElementById('artistExclusionDialog').close();
+  } catch (err) { document.getElementById('artistExclusionError').textContent = err.message; }
+}
 
 function loadFeedback() {
   try {
@@ -1488,30 +1644,14 @@ function setTrackFeedback(track, value) {
   saveFeedback(data);
 }
 
-function togglePrimaryArtistBlock(track) {
-  const primary = track?.artists?.[0];
-  const key = normalizeArtistName(primary?.name || "");
-  if (!key) return false;
-  const data = loadFeedbackBlockedArtists();
-  if (data[key]) {
-    delete data[key];
-  } else {
-    data[key] = {
-      name: primary.name || key,
-      blockedAt: new Date().toISOString(),
-      source: "playlist_feedback"
-    };
-  }
-  saveFeedbackBlockedArtists(data);
-  return Boolean(data[key]);
-}
-
 function renderFeedbackSummary() {
   if (!feedbackSummary) return;
   const entries = Object.values(loadFeedback());
   const ups = entries.filter(x => Number(x?.value) > 0).length;
   const downs = entries.filter(x => Number(x?.value) < 0).length;
-  const blocked = Object.keys(loadFeedbackBlockedArtists()).length;
+  let blocked;
+  try { blocked = Object.keys(loadFeedbackBlockedArtists()).length + Object.keys(loadArtistExclusions().artists).filter(id => artistExclusionStatus(id).blocked).length; }
+  catch (err) { feedbackSummary.textContent = err.message; return; }
   feedbackSummary.textContent = `Preferencje z feedbacku: ${ups} 👍 / ${downs} 👎 / ${blocked} 🚫 wykonawców`;
 }
 
@@ -1526,8 +1666,14 @@ function clearFeedback() {
 
 function clearFeedbackArtistBlocks() {
   if (!confirm("Wyczyścić wszystkie blokady wykonawców dodane przyciskiem 🚫?")) return;
+  try {
+    let state = loadArtistExclusions();
+    for (const id of Object.keys(state.artists)) state = OfficeArtistExclusions.decide(state, id, null);
+    saveArtistExclusions(state);
+  } catch (err) { alert(err.message); return; }
   localStorage.removeItem(FEEDBACK_BLOCKED_ARTISTS_KEY);
-  renderFeedbackSummary();
+  scheduleAutomaticCloudSync();
+  refreshArtistExclusionUi();
   document.querySelectorAll(".vote-btn").forEach(btn => btn.classList.remove("active-block"));
 }
 
@@ -3612,7 +3758,7 @@ async function collectFromQueries(
       if (!track?.id || !track?.uri) continue;
       // v23: 👎 dla konkretnego utworu jest twardym wykluczeniem.
       if (trackFeedbackValue(track) < 0) continue;
-      if (hasStrongNegativeArtistFeedback(track, artistFeedback)) continue;
+      if (hasStrongNegativeArtistFeedback(track, artistFeedback) || trackHasArtistExclusion(track)) continue;
       if (looksLikeUnwantedVariant(track)) continue;
       if (recognizabilityOverride === "low" ? false : !recognizabilityPass(track)) continue;
 
@@ -4407,6 +4553,7 @@ function newRejectionStats(rawPoolCount = 0) {
     unwantedVariant: 0,
     explicitBlockedArtist: 0,
     feedbackBlockedArtist: 0,
+    artistIdExcluded: 0,
     strongNegativeArtistFeedback: 0,
     artistCooldown: 0,
     recentTrack: 0,
@@ -4507,6 +4654,10 @@ function eligibleGroupCandidates(selected, blocklists, ctx) {
     }
     seenIds.add(track.id);
 
+    if (trackHasArtistExclusion(track)) {
+      stats.artistIdExcluded++;
+      continue;
+    }
     if (trackFeedbackValue(track) < 0) {
       stats.feedbackTrack++;
       continue;
@@ -4672,6 +4823,7 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
   // must obey the same per-artist rule in every normal/fallback branch.
   const artistFeedback = feedbackArtistStats();
   const remaining = eligible.filter(item => {
+    if (trackHasArtistExclusion(item.track)) { stats.artistIdExcluded = (stats.artistIdExcluded || 0) + 1; return false; }
     if (!hasStrongNegativeArtistFeedback(item.track, artistFeedback)) return true;
     stats.strongNegativeArtistFeedback = (stats.strongNegativeArtistFeedback || 0) + 1;
     return false;
@@ -5126,13 +5278,16 @@ function buildRatedTrackList(tracks, diagnosticProvider) {
     const li = document.createElement("li");
     const row = document.createElement("div");
     row.className = "track-row";
+    row.dataset.artistExclusionRow = "";
     const label = document.createElement("span");
     const titleLine = document.createElement("span");
     titleLine.textContent = `${(track.artists || []).map(a => a.name).join(", ")} - ${track.name}`;
     const meta = document.createElement("span");
     meta.className = "track-meta";
     meta.textContent = diagnosticProvider ? (diagnosticProvider(track) || "") : (track.diagnostic || "");
-    label.append(titleLine, meta);
+    const exclusionNote = document.createElement("span");
+    exclusionNote.className = "track-meta";
+    label.append(titleLine, meta, exclusionNote);
 
     const votes = document.createElement("span");
     votes.className = "track-votes";
@@ -5151,8 +5306,7 @@ function buildRatedTrackList(tracks, diagnosticProvider) {
     const block = document.createElement("button");
     block.type = "button";
     block.textContent = "🚫";
-    const primaryArtistName = track?.artists?.[0]?.name || "wykonawca";
-    block.title = `Zablokuj/odblokuj głównego wykonawcę: ${primaryArtistName}`;
+    block.title = "Wybierz wykonawcę i powód blokady albo odwołaj blokadę";
     const yt = document.createElement("button");
     yt.type = "button";
     yt.textContent = "▶ YT";
@@ -5166,11 +5320,16 @@ function buildRatedTrackList(tracks, diagnosticProvider) {
       up.classList.toggle("active-up", value > 0);
       down.classList.toggle("active-down", value < 0);
       const primaryKey = normalizeArtistName(track?.artists?.[0]?.name || "");
-      block.className = `vote-btn${loadFeedbackBlockedArtists()[primaryKey] ? " active-block" : ""}`;
+      try {
+        const exclusions = (track.artists || []).filter(a => artistExclusionStatus(a.id).blocked);
+        block.className = `vote-btn${exclusions.length || loadFeedbackBlockedArtists()[primaryKey] ? " active-block" : ""}`;
+        exclusionNote.textContent = exclusions.map(a => `${a.name}: ${artistExclusionReasonText(artistExclusionStatus(a.id))}`).join(" · ");
+      } catch (err) { exclusionNote.textContent = err.message; }
     };
     up.addEventListener("click", () => { setTrackFeedback(track, 1); refreshButtons(); });
     down.addEventListener("click", () => { setTrackFeedback(track, -1); refreshButtons(); });
-    block.addEventListener("click", () => { togglePrimaryArtistBlock(track); refreshButtons(); });
+    row.refreshArtistExclusion = refreshButtons;
+    block.addEventListener("click", () => openArtistExclusionDialog(track));
     refreshButtons();
     votes.append(up, down, block, yt);
     row.append(label, votes);
@@ -5237,7 +5396,7 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.10.R: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.11.F2: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
     `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
@@ -5289,7 +5448,7 @@ function renderPlaylistResult(
       `Diagnostyka filtrów: pula ${r.rawPool || 0} → kwalifikowalne ${r.eligible || 0} → wybrane ${tracks.length}. ` +
       `Odrzucono: 👎 utwór ${r.feedbackTrack || 0}, wariant/live/remix ${r.unwantedVariant || 0}, ` +
       `jawnie blokowany wykonawca ${r.explicitBlockedArtist || 0}, 🚫 wykonawca z feedbacku ${r.feedbackBlockedArtist || 0}, ` +
-      `kara wykonawcy <= -40 ${r.strongNegativeArtistFeedback || 0}, ` +
+      `blokada konkretnego Spotify wykonawcy ${r.artistIdExcluded || 0}, kara wykonawcy <= -40 ${r.strongNegativeArtistFeedback || 0}, ` +
       `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, ` +
       `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}, ` +
       `dobrane przez próg awaryjny ${r.fallbackSelections || 0}` +
@@ -5431,6 +5590,12 @@ migrateStorageV34();
 purgeExpiredCaches();
 loadRmfSettings();
 renderFeedbackSummary();
+document.getElementById('artistExclusionArtist').addEventListener('change', refreshArtistExclusionDialog);
+document.getElementById('artistExclusionDislike').addEventListener('click', () => submitArtistExclusion('dislike'));
+document.getElementById('artistExclusionWrong').addEventListener('click', () => submitArtistExclusion('wrong_artist'));
+document.getElementById('artistExclusionRevoke').addEventListener('click', () => submitArtistExclusion(null));
+document.getElementById('artistExclusionCancel').addEventListener('click', () => document.getElementById('artistExclusionDialog').close());
+document.getElementById('artistExclusionDialog').addEventListener('close', () => { artistExclusionDialogTrack = null; });
 renderRmfDiagnostics();
 updateRmfStatus();
 restoreMostRecentPlaylist();

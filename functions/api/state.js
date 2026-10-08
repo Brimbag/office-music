@@ -1,5 +1,9 @@
+import "../../artist-exclusions.js";
+
+const EXCLUSIONS_KEY = OfficeArtistExclusions.KEY;
 // Keep this allowlist aligned with cloudStateKeys() in index.html.
 const STATE_KEYS = new Set([
+  EXCLUSIONS_KEY,
   "office_taste_profile_v1", "office_music_feedback_v1",
   "office_music_feedback_blocked_artists_v1", "office_seed_artist_rotation_v1",
   "office_rmf_settings_v2", "office_recent_playlists_v1", "office_lastfm_user_v1",
@@ -133,15 +137,31 @@ export async function onRequestPut(context) {
     serialized.push([key, valueJson]);
   }
 
+  const exclusionsPresent = Object.hasOwn(body.state, EXCLUSIONS_KEY);
+  if (exclusionsPresent) {
+    if (!Object.hasOwn(body, 'artistExclusionsBase') || (body.artistExclusionsBase !== null && typeof body.artistExclusionsBase !== 'string')) return errorResponse('Artist exclusions require a synchronization base', 400);
+    try {
+      if (typeof body.state[EXCLUSIONS_KEY] !== 'string') throw new Error();
+      OfficeArtistExclusions.parse(body.state[EXCLUSIONS_KEY]);
+    } catch { return errorResponse('Invalid artist exclusions', 400); }
+  }
   const now = new Date().toISOString();
   try {
+    if (exclusionsPresent) {
+      const rows = await context.env.DB.prepare(`SELECT state_key, value_json FROM app_state WHERE account_id = ?`).bind(auth.accountId).all();
+      const current = (rows.results || []).find(row => row.state_key === EXCLUSIONS_KEY);
+      if ((current && current.value_json !== JSON.stringify(body.artistExclusionsBase)) || (!current && body.artistExclusionsBase !== null)) return errorResponse('Artist exclusions changed; merge and retry', 409);
+    }
     const statements = serialized.map(([key, valueJson]) => context.env.DB.prepare(`
       INSERT INTO app_state (account_id, state_key, value_json, updated_at)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(account_id, state_key)
       DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-    `).bind(auth.accountId, key, valueJson, now));
-    if (statements.length) await context.env.DB.batch(statements);
+      ${key === EXCLUSIONS_KEY ? 'WHERE app_state.value_json IS ?' : ''}
+    `).bind(auth.accountId, key, valueJson, now, ...(key === EXCLUSIONS_KEY ? [JSON.stringify(body.artistExclusionsBase)] : [])));
+    const results = statements.length ? await context.env.DB.batch(statements) : [];
+    const exclusionIndex = serialized.findIndex(([key]) => key === EXCLUSIONS_KEY);
+    if (exclusionIndex >= 0 && results[exclusionIndex]?.meta?.changes !== 1) return errorResponse('Artist exclusions changed; merge and retry', 409);
     return Response.json({ ok: true, saved: statements.length, updated_at: now });
   } catch { return errorResponse("State database unavailable", 503); }
 }
