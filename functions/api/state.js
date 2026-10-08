@@ -1,7 +1,5 @@
 // Keep this allowlist aligned with cloudStateKeys() in index.html.
-const IDENTITY_KEY = "office_artist_identity_v2";
 const STATE_KEYS = new Set([
-  IDENTITY_KEY,
   "office_taste_profile_v1", "office_music_feedback_v1",
   "office_music_feedback_blocked_artists_v1", "office_seed_artist_rotation_v1",
   "office_rmf_settings_v2", "office_recent_playlists_v1", "office_lastfm_user_v1",
@@ -135,43 +133,15 @@ export async function onRequestPut(context) {
     serialized.push([key, valueJson]);
   }
 
-  const identityPresent = Object.hasOwn(body.state, IDENTITY_KEY);
-  if (identityPresent) {
-    if (!Object.hasOwn(body, "identityBase") || (body.identityBase !== null && typeof body.identityBase !== "string")) {
-      return errorResponse("Identity state requires a synchronization base", 400);
-    }
-    try {
-      const value = JSON.parse(body.state[IDENTITY_KEY]);
-      if (typeof body.state[IDENTITY_KEY] !== "string" || value.version !== 2 || !value.cells || typeof value.cells !== "object" || Array.isArray(value.cells)) throw new Error();
-      for (const events of Object.values(value.cells)) {
-        if (!Array.isArray(events) || events.some(e => !e || typeof e.id !== "string" || !Array.isArray(e.parents) || e.parents.some(p => typeof p !== "string") || !Object.hasOwn(e, "value"))) throw new Error();
-      }
-    } catch { return errorResponse("Invalid artist identity state", 400); }
-  }
   const now = new Date().toISOString();
   try {
-    // Optimistic concurrency only for the additive identity journal. Old clients
-    // omit this key and cannot erase it. The SQL predicate closes the GET/PUT race.
-    if (identityPresent) {
-      const rows = await context.env.DB.prepare(`SELECT state_key, value_json FROM app_state WHERE account_id = ?`).bind(auth.accountId).all();
-      const current = (rows.results || []).find(row => row.state_key === IDENTITY_KEY);
-      const expected = JSON.stringify(body.identityBase);
-      if (current && current.value_json !== expected || !current && body.identityBase !== null) return errorResponse("Artist identity state changed; merge and retry", 409);
-    }
-    const statements = serialized.map(([key, valueJson]) => {
-      const conditional = key === IDENTITY_KEY;
-      const statement = context.env.DB.prepare(`
-        INSERT INTO app_state (account_id, state_key, value_json, updated_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(account_id, state_key)
-        DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        ${conditional ? "WHERE app_state.value_json IS ?" : ""}
-      `);
-      return statement.bind(auth.accountId, key, valueJson, now, ...(conditional ? [JSON.stringify(body.identityBase)] : []));
-    });
-    const results = statements.length ? await context.env.DB.batch(statements) : [];
-    const identityIndex = serialized.findIndex(([key]) => key === IDENTITY_KEY);
-    if (identityIndex >= 0 && results[identityIndex]?.meta?.changes !== 1) return errorResponse("Artist identity state changed; merge and retry", 409);
+    const statements = serialized.map(([key, valueJson]) => context.env.DB.prepare(`
+      INSERT INTO app_state (account_id, state_key, value_json, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(account_id, state_key)
+      DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+    `).bind(auth.accountId, key, valueJson, now));
+    if (statements.length) await context.env.DB.batch(statements);
     return Response.json({ ok: true, saved: statements.length, updated_at: now });
   } catch { return errorResponse("State database unavailable", 503); }
 }

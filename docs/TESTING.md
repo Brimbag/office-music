@@ -2,7 +2,7 @@
 
 Frontend nadal działa jako statyczny HTML, bez procesu build. package.json służy wyłącznie testom.
 
-Wymagania: Node >=22.13 (CI: Node 24; testy SQL używają wbudowanego `node:sqlite`), Chromium. Instalacja: `npm ci`, następnie `npx playwright-core install --with-deps chromium`. Uruchomienie: `npm test`.
+Wymagania: Node >=22, Chromium. Instalacja: `npm ci`, następnie `npx playwright-core install --with-deps chromium`. Uruchomienie: `npm test`.
 Można wskazać własny Chromium przez `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`; testy automatycznie wykrywają `/usr/bin/chromium`.
 
 Testy uruchamiają prawdziwe skrypty stron na tymczasowym lokalnym serwerze. Każdy przypadek ma osobny kontekst przeglądarki; dostęp do zewnętrznych usług jest blokowany. Spotify i Last.fm są symulowane, żadne produkcyjne tokeny ani D1 nie są używane.

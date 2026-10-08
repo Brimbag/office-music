@@ -3,5 +3,5 @@
   "private": true,
   "scripts": { "test": "node --test tests/*.test.mjs" },
   "devDependencies": { "playwright-core": "1.64.0" },
-  "engines": { "node": ">=22.13" }
+  "engines": { "node": ">=22" }
 }
