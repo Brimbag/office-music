@@ -79,11 +79,12 @@ test('historia blokuje odsłuchania, nie samo wygenerowanie', () => withPage(asy
   assert.deepEqual(result, { tracks: ['heard'], artists: ['artist'] });
 }));
 
-test('v42: silny feedback blokuje fallback, normalna ścieżka nadal dopuszcza', () => withPage(async page => {
+test('v43 A: kara wykonawcy blokuje normalną selekcję i fallback', () => withPage(async page => {
   const result = await page.evaluate(() => {
     const ctx = buildGroupRecommendationContext([{ id: 'bartek', artists: [], taste: {} }]);
     const track = { id: 'one', uri: 'spotify:track:one', name: 'One', artists: [{ name: 'Artist' }] };
     const item = groupCandidateStatic(track, ctx);
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify({ 'other|artist': { value: -1, artists: ['artist'] } }));
     item.features.feedback = -55;
     item.groupBase = 60;
     item.minScore = 60;
@@ -92,7 +93,7 @@ test('v42: silny feedback blokuje fallback, normalna ścieżka nadal dopuszcza',
     const fallback = selectGroupPlaylist([item], 1, ctx, newRejectionStats(1));
     return { normal: normal.tracks.length, fallback: fallback.tracks.length };
   });
-  assert.deepEqual(result, { normal: 1, fallback: 0 });
+  assert.deepEqual(result, { normal: 0, fallback: 0 });
 }));
 
 test('v42: fallback discovery używa zamówionej długości', () => withPage(async page => {
