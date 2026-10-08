@@ -135,6 +135,7 @@
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+<script src="taste-state.js"></script>
 <script>
 (() => {
   const STORAGE_KEY = 'office_taste_profile_v1';
@@ -259,7 +260,7 @@
       ['soul-blues','Soul Blues',['Bobby Bland','Little Milton','ZZ Hill','Denise LaSalle']]
     ]},
     {id:'folk',label:'Folk / Singer-Songwriter',examples:['Bob Dylan','Joni Mitchell','Stare Dobre Małżeństwo','Nick Drake'],children:[
-      ['folk','Folk',['Bob Dylan','Joan Baez','Pete Seeger','Simon & Garfunkel']],
+      ['folk-general','Folk',['Bob Dylan','Joan Baez','Pete Seeger','Simon & Garfunkel']],
       ['folk-rock','Folk Rock',['The Byrds','Crosby, Stills & Nash','Fairport Convention','Mumford & Sons']],
       ['contemporary-folk','Contemporary Folk',['Iron & Wine','The Tallest Man on Earth','Laura Marling','José González']],
       ['singer-songwriter','Singer-Songwriter',['Joni Mitchell','Leonard Cohen','Nick Drake','Carole King']],
@@ -278,7 +279,7 @@
       ['outlaw-country','Outlaw Country',['Willie Nelson','Waylon Jennings','Johnny Cash','Merle Haggard']]
     ]},
     {id:'reggae',label:'Reggae / Ska / Caribbean',examples:['Bob Marley','Toots & The Maytals','The Specials','Lee “Scratch” Perry'],children:[
-      ['reggae','Reggae',['Bob Marley & The Wailers','Peter Tosh','Jimmy Cliff','Burning Spear']],
+      ['reggae-general','Reggae',['Bob Marley & The Wailers','Peter Tosh','Jimmy Cliff','Burning Spear']],
       ['roots-reggae','Roots Reggae',['Culture','Black Uhuru','The Abyssinians','Israel Vibration']],
       ['dub','Dub',['Lee “Scratch” Perry','King Tubby','Scientist','Augustus Pablo']],
       ['ska','Ska',['The Skatalites','The Specials','Madness','The Selecter']],
@@ -301,7 +302,7 @@
       ['throat-singing','Mongolian / Tuvan Throat Singing',['The HU','Huun-Huur-Tu','Alash Ensemble','Batzorig Vaanchig']]
     ]},
     {id:'classical',label:'Classical / Soundtrack / Instrumental',examples:['Ludwig van Beethoven','Hans Zimmer','Max Richter','Joe Hisaishi'],children:[
-      ['classical','Classical',['Ludwig van Beethoven','Wolfgang Amadeus Mozart','Johann Sebastian Bach','Frédéric Chopin']],
+      ['classical-general','Classical',['Ludwig van Beethoven','Wolfgang Amadeus Mozart','Johann Sebastian Bach','Frédéric Chopin']],
       ['contemporary-classical','Contemporary Classical',['Max Richter','Ólafur Arnalds','Nils Frahm','Caroline Shaw']],
       ['minimalism','Minimalism',['Philip Glass','Steve Reich','Terry Riley','John Adams']],
       ['film-score','Film Score',['Hans Zimmer','John Williams','Ennio Morricone','Howard Shore']],
@@ -324,13 +325,19 @@
   let expanded = new Set();
   let selectedPerson = null;
 
-  function blankDb(){ return {version:1,updatedAt:null,people:Object.fromEntries(PEOPLE.map(p=>[p,{genres:{}}]))}; }
+  function blankDb(){ return {version:1,taxonomyVersion:2,updatedAt:null,people:Object.fromEntries(PEOPLE.map(p=>[p,{genres:{}}]))}; }
   function load(){
     try{
       const x = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
       if(!x || x.version!==1 || !x.people) return blankDb();
       for(const p of PEOPLE) if(!x.people[p]) x.people[p]={genres:{}};
-      return x;
+      const upgraded = upgradeTasteProfileDb(x);
+      if(upgraded.changed){
+        // A full storage must not turn a readable existing survey into an empty one.
+        try{localStorage.setItem(STORAGE_KEY, JSON.stringify(upgraded.db));}
+        catch{console.warn('Brak miejsca na zapis migracji ankiety; oceny pozostają dostępne.');}
+      }
+      return upgraded.db;
     }catch{return blankDb();}
   }
   function save(){
