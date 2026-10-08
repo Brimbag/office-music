@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.11.F2</title>
+  <title>Office Music Mixer v43.12.F3</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.11.F2</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.12.F3</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -397,6 +397,14 @@
         </div>
       </div>
       <div id="lastFmStatus" class="small"></div>
+      <details>
+        <summary>Porównanie wykonawców Spotify–Last.fm</summary>
+        <p class="small">Porównanie całej lokalnej bazy po utworach i albumach. Wyniki są wskazówkami do sprawdzenia; nie zmieniają playlist, ocen ani powiązań wykonawców.</p>
+        <button id="catalogEvidenceButton" type="button" class="secondary">Porównaj lokalną bazę</button>
+        <label class="small">Filtruj wyniki po nazwie <input id="catalogEvidenceFilter" type="search" maxlength="200" placeholder="np. Days of the New"></label>
+        <p id="catalogEvidenceSummary" class="small" role="status"></p>
+        <div id="catalogEvidenceRows"></div>
+      </details>
       <p class="small lastfm-note">
         Last.fm służy jako dodatkowa baza wykonawców dla wybranych gatunków. Historia Last.fm z ostatnich 14 dni jest głównym źródłem faktycznych odsłuchań do blokad anty-powtórkowych. Starsze scrobble są ignorowane.
         Dane rekomendacyjne: <a href="https://www.last.fm/" target="_blank" rel="noopener noreferrer">Last.fm</a>.
@@ -546,6 +554,7 @@
 </dialog>
 <script src="taste-state.js"></script>
 <script src="artist-exclusions.js"></script>
+<script src="artist-catalog-evidence.js"></script>
 <script>
 const clientId = "d207523201ce4426923cda4cc893f76f";
 const redirectUri = "https://office-music.pages.dev/";
@@ -1232,7 +1241,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.11.F2",
+      source: "Office Music Mixer v43.12.F3",
       storage: exportedStorageState()
     };
 
@@ -1369,6 +1378,77 @@ function cachedArtistCatalogAlternatives(name, excludedId) {
   return [...candidates.values()];
 }
 let artistExclusionDialogTrack = null;
+function localArtistCatalogEvidence() {
+  const exclusions = loadArtistExclusions();
+  const wrongArtistIds = Object.keys(exclusions.artists).filter(id =>
+    OfficeArtistExclusions.status(exclusions, id).entries.some(e => e.reason === 'wrong_artist')
+  );
+  return OfficeArtistCatalogEvidence.analyze({
+    spotifyTracks: [...loadCandidatePool().map(row => row.track), ...loadRecentPlaylists().flatMap(row => row.tracks || [])],
+    lastfmTracks: loadLastFmTrackPool(),
+    lastfmArtists: loadLastFmArtistPool(),
+    wrongArtistIds
+  });
+}
+function catalogEvidenceStatusText(status) {
+  return ({
+    supported: 'Zgodność co najmniej dwóch tytułów z albumami; propozycja wymaga sprawdzenia',
+    ambiguous: 'Kilka Spotify ID ma zgodne tytuły — wynik niejednoznaczny',
+    lastfm_ambiguous: 'Last.fm: niespójne MBID lub niepełna historia dowodów — wynik niejednoznaczny',
+    negative_conflict: 'Dowody wskazują ID zgłoszony jako niewłaściwy — wynik wymaga sprawdzenia',
+    insufficient: 'Za mało zgodnych utworów z albumami',
+    collaboration_only: 'Zgodność tylko dla współwykonawców — nie ustalamy właściciela katalogu',
+    missing_lastfm: 'Brak wykonawcy w lokalnej bazie Last.fm',
+    missing_spotify: 'Brak katalogu w lokalnej puli Spotify',
+    name_only: 'Wspólna nazwa bez zgodności repertuaru'
+  })[status] || 'Brak rozstrzygnięcia';
+}
+function appendCatalogEvidence(target, row) {
+  const status = document.createElement('p');
+  status.textContent = catalogEvidenceStatusText(row.status);
+  target.append(status);
+  for (const catalog of row.catalogs) {
+    const p = document.createElement('p'), a = document.createElement('a');
+    a.href = `https://open.spotify.com/artist/${encodeURIComponent(catalog.id)}`;
+    a.target = '_blank'; a.rel = 'noopener noreferrer';
+    a.textContent = `${catalog.name} [${catalog.id}]`;
+    p.append(a, ` · zgodne tytuły: ${catalog.matchedTitles}; z albumem: ${catalog.albumMatchedTitles}`);
+    if (artistExclusionStatus(catalog.id).blocked) p.append(' · zablokowany');
+    target.append(p);
+    if (catalog.matches.length) {
+      const details = document.createElement('details'), summary = document.createElement('summary');
+      summary.textContent = 'Zobacz dowody zgodności';
+      details.append(summary);
+      const list = document.createElement('ul');
+      for (const match of catalog.matches) {
+        const li = document.createElement('li');
+        li.textContent = `${match.title}${match.albums.length ? ` — album: ${match.albums.join(' / ')}` : ' — brak wspólnego albumu'}`;
+        list.append(li);
+      }
+      details.append(list); target.append(details);
+    }
+  }
+}
+function renderArtistCatalogEvidence() {
+  const summary = document.getElementById('catalogEvidenceSummary'), rows = document.getElementById('catalogEvidenceRows');
+  rows.replaceChildren();
+  try {
+    const report = localArtistCatalogEvidence(), s = report.summary;
+    summary.textContent = `Last.fm: ${s.lastfmNames} nazw; z katalogiem Spotify: ${s.lastfmNamesWithSpotify}; ` +
+      `Spotify: ${s.spotifyCatalogs} katalogów; nazwy z kilkoma ID: ${s.multiIdNames}. ` +
+      `Propozycje z repertuaru i albumów: ${s.proposals}/${s.lastfmNames} (${Math.round(s.coverage * 100)}%). ` +
+      `Sprzeczne ze zgłoszeniem „nie ten wykonawca”: ${s.negativeContradictions}. ` +
+      'Trafność nie została zweryfikowana; to nie jest odsetek poprawnych dopasowań. Nie zmieniono powiązań ani preferencji.';
+    const filter = OfficeArtistCatalogEvidence.key(document.getElementById('catalogEvidenceFilter').value);
+    const ordered = report.rows.filter(row => !filter || row.nameKey.includes(filter)).sort((a, b) => Number(b.catalogs.length > 1) - Number(a.catalogs.length > 1) || a.nameKey.localeCompare(b.nameKey));
+    summary.textContent += ` Pokazano ${Math.min(100, ordered.length)} z ${ordered.length} wyników${filter ? ' filtra' : ''}; podsumowanie dotyczy całej bazy.`;
+    for (const row of ordered.slice(0, 100)) {
+      const details = document.createElement('details'), title = document.createElement('summary');
+      title.textContent = `${row.name} — ${catalogEvidenceStatusText(row.status)}`;
+      details.append(title); appendCatalogEvidence(details, row); rows.append(details);
+    }
+  } catch (err) { summary.textContent = `Nie udało się porównać lokalnej bazy: ${err.message}`; }
+}
 function openArtistExclusionDialog(track) {
   const dialog = document.getElementById('artistExclusionDialog');
   const select = document.getElementById('artistExclusionArtist');
@@ -1405,6 +1485,13 @@ function refreshArtistExclusionDialog() {
   current.textContent = !artist ? 'Brakuje Spotify Artist ID — nie zapisujemy blokady po samej nazwie.' : status?.blocked ? `Obecna blokada: ${artistExclusionReasonText(status)}.` : 'Brak blokady tego katalogu Spotify.';
   if (artist && loadFeedbackBlockedArtists()[normalizeArtistName(artist.name)]) current.textContent += ' Istnieje również dawna blokada nazwy; odwołanie blokady ID jej nie usuwa.';
   if (status?.entries.some(e => e.reason === 'wrong_artist')) {
+    const evidence = localArtistCatalogEvidence().rows.find(row => row.nameKey === OfficeArtistCatalogEvidence.key(artist.name));
+    if (evidence) {
+      const p = document.createElement('p');
+      p.textContent = 'Automatyczne porównanie lokalnego repertuaru Spotify–Last.fm:';
+      candidates.append(p); appendCatalogEvidence(candidates, evidence);
+      return;
+    }
     const alternatives = cachedArtistCatalogAlternatives(artist.name, id);
     const explanation = document.createElement('p');
     explanation.textContent = alternatives.length ? 'Inne katalogi o tej nazwie z lokalnej bazy — wymagają sprawdzenia, nie są automatycznie dopasowane:' : 'Brak innego katalogu w lokalnej bazie. Zgłoszony ID pozostaje zablokowany. Automatyczne dopasowanie nie zostało wykonane.';
@@ -2354,11 +2441,16 @@ function readLastFmCache(method, params, ttlMs = LASTFM_CACHE_TTL_MS) {
   }
 }
 
+function compactLastFmCatalogMetadata(item) {
+  const evidence = OfficeArtistCatalogEvidence.metadata(item);
+  return { ...(evidence.album ? { album: { "#text": evidence.album } } : {}), ...(evidence.trackMbid ? { mbid: evidence.trackMbid } : {}) };
+}
+
 function compactLastFmCacheData(method, data) {
   if (method === "tag.getTopArtists") {
     return {
       topartists: {
-        artist: (data?.topartists?.artist || []).map(item => ({ name: item?.name || "" }))
+        artist: (data?.topartists?.artist || []).map(item => ({ name: item?.name || "", ...(OfficeArtistCatalogEvidence.metadata({ artist: item }).artistMbid ? { mbid: item.mbid } : {}) }))
       }
     };
   }
@@ -2367,7 +2459,8 @@ function compactLastFmCacheData(method, data) {
       tracks: {
         track: (data?.tracks?.track || []).map(item => ({
           name: item?.name || "",
-          artist: { name: item?.artist?.name || item?.artist?.["#text"] || "" }
+          artist: { name: item?.artist?.name || item?.artist?.["#text"] || "", mbid: OfficeArtistCatalogEvidence.metadata(item).artistMbid },
+          ...compactLastFmCatalogMetadata(item)
         }))
       }
     };
@@ -2379,8 +2472,10 @@ function compactLastFmCacheData(method, data) {
           name: item?.name || "",
           artist: {
             "#text": item?.artist?.["#text"] || item?.artist?.name || "",
-            name: item?.artist?.name || item?.artist?.["#text"] || ""
+            name: item?.artist?.name || item?.artist?.["#text"] || "",
+            mbid: OfficeArtistCatalogEvidence.metadata(item).artistMbid
           },
+          ...compactLastFmCatalogMetadata(item),
           ...(item?.date?.uts ? { date: { uts: item.date.uts } } : {})
         })),
         "@attr": { totalPages: data?.recenttracks?.["@attr"]?.totalPages || "1" }
@@ -2469,6 +2564,12 @@ function addLastFmArtists(items, { tags = [], source = "tag", recentCounts = nul
       savedAt: now
     };
     current.artist = artist;
+    const artistMbid = OfficeArtistCatalogEvidence.metadata({ artist: raw }).artistMbid;
+    if (artistMbid) {
+      const mbids = [...new Set([...(Array.isArray(current.catalogMbids) ? current.catalogMbids : []), artistMbid])];
+      current.catalogMbids = mbids.slice(-4);
+      if (mbids.length > 4) current.catalogEvidenceTruncated = true;
+    }
     current.tags = [...new Set([...(current.tags || []), ...tags.map(normalizeGenreName).filter(Boolean)])];
     current.sources = [...new Set([...(current.sources || []), source])];
     current.recentCount = Math.max(Number(current.recentCount || 0), Number(recentCounts?.get?.(key) || 0));
@@ -2522,6 +2623,9 @@ function addLastFmTracks(items, { tags = [], source = "tag" } = {}) {
     const current = map.get(key) || { track, artist, tags: [], sources: [], savedAt: now };
     current.track = track;
     current.artist = artist;
+    const evidence = OfficeArtistCatalogEvidence.mergeMetadata(current.catalogEvidence, OfficeArtistCatalogEvidence.metadata(raw));
+    if (evidence.records.length) current.catalogEvidence = evidence.records;
+    if (evidence.truncated) current.catalogEvidenceTruncated = true;
     current.tags = [...new Set([...(current.tags || []), ...tags.map(normalizeGenreName).filter(Boolean)])];
     current.sources = [...new Set([...(current.sources || []), source])];
     current.savedAt = now;
@@ -2749,7 +2853,7 @@ async function syncLastFmSources(
             playedAt: new Date(uts * 1000).toISOString(),
             source: "lastfm"
           });
-          recentPoolItems.push({ name: title, artist: { name } });
+          recentPoolItems.push({ name: title, artist: { name, mbid: track?.artist?.mbid || "" }, ...compactLastFmCatalogMetadata(track) });
         }
 
         page++;
@@ -5396,7 +5500,7 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.11.F2: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.12.F3: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
     `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
@@ -5590,6 +5694,8 @@ migrateStorageV34();
 purgeExpiredCaches();
 loadRmfSettings();
 renderFeedbackSummary();
+document.getElementById('catalogEvidenceButton').addEventListener('click', renderArtistCatalogEvidence);
+document.getElementById('catalogEvidenceFilter').addEventListener('input', renderArtistCatalogEvidence);
 document.getElementById('artistExclusionArtist').addEventListener('change', refreshArtistExclusionDialog);
 document.getElementById('artistExclusionDislike').addEventListener('click', () => submitArtistExclusion('dislike'));
 document.getElementById('artistExclusionWrong').addEventListener('click', () => submitArtistExclusion('wrong_artist'));
