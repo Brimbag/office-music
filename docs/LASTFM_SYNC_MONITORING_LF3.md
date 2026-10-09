@@ -27,3 +27,5 @@ Do istniejącej lokalnej historii dodajemy tylko `sourceAccount` i `durationMs`;
 ## Weryfikacja
 
 Deterministyczne testy pokrywają zgodność, serie braków i granice czasowe, opóźnienie, wersje tytułów, dopasowanie jeden-do-jednego, duplikaty, niepełne/stare/przyszłe dane, izolację kont, zamknięcie/24h/odzyskanie. Testy przeglądarkowe sprawdzają rzeczywistą synchronizację, brak powielania żądań, błędy obu API i zmianę konta podczas oczekiwania. Pełna regresja oraz benchmark generatora wymagane przed scaleniem.
+
+Świeża historia ze starszego klienta, bez metadanych właściciela, zachowuje dotychczasowy TTL. Nie dokładamy wymuszonego odczytu do generatora ani nie przypisujemy jej konta. Monitoring pozostaje insufficient_data do najbliższego zwykłego odświeżenia lub ręcznego sprawdzenia.

@@ -3416,7 +3416,7 @@ async function syncSpotifyRecentHistoryOnce(token, force, account) {
   const lastSync = Number(localStorage.getItem(RECENT_HISTORY_SYNC_KEY) || 0);
   const observation = syncMonitorRead(SPOTIFY_HISTORY_OBSERVATION_KEY);
   if (!force && observation?.account === account && observation.error && Date.now() - observation.observedAt < LASTFM_RETRY_BACKOFF_MS) return 0;
-  if (!force && observation?.account === account && Date.now() - lastSync < RECENT_HISTORY_SYNC_TTL_MS) {
+  if (!force && (!observation || observation.account === account) && Date.now() - lastSync < RECENT_HISTORY_SYNC_TTL_MS) {
     return 0;
   }
 

@@ -44,3 +44,9 @@ test('LF3 background check preserves active generation tag budget and counters',
  assert.deepEqual(r,[7,8]);assert.deepEqual(s.errors,[]);
  }finally{await s.close();}
 });
+test('LF3 fresh legacy history keeps its TTL without assigning ownership or fetching again',async()=>{
+ const s=await h.page();try{
+ const r=await s.page.evaluate(async()=>{lastFmSpotifyAccount='sp';localStorage.setItem(RECENT_HISTORY_SYNC_KEY,String(Date.now()));let calls=0;const old=spotifyGenerationRequest;spotifyGenerationRequest=async()=>{calls++;throw new Error('unexpected request');};try{const n=await syncSpotifyRecentHistory('fake');return {calls,n,observation:syncMonitorRead(SPOTIFY_HISTORY_OBSERVATION_KEY)};}finally{spotifyGenerationRequest=old;}});
+ assert.equal(r.calls,0);assert.equal(r.n,0);assert.equal(r.observation,null);assert.deepEqual(s.errors,[]);
+ }finally{await s.close();}
+});
