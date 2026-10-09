@@ -1,6 +1,8 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { startBrowserHarness } from './helpers/browser.mjs';
+const baseline = JSON.parse(readFileSync(new URL('./fixtures/features-v43.18.json', import.meta.url), 'utf8'));
 
 let harness;
 before(async () => { harness = await startBrowserHarness(); });
@@ -26,6 +28,61 @@ async function features(spec) {
     assert.deepEqual(session.errors, []);
     return result;
   } finally { await session.close(); }
+}
+
+for (const people of [2, 4]) {
+  test(`${people} profile: długość po B/C, niepowiązane dowody i bezpieczne zamienniki`, async t => {
+    const session = await harness.page();
+    try {
+      const result = await session.page.evaluate(({ people, source }) => {
+        Math.random = () => 0.25; discoveryLevel.value = '30';
+        const original = groupTrackFeatures, old = (0, eval)(`(${source})`);
+        const profiles = ['bartek', 'asia', 'edyta', 'monika'].slice(0, people).map(id => ({
+          id, artists: [], manualGenres: [], taste: { hasSurvey: true, likedGenres: ['Rock'], okGenres: [], blockedGenres: [] }
+        }));
+        const cases = [], now = Date.now(), originalFetch = fetch;
+        let fetches = 0;
+        window.fetch = () => { fetches++; throw new Error('Unexpected API request'); };
+        try {
+          for (const scenario of ['compatible', 'shortage', 'replacements']) {
+            const tracks = Array.from({ length: scenario === 'replacements' ? 20 : 16 }, (_, i) => ({
+              id: `g${i}`, uri: `spotify:track:g${i}`, name: `Song ${i}`,
+              artists: [{ id: `a${Math.floor(i / 2)}`, name: `Artist ${Math.floor(i / 2)}` }], album: { name: 'Album' }
+            }));
+            localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify(tracks.map(track => ({ track, queries: ['genre:"rock"'], savedAt: now }))));
+            localStorage.setItem(LASTFM_TRACK_POOL_KEY, JSON.stringify(tracks.map((track, i) => ({
+              artist: track.artists[0].name, track: track.name,
+              tags: scenario !== 'compatible' && i >= 12 && i < 16 ? ['jazz'] : ['rock'], sources: ['tag'], savedAt: now
+            }))));
+            const blocks = generationBlocklists(profiles), output = {};
+            for (const [mode, implementation] of [['before', old], ['after', original]]) {
+              groupTrackFeatures = implementation;
+              const ctx = buildGroupRecommendationContext(profiles);
+              const { eligible, stats } = eligibleGroupCandidates(profiles, blocks, ctx);
+              const selected = selectGroupPlaylist(eligible, 16, ctx, stats);
+              const scores = [...selected.details.values()].flatMap(d => Object.values(d.byUser));
+              output[mode] = { ids: selected.tracks.map(t => t.id), length: selected.tracks.length,
+                eligible: eligible.length, min: scores.length ? Math.min(...scores) : null,
+                averages: Object.fromEntries(Object.entries(selected.satisfaction).map(([id, r]) => [id, r.average])),
+                discovery: selected.discoveryCount, maximumDiscovery: selected.discoveryQuota.max };
+            }
+            cases.push({ scenario, ...output });
+          }
+        } finally { groupTrackFeatures = original; window.fetch = originalFetch; }
+        return { cases, fetches };
+      }, { people, source: baseline.source });
+      assert.deepEqual(session.errors, []);
+      assert.equal(result.fetches, 0);
+      assert.deepEqual(result.cases.map(r => [r.before.length, r.after.length]), [[16, 16], [16, 12], [16, 16]]);
+      assert.deepEqual(result.cases[0].before, result.cases[0].after);
+      for (const row of result.cases) {
+        assert.ok(row.after.min >= 35);
+        assert.ok(row.after.discovery <= row.after.maximumDiscovery);
+        if (row.scenario !== 'compatible') assert.ok(row.after.ids.every(id => !['g12', 'g13', 'g14', 'g15'].includes(id)));
+      }
+      t.diagnostic(JSON.stringify({ people, ...result }));
+    } finally { await session.close(); }
+  });
 }
 const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
 

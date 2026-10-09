@@ -1,0 +1,389 @@
+{
+  "baseline": "v43.18.C",
+  "candidate": "v43.19.G",
+  "scope": "controlled Chromium fixture, uniform Rock preferences; not live playlist prediction",
+  "results": [
+    {
+      "people": 2,
+      "cases": [
+        {
+          "scenario": "compatible",
+          "before": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g12",
+              "g14",
+              "g13",
+              "g15"
+            ],
+            "length": 16,
+            "eligible": 16,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.03999999999999,
+              "asia": 56.03999999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          },
+          "after": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g12",
+              "g14",
+              "g13",
+              "g15"
+            ],
+            "length": 16,
+            "eligible": 16,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.03999999999999,
+              "asia": 56.03999999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          }
+        },
+        {
+          "scenario": "shortage",
+          "before": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g12",
+              "g14",
+              "g13",
+              "g15"
+            ],
+            "length": 16,
+            "eligible": 16,
+            "min": 46.7832,
+            "averages": {
+              "bartek": 53.72579999999999,
+              "asia": 53.72579999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          },
+          "after": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11"
+            ],
+            "length": 12,
+            "eligible": 12,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.04,
+              "asia": 56.04
+            },
+            "discovery": 0,
+            "maximumDiscovery": 4
+          }
+        },
+        {
+          "scenario": "replacements",
+          "before": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g16",
+              "g18",
+              "g17",
+              "g19"
+            ],
+            "length": 16,
+            "eligible": 20,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.03999999999999,
+              "asia": 56.03999999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          },
+          "after": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g16",
+              "g18",
+              "g17",
+              "g19"
+            ],
+            "length": 16,
+            "eligible": 16,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.03999999999999,
+              "asia": 56.03999999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          }
+        }
+      ],
+      "fetches": 0
+    },
+    {
+      "people": 4,
+      "cases": [
+        {
+          "scenario": "compatible",
+          "before": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g12",
+              "g14",
+              "g13",
+              "g15"
+            ],
+            "length": 16,
+            "eligible": 16,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.03999999999999,
+              "asia": 56.03999999999999,
+              "edyta": 56.03999999999999,
+              "monika": 56.03999999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          },
+          "after": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g12",
+              "g14",
+              "g13",
+              "g15"
+            ],
+            "length": 16,
+            "eligible": 16,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.03999999999999,
+              "asia": 56.03999999999999,
+              "edyta": 56.03999999999999,
+              "monika": 56.03999999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          }
+        },
+        {
+          "scenario": "shortage",
+          "before": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g12",
+              "g14",
+              "g13",
+              "g15"
+            ],
+            "length": 16,
+            "eligible": 16,
+            "min": 46.7832,
+            "averages": {
+              "bartek": 53.72579999999999,
+              "asia": 53.72579999999999,
+              "edyta": 53.72579999999999,
+              "monika": 53.72579999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          },
+          "after": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11"
+            ],
+            "length": 12,
+            "eligible": 12,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.04,
+              "asia": 56.04,
+              "edyta": 56.04,
+              "monika": 56.04
+            },
+            "discovery": 0,
+            "maximumDiscovery": 4
+          }
+        },
+        {
+          "scenario": "replacements",
+          "before": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g16",
+              "g18",
+              "g17",
+              "g19"
+            ],
+            "length": 16,
+            "eligible": 20,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.03999999999999,
+              "asia": 56.03999999999999,
+              "edyta": 56.03999999999999,
+              "monika": 56.03999999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          },
+          "after": {
+            "ids": [
+              "g0",
+              "g2",
+              "g1",
+              "g3",
+              "g4",
+              "g6",
+              "g5",
+              "g7",
+              "g8",
+              "g10",
+              "g9",
+              "g11",
+              "g16",
+              "g18",
+              "g17",
+              "g19"
+            ],
+            "length": 16,
+            "eligible": 16,
+            "min": 56.04,
+            "averages": {
+              "bartek": 56.03999999999999,
+              "asia": 56.03999999999999,
+              "edyta": 56.03999999999999,
+              "monika": 56.03999999999999
+            },
+            "discovery": 0,
+            "maximumDiscovery": 5
+          }
+        }
+      ],
+      "fetches": 0
+    }
+  ]
+}
