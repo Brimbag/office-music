@@ -25,7 +25,7 @@ To pomiar kontrolowany, nie prognoza dla puli użytkownika. Neutralny profil z a
 
 ## Wdrożenie i wycofanie
 
-Nagłówki i tytuły obu stron, źródło eksportu i opis modelu pokazują v43.17.B. PR wymaga osobnego zatwierdzenia scalenia. Nie wdrażano podczas przygotowania PR.
+Nagłówki i tytuły obu stron, źródło eksportu i opis modelu pokazują v43.17.B. PR #16 zatwierdzono, scalono jako `a5b2364` i wdrożono v43.17.B; CI i Cloudflare potwierdziły ten commit. Następny niezależny zakres C opisuje [DISCOVERY_QUOTA.md](DISCOVERY_QUOTA.md).
 
 Rollback: revert commitu/scalenia B na aktualnym `main`, nowy jednoznaczny numer wersji we wszystkich etykietach, regresje i osobno zatwierdzone wdrożenie. Nie usuwamy pul ani preferencji, nie zmieniamy schematu eksportu i D1. Kod nie ewakuuje ani nie kasuje istniejących kandydatów; normalna retencja D.2 nadal działa podczas pozyskiwania, więc revert nie odtwarza wcześniej wypartego rekordu. Przed wdrożeniem można zachować istniejący eksport jako punkt odniesienia.
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.17.B</title>
+  <title>Office Music Mixer v43.18.C</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.17.B</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.18.C</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -556,6 +556,7 @@
 <script src="artist-exclusions.js"></script>
 <script src="artist-catalog-evidence.js"></script>
 <script src="pool-retention.js"></script>
+<script src="discovery-quota.js"></script>
 <script>
 const clientId = "d207523201ce4426923cda4cc893f76f";
 const redirectUri = "https://office-music.pages.dev/";
@@ -1244,7 +1245,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.17.B",
+      source: "Office Music Mixer v43.18.C",
       storage: exportedStorageState()
     };
 
@@ -4775,8 +4776,8 @@ function discoveryQuotaForTotal(total) {
   const tolerance = target > 0 && target < 1 ? 0.05 : 0;
   return {
     target,
-    min: Math.max(0, Math.floor(total * Math.max(0, target - tolerance))),
-    max: Math.min(total, Math.ceil(total * Math.min(1, target + tolerance)))
+    min: Math.max(0, Math.ceil(total * Math.max(0, target - tolerance) - 1e-9)),
+    max: Math.min(total, Math.floor(total * Math.min(1, target + tolerance) + 1e-9))
   };
 }
 
@@ -4811,6 +4812,7 @@ function newRejectionStats(rawPoolCount = 0) {
     recognizability: 0,
     lowGroupFit: 0,
     lowIndividualFit: 0,
+    discoveryModeExcluded: 0,
     eligible: 0,
     artistLimitDuringSelection: 0,
     duplicateDuringSelection: 0,
@@ -5060,9 +5062,8 @@ function sequencePlaylistForListening(tracks, minArtistGap = 5) {
   return ordered;
 }
 
-function selectGroupPlaylist(eligible, total, ctx, stats) {
-  const requestedDiscoveryQuota = discoveryQuotaForTotal(total);
-  const state = {
+function newGroupSelectionState(ctx) {
+  return {
     selected: [],
     selectedIds: new Set(),
     selectedSignatures: new Set(),
@@ -5073,6 +5074,53 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     polishCount: 0,
     details: new Map()
   };
+}
+
+function appendGroupSelection(state, item, ctx, dynamic, usedFallback) {
+  const track = item.track;
+  state.selected.push(track);
+  state.selectedIds.add(track.id);
+  const signature = trackSignature(track);
+  if (signature) state.selectedSignatures.add(signature);
+  for (const duplicateSignature of trackDuplicateSignatures(track)) {
+    state.selectedSignatures.add(duplicateSignature);
+  }
+  for (const key of trackArtistKeys(track)) {
+    state.artistCounts.set(key, (state.artistCounts.get(key) || 0) + 1);
+  }
+  for (const profile of ctx.selected || []) {
+    const score = item.byUser[profile.id]?.score || 0;
+    state.userSums.set(profile.id, (state.userSums.get(profile.id) || 0) + score);
+  }
+  for (const aspect of supportedAspectsForCandidate(item, ctx)) {
+    state.aspectCounts.set(aspect, (state.aspectCounts.get(aspect) || 0) + 1);
+  }
+  if (item.features.discovery) state.discoveryCount++;
+  if (item.features.isPolish) state.polishCount++;
+
+  state.details.set(track.id, {
+    byUser: Object.fromEntries(
+      (ctx.selected || []).map(profile => [
+        profile.id,
+        item.byUser[profile.id]?.score || 0
+      ])
+    ),
+    groupBase: item.groupBase,
+    leastMiseryPenalty: item.leastMiseryPenalty,
+    fairness: dynamic.fairness,
+    xquad: dynamic.xquad,
+    polishBoost: dynamic.polish,
+    isPolish: item.features.isPolish,
+    fallback: usedFallback,
+    mmr: dynamic.mmr,
+    discovery: item.features.discovery,
+    final: dynamic.final
+  });
+}
+
+function selectGroupPlaylist(eligible, total, ctx, stats) {
+  const requestedDiscoveryQuota = discoveryQuotaForTotal(total);
+  let state = newGroupSelectionState(ctx);
 
   // Recheck at selection entry: cached/static candidates and direct callers
   // must obey the same per-artist rule in every normal/fallback branch.
@@ -5087,8 +5135,19 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
       stats.lowIndividualFit = (stats.lowIndividualFit || 0) + 1;
       return false;
     }
+    if (Number(discoveryLevel.value) === 100 && !item.features.discovery) {
+      stats.discoveryModeExcluded = (stats.discoveryModeExcluded || 0) + 1;
+      return false;
+    }
     return true;
   });
+
+  const safeCandidates = remaining.filter(item =>
+    item.groupBase >= GROUP_HARD_MIN_BASE_SCORE ||
+    (item.groupBase >= GROUP_FALLBACK_MIN_BASE_SCORE &&
+      item.minScore >= GROUP_FALLBACK_MIN_USER_SCORE &&
+      item.features.feedback > GROUP_FALLBACK_MIN_FEEDBACK)
+  );
 
   while (state.selected.length < total && remaining.length) {
     let choices = [];
@@ -5206,46 +5265,44 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     const track = picked.item.track;
     if (usedFallback) stats.fallbackSelections++;
 
-    state.selected.push(track);
-    state.selectedIds.add(track.id);
-    const signature = trackSignature(track);
-    if (signature) state.selectedSignatures.add(signature);
-    for (const duplicateSignature of trackDuplicateSignatures(track)) {
-      state.selectedSignatures.add(duplicateSignature);
-    }
-    for (const key of trackArtistKeys(track)) {
-      state.artistCounts.set(key, (state.artistCounts.get(key) || 0) + 1);
-    }
-    for (const profile of ctx.selected || []) {
-      const score = picked.item.byUser[profile.id]?.score || 0;
-      state.userSums.set(profile.id, (state.userSums.get(profile.id) || 0) + score);
-    }
-    for (const aspect of supportedAspectsForCandidate(picked.item, ctx)) {
-      state.aspectCounts.set(aspect, (state.aspectCounts.get(aspect) || 0) + 1);
-    }
-    if (picked.item.features.discovery) state.discoveryCount++;
-    if (picked.item.features.isPolish) state.polishCount++;
-
-    state.details.set(track.id, {
-      byUser: Object.fromEntries(
-        (ctx.selected || []).map(profile => [
-          profile.id,
-          picked.item.byUser[profile.id]?.score || 0
-        ])
-      ),
-      groupBase: picked.item.groupBase,
-      leastMiseryPenalty: picked.item.leastMiseryPenalty,
-      fairness: picked.dynamic.fairness,
-      xquad: picked.dynamic.xquad,
-      polishBoost: picked.dynamic.polish,
-      isPolish: picked.item.features.isPolish,
-      fallback: usedFallback,
-      mmr: picked.dynamic.mmr,
-      discovery: picked.item.features.discovery,
-      final: picked.dynamic.final
-    });
+    appendGroupSelection(state, picked.item, ctx, picked.dynamic, usedFallback);
 
     remaining.splice(picked.index, 1);
+  }
+
+  let discoveryRepair;
+  if (state.selected.length === total && state.discoveryCount <= discoveryQuotaForTotal(total).max) {
+    // A full correct set cannot grow: avoid building/scanning repair descriptors.
+    discoveryRepair = { beforeLength: total, beforeDiscovery: state.discoveryCount,
+      afterLength: total, afterDiscovery: state.discoveryCount, added: 0, removed: 0,
+      minimumShortfall: Math.max(0, discoveryQuotaForTotal(total).min - state.discoveryCount) };
+  } else {
+    const descriptors = safeCandidates.map((item, order) => ({
+      id: item.track.id, item, order, score: item.groupBase,
+      discovery: Boolean(item.features.discovery),
+      signatures: [...new Set([trackSignature(item.track), ...trackDuplicateSignatures(item.track)].filter(Boolean))],
+      artists: [...trackArtistKeys(item.track)]
+    }));
+    const byId = new Map(descriptors.map(row => [row.id, row]));
+    discoveryRepair = OfficeDiscoveryQuota.repair({
+      selected: state.selected.map(track => byId.get(track.id)),
+      candidates: descriptors, total, quota: discoveryQuotaForTotal
+    });
+    const changed = discoveryRepair.rows.length !== state.selected.length ||
+      discoveryRepair.rows.some((row, i) => row.id !== state.selected[i]?.id);
+    if (changed) {
+      const previousDetails = state.details;
+      state = newGroupSelectionState(ctx);
+      for (const row of discoveryRepair.rows) {
+        const usedFallback = previousDetails.get(row.id)?.fallback ?? (row.item.groupBase < GROUP_HARD_MIN_BASE_SCORE);
+        appendGroupSelection(state, row.item, ctx, dynamicCandidateScore(row.item, state, ctx), usedFallback);
+      }
+      stats.fallbackSelections = [...state.details.values()].filter(detail => detail.fallback).length;
+      const finalRemaining = safeCandidates.filter(item => !state.selectedIds.has(item.track.id));
+      stats.lowFinalScoreStop = state.selected.length < total ? finalRemaining.length : 0;
+      stats.selectionStopDiagnostics = stats.lowFinalScoreStop ? analyzeSelectionStop(finalRemaining, state, total) : null;
+    }
+    delete discoveryRepair.rows;
   }
 
   const satisfaction = {};
@@ -5267,6 +5324,7 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     discoveryCount: state.discoveryCount,
     polishCount: state.polishCount,
     discoveryQuota: discoveryQuotaForTotal(state.selected.length),
+    discoveryRepair,
     requestedDiscoveryQuota,
     aspectCounts: state.aspectCounts,
     rejectionStats: stats
@@ -5768,12 +5826,12 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.17.B: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.18.C: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. v43.17.B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.18.C koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
-    `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, a dopiero końcowy fallback może wykorzystać górny limit odpowiadający docelowej długości playlisty. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
+    `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
     (groupResult?.acquisition ? `Pozyskiwanie: kwalifikowalni wykonawcy ${groupResult.acquisition.before} → ${groupResult.acquisition.after}; ponownie użyte strony cache ${groupResult.acquisition.cachedPages}; nowe wyszukiwania ${groupResult.acquisition.newSearches}. ` : "") +
     `Wyszukiwania Spotify są buforowane przez 24 h, lokalna pula żyje 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS}), a budżet tego generowania wynosił maks. ${maxNewSearchesThisGeneration} nowych wyszukiwań. ` +
     `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(requestedTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami. ` +
@@ -5811,8 +5869,22 @@ function renderPlaylistResult(
     satisfaction.textContent =
       `Dopasowanie grupowe: ${satParts.join(" · ")}. Odkrycia w wyniku: ${groupResult.discoveryCount || 0}/${tracks.length} (${discoveryPct}%). ` +
       `Polska muzyka rozpoznana przez Last.fm: ${groupResult.polishCount || 0}/${tracks.length}. ` +
-      `Quota discovery dla celu ${discoveryLevel.value}%: ${groupResult.discoveryQuota?.min ?? 0}–${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}; górny limit dla docelowych ${requestedTotal}: ${groupResult.requestedDiscoveryQuota?.max ?? requestedTotal}.`;
+      `Quota discovery dla celu ${discoveryLevel.value}%: dolny cel ${groupResult.discoveryQuota?.min ?? 0}, twarde maksimum ${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}; pomocniczy limit selekcji wstępnej dla docelowych ${requestedTotal}: ${groupResult.requestedDiscoveryQuota?.max ?? requestedTotal}.`;
     playlistResult.append(satisfaction);
+    if (groupResult.discoveryRepair) {
+      const repair = groupResult.discoveryRepair;
+      const correction = document.createElement("p");
+      correction.className = "small";
+      correction.textContent = `Korekta discovery: ${repair.beforeDiscovery}/${repair.beforeLength} → ${repair.afterDiscovery}/${repair.afterLength}; ` +
+        `nowych utworów ${repair.added}, pominiętych z doboru wstępnego ${repair.removed}; ` +
+        (repair.minimumShortfall
+          ? `Discovery poniżej celu: brak bezpiecznych odkryć do dodania w zamówionym limicie bez usuwania znanych utworów; niedobór ${repair.minimumShortfall}. `
+          : `Dolny cel discovery spełniony. `) +
+        `Discovery powyżej dozwolonego maksimum: ${Math.max(0, repair.afterDiscovery - groupResult.discoveryQuota.max)} po korekcie; ` +
+        `nadmiar w doborze wstępnym: ${Math.max(0, repair.beforeDiscovery - discoveryQuotaForTotal(repair.beforeLength).max)}.`;
+      playlistResult.append(correction);
+    }
+
 
     const r = groupResult.rejectionStats || {};
     const rejection = document.createElement("p");
@@ -5824,9 +5896,10 @@ function renderPlaylistResult(
       `blokada konkretnego Spotify wykonawcy ${r.artistIdExcluded || 0}, kara wykonawcy <= -40 ${r.strongNegativeArtistFeedback || 0}, ` +
       `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, ` +
       `wynik obecnej osoby <35 lub brak poprawnej oceny ${r.lowIndividualFit || 0}, ` +
+      `znany utwór przy trybie 100% discovery ${r.discoveryModeExcluded || 0}, ` +
       `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}, ` +
       `dobrane przez próg awaryjny ${r.fallbackSelections || 0}` +
-      (r.lowFinalScoreStop ? `, zatrzymanie po wyczerpaniu bezpiecznego progu awaryjnego: ${r.lowFinalScoreStop} kandydatów pozostało` : "") + `.`;
+      (r.lowFinalScoreStop ? `, kandydaci poza końcowym zestawem przy skróconym wyniku: ${r.lowFinalScoreStop}` : "") + `.`;
     playlistResult.append(rejection);
 
     if (r.selectionStopDiagnostics) {
@@ -5834,7 +5907,7 @@ function renderPlaylistResult(
       const stopDiag = document.createElement("p");
       stopDiag.className = "small";
       stopDiag.textContent =
-        `Diagnostyka zatrzymania v40: pozostało ${d.remaining || 0}; ` +
+        `Diagnostyka końcowego zatrzymania: pozostało ${d.remaining || 0}; ` +
         `blokady: duplikat ${d.duplicateBlocked || 0}, limit 2 utworów wykonawcy ${d.artistLimitBlocked || 0}, ` +
         `quota discovery przy długości bieżącej ${d.discoveryQuotaBlockedCurrent || 0}, quota discovery przy celu ${requestedTotal} (max ${d.targetQuotaMax ?? 0}) ${d.discoveryQuotaBlockedTarget || 0}; ` +
         `wybieralnych przy quota docelowej ${d.selectableAtTargetQuota || 0}. Rozkład groupBase: >=44: ${d.base44Plus || 0}, 40-43: ${d.base40to43 || 0}, 35-39: ${d.base35to39 || 0}, <35: ${d.baseBelow35 || 0}. ` +

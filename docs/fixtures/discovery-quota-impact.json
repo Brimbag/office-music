@@ -1,0 +1,666 @@
+{
+  "baselineCommit": "a5b23644df33c12231bfc53a25cf0923e784a127",
+  "controlledFixtures": true,
+  "requestedTotal": 60,
+  "targetDiscoveryPercent": 30,
+  "results": [
+    {
+      "people": 2,
+      "known": 1,
+      "before": {
+        "length": 22,
+        "discovery": 21,
+        "max": 8,
+        "detailCount": 22,
+        "detailDiscovery": 21,
+        "fallback": 21,
+        "detailFallback": 21,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 1,
+        "discovery": 0,
+        "max": 0,
+        "repair": {
+          "beforeLength": 22,
+          "beforeDiscovery": 21,
+          "afterLength": 1,
+          "afterDiscovery": 0,
+          "added": 0,
+          "removed": 21,
+          "minimumShortfall": 1
+        },
+        "detailCount": 1,
+        "detailDiscovery": 0,
+        "fallback": 1,
+        "detailFallback": 1,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 0,
+      "orderedLength": 1
+    },
+    {
+      "people": 2,
+      "known": 10,
+      "before": {
+        "length": 31,
+        "discovery": 21,
+        "max": 11,
+        "detailCount": 31,
+        "detailDiscovery": 21,
+        "fallback": 30,
+        "detailFallback": 30,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 15,
+        "discovery": 5,
+        "max": 5,
+        "repair": {
+          "beforeLength": 31,
+          "beforeDiscovery": 21,
+          "afterLength": 15,
+          "afterDiscovery": 5,
+          "added": 0,
+          "removed": 16,
+          "minimumShortfall": 0
+        },
+        "detailCount": 15,
+        "detailDiscovery": 5,
+        "fallback": 15,
+        "detailFallback": 15,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 5,
+      "orderedLength": 15
+    },
+    {
+      "people": 2,
+      "known": 15,
+      "before": {
+        "length": 36,
+        "discovery": 21,
+        "max": 13,
+        "detailCount": 36,
+        "detailDiscovery": 21,
+        "fallback": 35,
+        "detailFallback": 35,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 23,
+        "discovery": 8,
+        "max": 8,
+        "repair": {
+          "beforeLength": 36,
+          "beforeDiscovery": 21,
+          "afterLength": 23,
+          "afterDiscovery": 8,
+          "added": 0,
+          "removed": 13,
+          "minimumShortfall": 0
+        },
+        "detailCount": 23,
+        "detailDiscovery": 8,
+        "fallback": 23,
+        "detailFallback": 23,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 8,
+      "orderedLength": 23
+    },
+    {
+      "people": 2,
+      "known": 20,
+      "before": {
+        "length": 41,
+        "discovery": 21,
+        "max": 15,
+        "detailCount": 41,
+        "detailDiscovery": 21,
+        "fallback": 40,
+        "detailFallback": 40,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 30,
+        "discovery": 10,
+        "max": 10,
+        "repair": {
+          "beforeLength": 41,
+          "beforeDiscovery": 21,
+          "afterLength": 30,
+          "afterDiscovery": 10,
+          "added": 0,
+          "removed": 11,
+          "minimumShortfall": 0
+        },
+        "detailCount": 30,
+        "detailDiscovery": 10,
+        "fallback": 30,
+        "detailFallback": 30,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 10,
+      "orderedLength": 30
+    },
+    {
+      "people": 2,
+      "known": 27,
+      "before": {
+        "length": 48,
+        "discovery": 21,
+        "max": 17,
+        "detailCount": 48,
+        "detailDiscovery": 21,
+        "fallback": 47,
+        "detailFallback": 47,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 41,
+        "discovery": 14,
+        "max": 14,
+        "repair": {
+          "beforeLength": 48,
+          "beforeDiscovery": 21,
+          "afterLength": 41,
+          "afterDiscovery": 14,
+          "added": 0,
+          "removed": 7,
+          "minimumShortfall": 0
+        },
+        "detailCount": 41,
+        "detailDiscovery": 14,
+        "fallback": 41,
+        "detailFallback": 41,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 14,
+      "orderedLength": 41
+    },
+    {
+      "people": 2,
+      "known": 29,
+      "before": {
+        "length": 50,
+        "discovery": 21,
+        "max": 18,
+        "detailCount": 50,
+        "detailDiscovery": 21,
+        "fallback": 49,
+        "detailFallback": 49,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 44,
+        "discovery": 15,
+        "max": 15,
+        "repair": {
+          "beforeLength": 50,
+          "beforeDiscovery": 21,
+          "afterLength": 44,
+          "afterDiscovery": 15,
+          "added": 0,
+          "removed": 6,
+          "minimumShortfall": 0
+        },
+        "detailCount": 44,
+        "detailDiscovery": 15,
+        "fallback": 44,
+        "detailFallback": 44,
+        "averages": [
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 15,
+      "orderedLength": 44
+    },
+    {
+      "people": 2,
+      "before": {
+        "length": 30,
+        "discovery": 20
+      },
+      "after": {
+        "length": 50,
+        "discovery": 0,
+        "max": 17,
+        "repair": {
+          "beforeLength": 30,
+          "beforeDiscovery": 20,
+          "afterLength": 50,
+          "afterDiscovery": 0,
+          "added": 40,
+          "removed": 20,
+          "minimumShortfall": 13
+        },
+        "averages": [
+          60,
+          60
+        ]
+      },
+      "counts": {
+        "independent0": 1,
+        "independent1": 1,
+        "independent2": 1,
+        "independent3": 1,
+        "independent4": 1,
+        "independent5": 1,
+        "independent6": 1,
+        "independent7": 1,
+        "independent8": 1,
+        "independent9": 1,
+        "a0": 2,
+        "b0": 2,
+        "a1": 2,
+        "b1": 2,
+        "a2": 2,
+        "b2": 2,
+        "a3": 2,
+        "b3": 2,
+        "a4": 2,
+        "b4": 2,
+        "a5": 2,
+        "b5": 2,
+        "a6": 2,
+        "b6": 2,
+        "a7": 2,
+        "b7": 2,
+        "a8": 2,
+        "b8": 2,
+        "a9": 2,
+        "b9": 2
+      },
+      "calls": 0
+    },
+    {
+      "people": 4,
+      "known": 1,
+      "before": {
+        "length": 22,
+        "discovery": 21,
+        "max": 8,
+        "detailCount": 22,
+        "detailDiscovery": 21,
+        "fallback": 21,
+        "detailFallback": 21,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 1,
+        "discovery": 0,
+        "max": 0,
+        "repair": {
+          "beforeLength": 22,
+          "beforeDiscovery": 21,
+          "afterLength": 1,
+          "afterDiscovery": 0,
+          "added": 0,
+          "removed": 21,
+          "minimumShortfall": 1
+        },
+        "detailCount": 1,
+        "detailDiscovery": 0,
+        "fallback": 1,
+        "detailFallback": 1,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 0,
+      "orderedLength": 1
+    },
+    {
+      "people": 4,
+      "known": 10,
+      "before": {
+        "length": 31,
+        "discovery": 21,
+        "max": 11,
+        "detailCount": 31,
+        "detailDiscovery": 21,
+        "fallback": 30,
+        "detailFallback": 30,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 15,
+        "discovery": 5,
+        "max": 5,
+        "repair": {
+          "beforeLength": 31,
+          "beforeDiscovery": 21,
+          "afterLength": 15,
+          "afterDiscovery": 5,
+          "added": 0,
+          "removed": 16,
+          "minimumShortfall": 0
+        },
+        "detailCount": 15,
+        "detailDiscovery": 5,
+        "fallback": 15,
+        "detailFallback": 15,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 5,
+      "orderedLength": 15
+    },
+    {
+      "people": 4,
+      "known": 15,
+      "before": {
+        "length": 36,
+        "discovery": 21,
+        "max": 13,
+        "detailCount": 36,
+        "detailDiscovery": 21,
+        "fallback": 35,
+        "detailFallback": 35,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 23,
+        "discovery": 8,
+        "max": 8,
+        "repair": {
+          "beforeLength": 36,
+          "beforeDiscovery": 21,
+          "afterLength": 23,
+          "afterDiscovery": 8,
+          "added": 0,
+          "removed": 13,
+          "minimumShortfall": 0
+        },
+        "detailCount": 23,
+        "detailDiscovery": 8,
+        "fallback": 23,
+        "detailFallback": 23,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 8,
+      "orderedLength": 23
+    },
+    {
+      "people": 4,
+      "known": 20,
+      "before": {
+        "length": 41,
+        "discovery": 21,
+        "max": 15,
+        "detailCount": 41,
+        "detailDiscovery": 21,
+        "fallback": 40,
+        "detailFallback": 40,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 30,
+        "discovery": 10,
+        "max": 10,
+        "repair": {
+          "beforeLength": 41,
+          "beforeDiscovery": 21,
+          "afterLength": 30,
+          "afterDiscovery": 10,
+          "added": 0,
+          "removed": 11,
+          "minimumShortfall": 0
+        },
+        "detailCount": 30,
+        "detailDiscovery": 10,
+        "fallback": 30,
+        "detailFallback": 30,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 10,
+      "orderedLength": 30
+    },
+    {
+      "people": 4,
+      "known": 27,
+      "before": {
+        "length": 48,
+        "discovery": 21,
+        "max": 17,
+        "detailCount": 48,
+        "detailDiscovery": 21,
+        "fallback": 47,
+        "detailFallback": 47,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 41,
+        "discovery": 14,
+        "max": 14,
+        "repair": {
+          "beforeLength": 48,
+          "beforeDiscovery": 21,
+          "afterLength": 41,
+          "afterDiscovery": 14,
+          "added": 0,
+          "removed": 7,
+          "minimumShortfall": 0
+        },
+        "detailCount": 41,
+        "detailDiscovery": 14,
+        "fallback": 41,
+        "detailFallback": 41,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 14,
+      "orderedLength": 41
+    },
+    {
+      "people": 4,
+      "known": 29,
+      "before": {
+        "length": 50,
+        "discovery": 21,
+        "max": 18,
+        "detailCount": 50,
+        "detailDiscovery": 21,
+        "fallback": 49,
+        "detailFallback": 49,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "after": {
+        "length": 44,
+        "discovery": 15,
+        "max": 15,
+        "repair": {
+          "beforeLength": 50,
+          "beforeDiscovery": 21,
+          "afterLength": 44,
+          "afterDiscovery": 15,
+          "added": 0,
+          "removed": 6,
+          "minimumShortfall": 0
+        },
+        "detailCount": 44,
+        "detailDiscovery": 15,
+        "fallback": 44,
+        "detailFallback": 44,
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "weak": 0
+      },
+      "orderedDiscovery": 15,
+      "orderedLength": 44
+    },
+    {
+      "people": 4,
+      "before": {
+        "length": 30,
+        "discovery": 20
+      },
+      "after": {
+        "length": 50,
+        "discovery": 0,
+        "max": 17,
+        "repair": {
+          "beforeLength": 30,
+          "beforeDiscovery": 20,
+          "afterLength": 50,
+          "afterDiscovery": 0,
+          "added": 40,
+          "removed": 20,
+          "minimumShortfall": 13
+        },
+        "averages": [
+          60,
+          60,
+          60,
+          60
+        ]
+      },
+      "counts": {
+        "independent0": 1,
+        "independent1": 1,
+        "independent2": 1,
+        "independent3": 1,
+        "independent4": 1,
+        "independent5": 1,
+        "independent6": 1,
+        "independent7": 1,
+        "independent8": 1,
+        "independent9": 1,
+        "a0": 2,
+        "b0": 2,
+        "a1": 2,
+        "b1": 2,
+        "a2": 2,
+        "b2": 2,
+        "a3": 2,
+        "b3": 2,
+        "a4": 2,
+        "b4": 2,
+        "a5": 2,
+        "b5": 2,
+        "a6": 2,
+        "b6": 2,
+        "a7": 2,
+        "b7": 2,
+        "a8": 2,
+        "b8": 2,
+        "a9": 2,
+        "b9": 2
+      },
+      "calls": 0
+    }
+  ]
+}
