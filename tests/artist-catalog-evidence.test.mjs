@@ -243,6 +243,7 @@ test('prawdziwy przycisk diagnostyki działa przy cold start; nazwy i tytuły s�
       saveCandidatePool([{ track, queries: [], savedAt: Date.now() }]);
       document.getElementById('mixerBox').style.display = 'block';
     }, { A });
+    await session.page.locator('#generatorTools > summary').click();
     await session.page.getByText('Porównanie wykonawców Spotify–Last.fm', { exact: true }).click();
     await session.page.getByRole('button', { name: 'Porównaj lokalną bazę', exact: true }).click();
     assert.match(await session.page.locator('#catalogEvidenceSummary').textContent(), /Last.fm: 0 nazw/);
@@ -267,6 +268,7 @@ test('duża baza: podsumowanie obejmuje wszystkie katalogi, filtr odnajduje Days
       saveCandidatePool(names.map((name, i) => ({ track: { id: `t${i}`, uri: `spotify:track:t${i}`, name: 'Song', artists: [{ id: i === 110 ? A : String(i).padStart(22, '0'), name }] }, queries: [], savedAt: Date.now() })));
       document.getElementById('mixerBox').style.display = 'block';
     }, { A });
+    await session.page.locator('#generatorTools > summary').click();
     await session.page.getByText('Porównanie wykonawców Spotify–Last.fm', { exact: true }).click();
     await session.page.getByRole('button', { name: 'Porównaj lokalną bazę', exact: true }).click();
     assert.equal(await session.page.locator('#catalogEvidenceRows > details').count(), 100);
