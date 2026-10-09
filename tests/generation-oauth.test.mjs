@@ -113,15 +113,58 @@ for (const operation of ['create', 'add']) test(`wygaśnięcie przed ${operation
 });
 test('Web Locks chroni rotację refresh tokenu również między dwiema kartami', async () => {
   const session=await harness.page(); const other=await session.page.context().newPage();
+  const events=[]; await session.page.context().exposeBinding('recordRefresh', ({page}, state) => events.push({tab:page===session.page?1:2,state,at:Date.now()}));
   try {
     await other.goto(session.page.url());
-    const setup=() => { window.testTrace=[]; window.fetch=async url => { if (!String(url).includes('/api/token')) return Response.json({ id: 'mock', state: {} }); window.testTrace.push({ old:localStorage.getItem('spotify_access_token')==='old', valid:Number(localStorage.getItem('spotify_token_expires'))>Date.now(), locks:!!navigator.locks, held: navigator.locks ? (await navigator.locks.query()).held.length : 0 }); localStorage.setItem('test_refresh_count',String(Number(localStorage.getItem('test_refresh_count')||0)+1)); await new Promise(resolve=>setTimeout(resolve,30)); return Response.json({access_token:'fresh',refresh_token:'rotated',expires_in:3600}); }; };
+    const setup=() => { window.testTrace=[]; window.fetch=async url => { if (!String(url).includes('/api/token')) return Response.json({ id: 'mock', state: {} }); await window.recordRefresh('start'); window.testTrace.push({ old:localStorage.getItem('spotify_access_token')==='old', valid:Number(localStorage.getItem('spotify_token_expires'))>Date.now(), locks:!!navigator.locks, held: navigator.locks ? (await navigator.locks.query()).held.length : 0 }); localStorage.setItem('test_refresh_count',String(Number(localStorage.getItem('test_refresh_count')||0)+1)); await new Promise(resolve=>setTimeout(resolve,30)); await window.recordRefresh('end'); return Response.json({access_token:'fresh',refresh_token:'rotated',expires_in:3600}); }; };
     await session.page.evaluate(setup); await other.evaluate(setup);
     await session.page.evaluate(() => {localStorage.setItem('spotify_access_token','old');localStorage.setItem('spotify_refresh_token','old-r');localStorage.setItem('spotify_token_expires','0');});
+    // Both tabs must start with the same expired session before racing refresh.
+    await other.waitForFunction(() => localStorage.getItem('spotify_access_token') === 'old' && localStorage.getItem('spotify_refresh_token') === 'old-r' && localStorage.getItem('spotify_token_expires') === '0');
     const values=await Promise.all([session.page.evaluate(()=>refreshAccessToken('old')),other.evaluate(()=>refreshAccessToken('old'))]);
     assert.deepEqual(values,['fresh','fresh']);
     const trace=await Promise.all([session.page.evaluate(()=>window.testTrace),other.evaluate(()=>window.testTrace)]);
-    assert.equal(await session.page.evaluate(()=>Number(localStorage.getItem('test_refresh_count'))),1,JSON.stringify(trace));
+    assert.equal(await session.page.evaluate(()=>Number(localStorage.getItem('test_refresh_count'))),1,JSON.stringify({trace,events}));
     assert.deepEqual(session.errors,[]);
   } finally { await session.close(); }
+});
+test('niedostępna synchronizacja OAuth: sesja zachowana, brak ryzykownej rotacji', async () => {
+  const result = await evaluate(async () => {
+    localStorage.setItem('spotify_access_token','old'); localStorage.setItem('spotify_refresh_token','old-r'); localStorage.setItem('spotify_token_expires','0');
+    spotifyOAuthRotation = async () => { throw new Error('OAuth storage unavailable; session retained'); };
+    let requests=0; window.fetch=async()=>{requests++;return Response.json({});};
+    let error=''; try { await refreshAccessToken('old'); } catch(e) { error=e.message; }
+    return {requests,error,refresh:localStorage.getItem('spotify_refresh_token')};
+  });
+  assert.equal(result.requests,0); assert.equal(result.refresh,'old-r'); assert.ok(result.error);
+});
+test('wylogowanie usuwa także rekord przekazania rotacji OAuth', async () => {
+  const result = await evaluate(async () => {
+    await spotifyOAuthRotation({previousRefresh:'old-r',refresh:'rotated',access:'fresh',expires:Date.now()+3600000});
+    localStorage.setItem('spotify_refresh_token','rotated'); clearTokens();
+    await navigator.locks.request('omm-spotify-refresh',()=>{});
+    return {rotation:await spotifyOAuthRotation() ?? null,refresh:localStorage.getItem('spotify_refresh_token')};
+  });
+  assert.deepEqual(result,{rotation:null,refresh:null});
+});
+test('rekord innej sesji nie przypisuje poprzedniego tokenu do nowego logowania', async () => {
+  const result = await evaluate(async () => {
+    await spotifyOAuthRotation({previousRefresh:'unrelated',refresh:'another',access:'other',expires:Date.now()+3600000});
+    localStorage.setItem('spotify_access_token','old'); localStorage.setItem('spotify_refresh_token','old-r'); localStorage.setItem('spotify_token_expires','0');
+    let requests=0; window.fetch=async()=>{requests++;return Response.json({access_token:'fresh',refresh_token:'rotated',expires_in:3600});};
+    return {access:await refreshAccessToken('old'),requests,refresh:localStorage.getItem('spotify_refresh_token')};
+  });
+  assert.deepEqual(result,{access:'fresh',requests:1,refresh:'rotated'});
+});
+test('nowe logowanie podczas odczytu przekazania OAuth ma pierwszeństwo', async () => {
+  const result = await evaluate(async () => {
+    localStorage.setItem('spotify_access_token','old'); localStorage.setItem('spotify_refresh_token','old-r'); localStorage.setItem('spotify_token_expires','0');
+    spotifyOAuthRotation=async()=>{
+      localStorage.setItem('spotify_access_token','login'); localStorage.setItem('spotify_refresh_token','login-r'); localStorage.setItem('spotify_token_expires',String(Date.now()+3600000));
+      return {previousRefresh:'old-r',access:'fresh',refresh:'rotated',expires:Date.now()+3600000};
+    };
+    let requests=0; window.fetch=async()=>{requests++;return Response.json({});};
+    return {access:await refreshAccessToken('old'),requests,refresh:localStorage.getItem('spotify_refresh_token')};
+  });
+  assert.deepEqual(result,{access:'login',requests:0,refresh:'login-r'});
 });

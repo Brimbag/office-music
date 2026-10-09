@@ -2143,15 +2143,55 @@ function saveTokens(data) {
   }
 }
 
+// IndexedDB transactions provide a coherent handoff across renderer processes;
+// Web Locks alone do not guarantee visibility of multiple localStorage writes.
+async function spotifyOAuthRotation(value = undefined) {
+  let db;
+  try {
+    db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("omm-spotify-oauth", 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("rotation");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error("OAuth storage blocked"));
+    });
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction("rotation", value === undefined ? "readonly" : "readwrite");
+      const store = transaction.objectStore("rotation");
+      const request = value === undefined ? store.get("current") : value === null ? store.delete("current") : store.put(value, "current");
+      let result; request.onsuccess = () => { result = request.result; };
+      transaction.oncomplete = () => resolve(result);
+      transaction.onerror = transaction.onabort = () => reject(transaction.error);
+    });
+  } catch {
+    throw new Error("Nie można bezpiecznie zsynchronizować odnowienia sesji Spotify między kartami. Sesja zachowana; spróbuj ponownie.");
+  } finally { db?.close(); }
+}
+
 let spotifyRefreshInFlight = null;
 
 async function refreshAccessToken(rejectedToken = null) {
   if (!localStorage.getItem("spotify_refresh_token")) return null;
   if (spotifyRefreshInFlight) return spotifyRefreshInFlight;
   const renew = async () => {
-    const refreshToken = localStorage.getItem("spotify_refresh_token");
-    const previousAccess = localStorage.getItem("spotify_access_token");
-    const expiry = Number(localStorage.getItem("spotify_token_expires"));
+    let refreshToken = localStorage.getItem("spotify_refresh_token");
+    let previousAccess = localStorage.getItem("spotify_access_token");
+    let expiry = Number(localStorage.getItem("spotify_token_expires"));
+    if (navigator.locks && refreshToken) {
+      const rotation = await spotifyOAuthRotation();
+      if (rotation && (rotation.previousRefresh === refreshToken || rotation.refresh === refreshToken) && rotation.expires > Date.now()) {
+        if (!localStorage.getItem("spotify_refresh_token")) throw new Error("Sesja Spotify została wylogowana. Zaloguj się ponownie.");
+        const observedRefresh = localStorage.getItem("spotify_refresh_token");
+        const observedAccess = localStorage.getItem("spotify_access_token");
+        if ((observedRefresh !== refreshToken && observedRefresh !== rotation.refresh) || (observedAccess !== previousAccess && observedAccess !== rotation.access)) {
+          if (observedAccess && Number(localStorage.getItem("spotify_token_expires")) > Date.now()) return observedAccess;
+          throw new Error("Sesja Spotify zmieniła się podczas odświeżania. Zaloguj się ponownie.");
+        }
+        saveTokens({ access_token: rotation.access, refresh_token: rotation.refresh, expires_in: (rotation.expires - Date.now() + 60000) / 1000 });
+        if (rejectedToken === null || rotation.access !== rejectedToken) return rotation.access;
+        refreshToken = rotation.refresh; previousAccess = rotation.access; expiry = rotation.expires;
+      }
+    }
     if (previousAccess && expiry > Date.now() && (rejectedToken === null || previousAccess !== rejectedToken)) return previousAccess;
     if (!refreshToken) return null;
     activeGenerationProgress?.count("oauthAttempts");
@@ -2180,6 +2220,7 @@ async function refreshAccessToken(rejectedToken = null) {
         throw new Error("Niepoprawna odpowiedź odświeżenia Spotify. Sesja zachowana; spróbuj ponownie.");
       }
       saveTokens(data);
+      if (navigator.locks) await spotifyOAuthRotation({ previousRefresh: refreshToken, access: data.access_token, refresh: data.refresh_token || refreshToken, expires: Number(localStorage.getItem("spotify_token_expires")) });
       activeGenerationProgress?.count("oauthSuccess");
       activeGenerationProgress?.note("Połączenie Spotify odnowione. Kontynuuję generowanie…");
       return data.access_token;
@@ -6185,6 +6226,7 @@ function renderPlaylistResult(
 }
 
 function clearTokens() {
+  if (navigator.locks) void navigator.locks.request("omm-spotify-refresh", () => spotifyOAuthRotation(null)).catch(() => {});
   localStorage.removeItem("spotify_access_token");
   localStorage.removeItem("spotify_refresh_token");
   localStorage.removeItem("spotify_token_expires");
