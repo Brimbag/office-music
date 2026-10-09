@@ -8,7 +8,11 @@ Wdrożone: 1 testy (#2), 2 API stanu (#3), 3 hierarchia ankiety (#4), 4 dowody g
 
 Dodatkowo wdrożono B (minimum 35 każdej obecnej osoby, #16), F2 (powód blokady Spotify ID, #11), F3 (raport katalogów, #12) i P–P4 (#18–22). Pierwotne ręczne F (#9) wycofano w #10; nie wraca do kolejki. Historyczny handoff #1 wymaga aktualizacji, nie scalenia bez sprawdzenia.
 
-## Teraz — U1 / punkt 16
+## Aktualizacja po U1
+
+U1 wdrożono jako v43.25.U1 (#23). Kolejny zatwierdzony zakres to U2 — dopasowanie do mockupu, v43.26.U2; testy/CI warunkiem scalenia. Przeniesienie artystów otrzymuje nazwę U3, żeby nie mylić go z adaptacją wizualną. Po U2 następne pozostają L1/L2.
+
+## U1 / punkt 16
 
 Kandydat `v43.25.U1`: kafelki obecności z klawiaturą, zwijane preferencje ręczne w tych samych polach, osobne CTA generowania, zwijane narzędzia i dane, krótkie podsumowanie wyniku, średnie dopasowanie osób i pełna diagnostyka w details. RMF pozostaje odrębnym panelem. Bez nowych zapisów, requestów, migracji i zmian algorytmu. Przeniesienie konfiguracji Last.fm i istniejących narzędzi pod details jest wyłącznie zmianą układu — nie nowym panelem administracyjnym ani mechanizmem synchronizacji.
 
@@ -19,7 +23,7 @@ Kandydat `v43.25.U1`: kafelki obecności z klawiaturą, zwijane preferencje ręc
 | 1 | **U1 — generator (16)** | Bieżący PR. Testy klawiatury, układu mobilnego, dostępności narzędzi i zachowania diagnostyki/ocen. Wynik playlisty i zapisany stan identyczne. |
 | 2 | **L1 — bezpieczne zapisy i import (10)** | Fundament przed przenoszeniem edycji. Quota przy zapisie ankiety/ustawień, odzyskiwalny import, kontrola utraty danych. Test awarii w połowie importu i awarii rollbacku; bez kasowania preferencji w celu zwolnienia miejsca. |
 | 3 | **L2 — synchronizacja między stronami (10)** | Zdarzenia storage, świeży odczyt przed zapisem i jawne konflikty edycji. Test dwóch kart, starszego klienta, usunięcia i równoległego zapisu. L1 i L2 osobno, bez utożsamiania localStorage z D1. |
-| 4 | **U2 — artyści w ankiecie (14)** | Po L1/L2. Zachować office_seed_* i office_blocked_*, domyślne blokady i ręczne gatunki. Test zgodności edycji starej/nowej strony. Nie wracać do ręcznego rozróżniania setek wykonawców. |
+| 4 | **U3 — artyści w ankiecie (14)** | Po L1/L2. Zachować office_seed_* i office_blocked_*, domyślne blokady i ręczne gatunki. Test zgodności edycji starej/nowej strony. Nie wracać do ręcznego rozróżniania setek wykonawców. |
 | 5 | **LF1 — Last.fm po błędach (7)** | Osobne attempt/success, retry/backoff, sukcesy częściowe. Dziś tag sync zapisuje czas także po błędach. Test wszystkich błędów, jednej udanej metody, pustej poprawnej odpowiedzi, 429 i zmiany konta. Nie zmienia selekcji. |
 | 6 | **LF2 — kompaktowa baza w chmurze (11)** | Po LF1 i kontrakcie API. Projekt limitów, TTL, pochodzenia dowodów i deterministycznego merge dla dwóch komputerów. Raw cache pozostaje lokalny. Najpierw pomiary rozmiaru i zgodności klientów; bez automatycznej migracji produkcji. |
 | 7 | **LOG1 — backend generowań (12)** | Osobny endpoint/tabela, account_id, sanitizacja, retencja do 100/konto, rollback. SQL i migracja produkcji do osobnego zatwierdzenia; błąd logowania nie przerywa playlisty. |
@@ -37,7 +41,7 @@ Zgodnie z aktualną decyzją użytkownika pozostawiamy mechanizm generowania bez
 
 - **Q1 — długość playlisty i pozyskiwanie (8/6):** porównać P3/P4 na identycznym pełnym stanie. Raporty live P4: 2 osoby 35/60, 4 osoby 36/60; quota usuwa odpowiednio 7 i 9 odkryć. Zbadać dostępność non-discovery, bezpieczne zamiany i wykorzystanie istniejącego budżetu, bez obniżania min35/limitów. Samo pełne 12/12 Search nie rozwiązuje czteroosobowego wyniku. Nie obiecywać 60/60 ani traktować raportu jako dowodu globalnego optimum lub regresji P4.
 - **P5 — sprawdzanie cache:** live 14,1 s dla 2 i 29,0 s dla 4 osób, zero dodanych kandydatów. Oddzielny PR optymalizacyjny dopiero po zgodzie, ścisła zgodność ocen/retencji/requestów i pełna invalidacja po historii, feedbacku i zmianie osoby. Nie łączyć z Q1. Czas ścienny i luka timera nie dowodzą CPU ani uśpienia.
-- **T1 — gatunki tylko z ankiety (15):** po U2 i realnym eksperymencie A/B/C. B bez dawnych stylów i seedów, C z punktacją seedów bez ich aktywnego odświeżania. Dotychczasowe dane syntetyczne nie wskazały zwycięzcy. Zachować stare klucze dla rollbacku; zmiana funkcjonalna osobno od UX.
+- **T1 — gatunki tylko z ankiety (15):** po U3 i realnym eksperymencie A/B/C. B bez dawnych stylów i seedów, C z punktacją seedów bez ich aktywnego odświeżania. Dotychczasowe dane syntetyczne nie wskazały zwycięzcy. Zachować stare klucze dla rollbacku; zmiana funkcjonalna osobno od UX.
 - **E.2 — En Directo i inne wersje:** potwierdzić błąd i fałszywe trafienia, osobny mały PR z ochroną zwykłych tytułów i klasyki.
 - **F4 — użycie dopasowań katalogowych:** F3 tylko raportuje; najpierw próbka z rzeczywistej bazy i pomiar błędów. Bez automatycznego przenoszenia ocen po nazwie lub wybierania wykonawcy wyłącznie po popularności. Nie ma zatwierdzonej masowej migracji preferencji.
 - **Dokumentacja:** aktualizacja AGENTS/ARCHITECTURE/ROADMAP do main i wycofanego F, niezależny PR bez wersji aplikacji. Warto wykonać przed rozszerzeniami danych/monitora. Nie nadpisywać historycznych, lokalnych plików użytkownika.
