@@ -135,9 +135,17 @@ test('eksport/import zachowuje dane i pomija tokeny Spotify', () => withPage(asy
   assert.equal(storage.office_seed_bartek, 'Queen');
   assert.ok(!Object.hasOwn(storage, 'spotify_access_token'));
   await page.evaluate(() => localStorage.setItem('office_seed_bartek', 'Changed'));
-  page.on('dialog', dialog => dialog.accept());
-  await page.locator('#importStateFile').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ format: 'office-music-state', version: 1, storage })) });
-  await page.waitForFunction(() => localStorage.getItem('office_seed_bartek') === 'Queen');
+  const dialogs=[];
+  const accept=dialog=>{const pending=dialog.accept();dialogs.push(pending);pending.catch(()=>{});};
+  page.on('dialog',accept);
+  await Promise.all([
+    page.waitForNavigation(),
+    page.locator('#importStateFile').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ format: 'office-music-state', version: 1, storage })) })
+  ]);
+  await Promise.all(dialogs); // Errors still fail the test, but cannot become detached rejections.
+  page.off('dialog',accept);
+  await page.waitForFunction(()=>window.ommStorageReady===true);
+  assert.equal(await page.evaluate(()=>localStorage.getItem('office_seed_bartek')),'Queen');
 }));
 
 test('bezpieczny zapis usuwa cache po quota i chroni preferencje', () => withPage(async page => {
