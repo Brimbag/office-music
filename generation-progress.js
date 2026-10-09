@@ -44,7 +44,7 @@
       created() { playlistCreated = true; },
       measure(name, operation) { const entry = { started: performance.now(), children: 0 }; stack.push(entry); try { return operation(); } finally { stack.pop(); const ms = record(name, entry.started, entry.children); if (stack.length) stack.at(-1).children += ms; render(); } },
       async measureAsync(name, operation) { const start = performance.now(); try { return await operation(); } finally { record(name, start); render(); } },
-      finish(error = null, size = 0) { ended = performance.now(); outcome = error ? 'error' : 'success'; length = size; if (rows[current]) { rows[current].ms = ended - rows[current].started; rows[current].status = error ? 'error' : 'done'; } if (error) message = `Etap: ${rows[current]?.name}. ${error.message}`; clearInterval(timer); document.removeEventListener('visibilitychange', visibility); render(true); },
+      finish(error = null, size = 0) { ended = performance.now(); outcome = error ? 'error' : 'success'; length = size; if (rows[current]) { rows[current].ms = ended - rows[current].started; rows[current].status = error ? 'error' : 'done'; } message = error ? `Etap: ${rows[current]?.name}. ${error.message}` : ""; clearInterval(timer); document.removeEventListener('visibilitychange', visibility); render(true); },
       report() { return { outcome, totalMs: elapsed(), playlistCreated, length, stages: rows.map(row => ({ ...row })), metrics: structuredClone(metrics), counters: { ...counters }, warnings: [...warnings] }; }
     };
   } };
