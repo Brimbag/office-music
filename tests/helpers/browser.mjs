@@ -39,6 +39,7 @@ export async function startBrowserHarness() {
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       await page.goto(`${baseURL}${path}`);
+      await page.waitForFunction(() => window.ommStorageReady !== false);
       return { page, errors, close: () => context.close() };
     },
     async close() {

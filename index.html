@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.26.U2</title>
+  <title>Office Music Mixer v43.27.L1</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -412,7 +412,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.26.U2</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.27.L1</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -570,6 +570,7 @@
     </div>
     <div class="toolbar">
       <button id="clearHistoryButton" class="secondary">Wyczyść historię aplikacji</button>
+      <button id="recoveryExportButton" type="button" class="secondary" onclick="OmmLocalState.downloadBackup().catch(() => alert('Brak dostępnej kopii sprzed importu.'))">Kopia sprzed importu</button>
       <button id="exportStateButton" type="button" class="secondary">Eksportuj bazę</button>
       <button id="importStateButton" type="button" class="secondary">Importuj bazę</button>
       <button id="cloudUploadButton" type="button" class="secondary">Wyślij dane do chmury</button>
@@ -611,6 +612,7 @@
   <div id="artistExclusionCandidates" class="small"></div>
   <p id="artistExclusionError" class="error" role="alert"></p>
 </dialog>
+<script src="local-state.js"></script>
 <script src="taste-state.js"></script>
 <script src="artist-exclusions.js"></script>
 <script src="artist-catalog-evidence.js"></script>
@@ -885,7 +887,7 @@ cloudDownloadButton.addEventListener("click", downloadDurableStateFromCloud);
 
 clearFeedbackButton.addEventListener("click", clearFeedback);
 clearBlockedFeedbackButton.addEventListener("click", clearFeedbackArtistBlocks);
-rmfEnabled.addEventListener("change", () => { saveRmfSettings(); updateRmfStatus(); });
+rmfEnabled.addEventListener("change", () => { if (saveRmfSettings()) updateRmfStatus(); });
 for (const input of rmfSlotInputs) input.addEventListener("change", saveRmfSettings);
 rmfCheckButton.addEventListener("click", () => manualRmfCheck(false));
 rmfQueueButton.addEventListener("click", () => manualRmfCheck(true));
@@ -906,7 +908,7 @@ syncLastFmButton.addEventListener("click", async () => {
 });
 lastFmUserInput.addEventListener("change", () => {
   const next = lastFmUserInput.value.trim();
-  localStorage.setItem(LASTFM_USER_KEY, next);
+  try { OmmLocalState.write(LASTFM_USER_KEY, next); } catch { lastFmUserInput.value = localStorage.getItem(LASTFM_USER_KEY) || ""; return; }
   renderLastFmStatus();
   renderHistorySummary();
 });
@@ -983,6 +985,7 @@ const RMF_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const RMF_WINDOW_MINUTES = 55;
 let rmfWatcherTimer = null;
 let rmfLastApiCheckAt = 0;
+let rmfChecksInFlight = 0;
 
 const APP_STORAGE_PREFIX = "office_";
 const STATE_EXPORT_FORMAT = "office-music-state";
@@ -1007,6 +1010,7 @@ const CLOUD_SHADOW_KEY = "office_cloud_shadow_v1";
 const CLOUD_AUTO_SYNC_DEBOUNCE_MS = 2500;
 let cloudAutoSyncReady = false;
 let cloudSyncTimer = null;
+let cloudRequestsInFlight = 0;
 let lastCloudFingerprint = "";
 
 function cloudStateKeys() {
@@ -1098,6 +1102,7 @@ function mergedCandidatePool(localRaw, cloudRaw) {
 }
 
 function applyCloudStateWithMerge(remoteState) {
+  if (OmmLocalState.blocked) throw new Error("Import lub odzyskiwanie danych w toku.");
   const remote = remoteState && typeof remoteState === "object" ? remoteState : {};
   const allowed = new Set(cloudStateKeys());
   const shadow = loadCloudShadow();
@@ -1173,6 +1178,9 @@ async function generationCloudRequest(token, url, options) {
 }
 
 async function cloudApiRequest(token, options = {}) {
+  if (OmmLocalState.blocked) throw new Error("Import lub odzyskiwanie danych w toku.");
+  cloudRequestsInFlight++;
+  try {
   const response = await generationCloudRequest(token, CLOUD_STATE_ENDPOINT, {
     ...options,
     headers: {
@@ -1188,9 +1196,11 @@ async function cloudApiRequest(token, options = {}) {
     throw error;
   }
   return data;
+  } finally { cloudRequestsInFlight--; }
 }
 
 async function uploadCloudStateIfChanged(token, { force = false, status = true } = {}) {
+  if (OmmLocalState.blocked) throw new Error("Stan lokalny wymaga odzyskania.");
   if (!force && cloudStateFingerprint() === lastCloudFingerprint) return { saved: 0, skipped: true };
   if (status) setCloudStatus("zapisuję…");
   let result, state, fingerprint;
@@ -1218,9 +1228,11 @@ async function uploadCloudStateIfChanged(token, { force = false, status = true }
 }
 
 function scheduleAutomaticCloudSync(delay = CLOUD_AUTO_SYNC_DEBOUNCE_MS) {
+  if (OmmLocalState.blocked) return;
   if (!cloudAutoSyncReady) return;
   clearTimeout(cloudSyncTimer);
   cloudSyncTimer = setTimeout(async () => {
+    cloudSyncTimer = null;
     try {
       const token = await getValidAccessToken();
       if (!token) return;
@@ -1312,7 +1324,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.26.U2",
+      source: "Office Music Mixer v43.27.L1",
       storage: exportedStorageState()
     };
 
@@ -1341,6 +1353,7 @@ async function importLocalStateFromFile(event) {
   if (!file) return;
 
   try {
+    if (file.size > 32 * 1024 * 1024) throw new Error("Kopia przekracza limit rozmiaru.");
     const text = await file.text();
     const payload = JSON.parse(text);
     if (
@@ -1353,37 +1366,26 @@ async function importLocalStateFromFile(event) {
       throw new Error("To nie jest prawidłowy plik kopii Office Music Mixer.");
     }
 
-    const entries = Object.entries(payload.storage).filter(
-      ([key, value]) => key.startsWith(APP_STORAGE_PREFIX) && typeof value === "string"
-    );
-    if (!entries.length) {
-      throw new Error("Plik nie zawiera lokalnej bazy Office Music Mixer.");
-    }
+    const validated = OmmLocalState.validate(payload);
+    const entries = Object.entries(validated);
+    if (generateButton.disabled || cloudUploadButton.disabled || syncLastFmButton.disabled || cloudRequestsInFlight || rmfChecksInFlight || rmfCheckButton.disabled) throw new Error("Poczekaj na zakończenie generowania i synchronizacji przed importem.");
 
     const confirmed = window.confirm(
-      `Import zastąpi obecną lokalną bazę danymi z pliku (${entries.length} wpisów). Nowe blokady wykonawców zostaną scalone, aby stara kopia nie odtworzyła odwołanych decyzji. Logowanie Spotify pozostanie bez zmian. Kontynuować?`
+      `Import zastąpi obecną lokalną bazę danymi z pliku (${entries.length} wpisów). Nowe blokady wykonawców zostaną scalone, aby stara kopia nie odtworzyła odwołanych decyzji. Logowanie Spotify pozostanie bez zmian. Zamknij inne karty OMM na czas importu. Kontynuować?`
     );
     if (!confirmed) return;
 
-    const appKeys = [];
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(APP_STORAGE_PREFIX)) appKeys.push(key);
-    }
     const before = exportedStorageState(), incoming = Object.fromEntries(entries);
     const archivedIdentityKey = 'office_artist_identity_v2';
     if (before[archivedIdentityKey] !== undefined && incoming[archivedIdentityKey] === undefined) incoming[archivedIdentityKey] = before[archivedIdentityKey];
     if (before[OfficeArtistExclusions.KEY] !== undefined || incoming[OfficeArtistExclusions.KEY] !== undefined) {
       incoming[OfficeArtistExclusions.KEY] = JSON.stringify(OfficeArtistExclusions.merge(before[OfficeArtistExclusions.KEY], incoming[OfficeArtistExclusions.KEY]));
     }
-    try {
-      for (const key of appKeys) localStorage.removeItem(key);
-      for (const [key, value] of Object.entries(incoming)) localStorage.setItem(key, value);
-    } catch (err) {
-      for (const key of Object.keys(incoming)) localStorage.removeItem(key);
-      for (const [key, value] of Object.entries(before)) localStorage.setItem(key, value);
-      throw err;
-    }
+    clearTimeout(cloudSyncTimer); cloudSyncTimer = null;
+    const controls = [...document.querySelectorAll("button, input, select")].map(el => [el, el.disabled]);
+    controls.forEach(([el]) => { el.disabled = true; });
+    try { await OmmLocalState.importState(incoming); }
+    finally { if (!OmmLocalState.blocked) controls.forEach(([el, wasDisabled]) => { el.disabled = wasDisabled; }); }
 
     window.alert(`Zaimportowano ${entries.length} wpisów. Strona zostanie odświeżona.`);
     window.location.reload();
@@ -1407,7 +1409,7 @@ function loadArtistExclusions() {
 function saveArtistExclusions(state) {
   const raw = JSON.stringify(OfficeArtistExclusions.merge(state, null));
   if (new TextEncoder().encode(JSON.stringify(raw)).byteLength > 1536 * 1024) throw new Error("Blokady przekraczają limit zapisu; wyeksportuj bazę.");
-  localStorage.setItem(OfficeArtistExclusions.KEY, raw);
+  OmmLocalState.write(OfficeArtistExclusions.KEY, raw);
 }
 function artistExclusionStatus(id) {
   return OfficeArtistExclusions.status(loadArtistExclusions(), id || "");
@@ -1594,7 +1596,7 @@ function loadFeedback() {
 }
 
 function saveFeedback(data) {
-  localStorage.setItem(FEEDBACK_KEY, JSON.stringify(data));
+  OmmLocalState.write(FEEDBACK_KEY, JSON.stringify(data));
   renderFeedbackSummary();
 }
 
@@ -1608,7 +1610,7 @@ function loadFeedbackBlockedArtists() {
 }
 
 function saveFeedbackBlockedArtists(data) {
-  localStorage.setItem(FEEDBACK_BLOCKED_ARTISTS_KEY, JSON.stringify(data));
+  OmmLocalState.write(FEEDBACK_BLOCKED_ARTISTS_KEY, JSON.stringify(data));
   renderFeedbackSummary();
 }
 
@@ -1828,7 +1830,7 @@ function clearFeedbackArtistBlocks() {
   document.querySelectorAll(".vote-btn").forEach(btn => btn.classList.remove("active-block"));
 }
 
-function loadRmfSettings() {
+function loadRmfSettings(persistMigration = true) {
   try {
     const currentRaw = localStorage.getItem(RMF_SETTINGS_KEY);
     const legacyRaw = localStorage.getItem(RMF_SETTINGS_LEGACY_KEY);
@@ -1839,7 +1841,7 @@ function loadRmfSettings() {
     // ale późniejsze ręczne odznaczenie 09:00 jest już respektowane przez klucz v2.
     if (!currentRaw && legacyRaw && !slots.includes(9)) slots = [9, ...slots];
     for (const input of rmfSlotInputs) input.checked = slots.includes(Number(input.value));
-    if (!currentRaw) saveRmfSettings();
+    if (!currentRaw && persistMigration) saveRmfSettings();
   } catch {
     rmfEnabled.checked = true;
     for (const input of rmfSlotInputs) input.checked = [9, 10, 12, 14, 16].includes(Number(input.value));
@@ -1847,10 +1849,11 @@ function loadRmfSettings() {
 }
 
 function saveRmfSettings() {
-  localStorage.setItem(RMF_SETTINGS_KEY, JSON.stringify({
+  try { OmmLocalState.write(RMF_SETTINGS_KEY, JSON.stringify({
     enabled: rmfEnabled.checked,
     slots: rmfSlotInputs.filter(x => x.checked).map(x => Number(x.value))
-  }));
+  })); return true; }
+  catch { loadRmfSettings(false); return false; }
 }
 
 function loadRmfQueued() {
@@ -2039,6 +2042,9 @@ function updateRmfStatus(text = "") {
 }
 
 async function checkRmfWatcher(force = false) {
+  if (OmmLocalState.blocked) return;
+  rmfChecksInFlight++;
+  try {
   if (!rmfEnabled?.checked) return;
   const slot = currentRmfSlot();
   if (!slot) { updateRmfStatus(); return; }
@@ -2075,9 +2081,11 @@ async function checkRmfWatcher(force = false) {
   rmfStatus.textContent = Number.isInteger(queueResult.afterPosition)
     ? `Fakty RMF: ${episode.name} dodane do kolejki Spotify (pozycja ${queueResult.afterPosition}).`
     : `Fakty RMF: ${episode.name} dodane do kolejki Spotify; pozycja nie została potwierdzona przez API.`;
+  } finally { rmfChecksInFlight--; }
 }
 
 async function manualRmfCheck(addToQueue) {
+  if (OmmLocalState.blocked) return;
   try {
     rmfCheckButton.disabled = true;
     rmfQueueButton.disabled = true;
@@ -2424,7 +2432,7 @@ function renderProfiles() {
     genreInput.placeholder = "np. rock, pop, throat singing...";
     genreInput.value = localStorage.getItem(`office_genres_${id}`) ?? profile.genres.join(", ");
     genreInput.addEventListener("input", () => {
-      localStorage.setItem(`office_genres_${id}`, genreInput.value.trim());
+      try { OmmLocalState.write(`office_genres_${id}`, genreInput.value.trim()); } catch { genreInput.value = localStorage.getItem(`office_genres_${id}`) ?? profile.genres.join(", "); }
     });
 
     const seedLabel = document.createElement("label");
@@ -2440,7 +2448,7 @@ function renderProfiles() {
         : "np. 2–5 wykonawców...";
     seedInput.value = localStorage.getItem(`office_seed_${id}`) || "";
     seedInput.addEventListener("change", () => {
-      localStorage.setItem(`office_seed_${id}`, seedInput.value.trim());
+      try { OmmLocalState.write(`office_seed_${id}`, seedInput.value.trim()); } catch { seedInput.value = localStorage.getItem(`office_seed_${id}`) || ""; }
     });
 
     const blockedLabel = document.createElement("label");
@@ -2454,7 +2462,7 @@ function renderProfiles() {
     const defaultBlocked = id === "edyta" ? "Slipknot" : "";
     blockedInput.value = localStorage.getItem(`office_blocked_${id}`) ?? defaultBlocked;
     blockedInput.addEventListener("change", () => {
-      localStorage.setItem(`office_blocked_${id}`, blockedInput.value.trim());
+      try { OmmLocalState.write(`office_blocked_${id}`, blockedInput.value.trim()); } catch { blockedInput.value = localStorage.getItem(`office_blocked_${id}`) ?? defaultBlocked; }
     });
 
     const preferences = document.createElement("details");
@@ -2579,9 +2587,9 @@ function selectedProfiles() {
       blockedInput?.value ?? localStorage.getItem(`office_blocked_${id}`) ?? (id === "edyta" ? "Slipknot" : "")
     );
 
-    localStorage.setItem(`office_genres_${id}`, manualGenres.join(", "));
-    localStorage.setItem(`office_seed_${id}`, artists.join(", "));
-    localStorage.setItem(`office_blocked_${id}`, blockedArtists.join(", "));
+    OmmLocalState.write(`office_genres_${id}`, manualGenres.join(", "));
+    OmmLocalState.write(`office_seed_${id}`, artists.join(", "));
+    OmmLocalState.write(`office_blocked_${id}`, blockedArtists.join(", "));
 
     const taste = tasteStateForPerson(profiles[id].name);
     const blockedTaste = new Set(taste.blockedGenres.map(normalizeGenreName));
@@ -5776,6 +5784,7 @@ async function primeCommonGroupQueries(token, selected, maxNewSearches = 3, acqu
 }
 
 async function generateOfficePlaylist() {
+  if (OmmLocalState.blocked) { alert("Najpierw zakończ odzyskiwanie danych lokalnych."); return; }
   if (generationInFlight) return;
   generationInFlight = true;
   const total = Number(playlistLength.value);
@@ -6181,9 +6190,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.26.U2: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.27.L1: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.26.U2 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.27.L1 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -6406,6 +6415,14 @@ async function init() {
   }
 }
 
+window.ommStorageReady = false;
+(async () => {
+  if (!await OmmLocalState.recover()) {
+    document.querySelectorAll('button, input, select').forEach(el => { if (!el.closest('#localStateNotice')) el.disabled = true; });
+    window.ommStorageReady = true;
+    return;
+  }
+
 migrateHistoryStorage();
 migrateStorageV34();
 purgeExpiredCaches();
@@ -6423,6 +6440,12 @@ renderRmfDiagnostics();
 updateRmfStatus();
 restoreMostRecentPlaylist();
 init();
+  window.ommStorageReady = true;
+})().catch(err => {
+  console.error("Uruchomienie magazynu lokalnego:", err);
+  statusBox.textContent = "Nie udało się odczytać danych lokalnych. Pobierz kopię lub odśwież stronę.";
+  window.ommStorageReady = true;
+});
 </script>
 </body>
 </html>

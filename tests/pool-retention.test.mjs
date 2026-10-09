@@ -230,9 +230,11 @@ test('eksport/import i cold start zachowują pola retencji oraz lokalną rotacj�
     const timestamp = JSON.parse(storage.office_candidate_pool_v1)[0].lastUsedAt;
     await session.page.evaluate(() => { localStorage.removeItem('office_lastfm_source_rotation_v1'); localStorage.removeItem(CANDIDATE_POOL_KEY); });
     session.page.on('dialog', dialog => dialog.accept());
-    await session.page.locator('#importStateFile').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ format: 'office-music-state', version: 1, storage })) });
-    await session.page.waitForFunction(() => localStorage.getItem('office_lastfm_source_rotation_v1') !== null);
-    await session.page.reload();
+    await Promise.all([
+      session.page.waitForNavigation(),
+      session.page.locator('#importStateFile').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ format: 'office-music-state', version: 1, storage })) })
+    ]);
+    await session.page.waitForFunction(() => window.ommStorageReady === true);
     const r = await session.page.evaluate(() => ({ used: loadCandidatePool()[0].lastUsedAt, cloud: cloudStateKeys().includes('office_lastfm_source_rotation_v1'), rotation: localStorage.getItem('office_lastfm_source_rotation_v1') }));
     assert.equal(r.used, timestamp); assert.equal(r.cloud, false); assert.equal(r.rotation, storage.office_lastfm_source_rotation_v1); assert.deepEqual(session.errors, []);
   } finally { await session.close(); }
