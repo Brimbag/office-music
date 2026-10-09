@@ -42,8 +42,8 @@ const results = before.results.map((old, index) => {
     semanticHash: createHash('sha256').update(JSON.stringify(result)).digest('hex'),
     result, baselineFunctions: old.functions, candidateFunctions: current.functions,
     // Repeated semantic fields are verified above and stored once, not 10 times.
-    baselineSamples: old.raw.map(row => ({ metrics: row.metrics, serviceMs: row.requests.map(request => request.serviceMs) })),
-    candidateSamples: current.raw.map(row => ({ metrics: row.metrics, serviceMs: row.requests.map(request => request.serviceMs) }))
+    baselineSamples: old.raw.map(row => ({ metrics: row.metrics, serviceMs: row.requests.map(request => request.serviceMs), ...(row.progressReport?{progressReport:row.progressReport}:{}) })),
+    candidateSamples: current.raw.map(row => ({ metrics: row.metrics, serviceMs: row.requests.map(request => request.serviceMs), ...(row.progressReport?{progressReport:row.progressReport}:{}) }))
   };
 });
 console.log(JSON.stringify({ baselineCommit: before.baselineCommit, candidateVersion: after.appVersion,
