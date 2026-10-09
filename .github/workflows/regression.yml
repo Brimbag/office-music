@@ -13,7 +13,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright-core install --with-deps chromium
-      - run: npm test
+      - name: Regression tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/omm-regression.log
+      - name: Preserve regression diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-diagnostics
+          path: /tmp/omm-regression.log
       - name: Generation benchmark smoke (mock APIs, no timing threshold)
         run: node tests/benchmarks/generation-pipeline.mjs > /tmp/generation-benchmark.json
         env:
