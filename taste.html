@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.31.LF3 – profil muzyczny</title>
+  <title>Office Music Mixer v43.32.U3 – profil muzyczny</title>
   <meta name="color-scheme" content="light dark">
   <style>
     :root{
@@ -38,7 +38,11 @@
     .change-person{border:1px solid var(--line);background:var(--panel);color:var(--text);padding:8px 10px;border-radius:10px}
     .toolbar{display:grid;grid-template-columns:minmax(160px,220px) minmax(220px,1fr) auto;gap:12px;align-items:end;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);padding:14px;border-radius:14px;margin-bottom:18px}
     .field label{display:block;font-size:.8rem;color:var(--muted);margin:0 0 5px}
-    select,input[type="search"]{width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 11px;min-height:44px}
+    select,input[type="search"],.artist-preferences input[type="text"]{width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 11px;min-height:44px}
+    .artist-preferences{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:18px}
+    .artist-preferences h2{margin:0 0 6px;font-size:1.1rem}
+    .artist-preferences .field{margin-top:12px}
+    .artist-preferences p{color:var(--muted);font-size:.84rem}
     .progress{min-width:170px;text-align:right}
     .progress strong{display:block;font-size:1rem}
     .progress span{font-size:.8rem;color:var(--muted)}
@@ -85,7 +89,7 @@
   <main class="wrap">
     <header class="top">
       <div>
-        <h1>Profil muzyczny <span class="version">v43.31.LF3</span></h1>
+        <h1>Profil muzyczny <span class="version">v43.32.U3</span></h1>
         <p>Przeklikaj gatunki i podgatunki. „Lubię” rozwija pulę odkryć, „Dam radę” oznacza dobrą muzykę do wspólnej playlisty, a „Nie lubię” odcina daną gałąź.</p>
       </div>
       <a class="back" href="index.html">← Office Music Mixer</a>
@@ -121,6 +125,14 @@
         <span>▶ YT = małe okno z wyszukiwaniem YouTube</span>
       </div>
 
+      <section class="artist-preferences" aria-labelledby="artistPreferencesTitle">
+        <h2 id="artistPreferencesTitle">Twoi wykonawcy</h2>
+        <p>Podaj nazwy rozdzielone przecinkami. Artyści wzorcowi pomagają określić gust, a blokowani wykonawcy są wykluczani dla tej osoby. Przykłady wykonawców przy gatunkach służą do odsłuchu i nie są automatycznie dodawane tutaj.</p>
+        <div class="field"><label for="seedArtists">Artyści wzorcowi</label><input id="seedArtists" type="text" autocomplete="off" placeholder="np. Queen, Pearl Jam"><div class="actions"><button id="saveSeedArtists" class="btn" type="button">Zapisz artystów wzorcowych</button><button id="reloadSeedArtists" class="btn" type="button">Wczytaj zapisane</button></div></div>
+        <div class="field"><label for="blockedArtists">Blokowani wykonawcy</label><input id="blockedArtists" type="text" autocomplete="off" placeholder="np. wykonawca, którego nie chcesz słyszeć"><div class="actions"><button id="saveBlockedArtists" class="btn" type="button">Zapisz blokowanych wykonawców</button><button id="reloadBlockedArtists" class="btn" type="button">Wczytaj zapisane</button></div></div>
+        <p id="artistSaveState" role="status"></p>
+        <p>Przycisk „Wyczyść ten profil” poniżej usuwa oceny gatunków. Listy wykonawców pozostają zachowane; możesz wyczyścić je osobno i zapisać puste pole.</p>
+      </section>
       <section id="genres" class="grid" aria-live="polite"></section>
 
       <section class="footerbar">
@@ -355,7 +367,7 @@
     db.updatedAt = new Date().toISOString();
     try { persistedRaw = await OmmLocalState.edit(STORAGE_KEY, persistedRaw, JSON.stringify(db), {json:true, initial:persistedDb, strictPerson}); db=JSON.parse(persistedRaw); }
     catch (error) { db=load(); persistedRaw=localStorage.getItem(STORAGE_KEY); persistedDb=JSON.stringify(db); els.save.textContent='Nie zapisano zmiany'; toast(error.name==='LocalStateConflict' ? error.message : 'Nie zapisano oceny. Poprzednie oceny pozostają zachowane.'); return false; }
-    finally { saving=false; controls.forEach(([button,disabled])=>{button.disabled=disabled;}); }
+    finally { saving=false; controls.forEach(([button,disabled])=>{button.disabled=disabled;}); renderArtistPreferences(); }
     persistedDb = JSON.stringify(db);
     els.save.textContent = 'Zapisano lokalnie';
     clearTimeout(save._t); save._t=setTimeout(()=>els.save.textContent='Zapisywanie lokalnie',1100);
@@ -382,6 +394,7 @@
     els.activePerson.textContent=person;
     els.personPicker.hidden=true;
     els.survey.hidden=false;
+    renderArtistPreferences();
     render();
     window.scrollTo({top:0,behavior:'smooth'});
   }
@@ -474,7 +487,49 @@
     if(confirm(`Wyczyścić wszystkie oceny profilu ${p}?`)){db.people[p].genres={};if(!await save(p)){render();return;}expanded.clear();render();toast(`Wyczyszczono profil ${p}.`)}
   });
 
+
+  const artistFields = new Map();
+  const artistKinds = { seed: ['seedArtists','saveSeedArtists','reloadSeedArtists'], blocked: ['blockedArtists','saveBlockedArtists','reloadBlockedArtists'] };
+  function artistField(kind) {
+    const id=selectedPerson.toLowerCase(), key=`office_${kind}_${id}`;
+    if (!artistFields.has(key)) { const base=localStorage.getItem(key); artistFields.set(key,{key,base,draft:base ?? (kind==='blocked' && id==='edyta' ? 'Slipknot' : ''),dirty:false,busy:false,status:''}); }
+    return artistFields.get(key);
+  }
+  function renderArtistPreferences() {
+    if (!selectedPerson) return;
+    for (const [kind,[inputId,saveId,reloadId]] of Object.entries(artistKinds)) {
+      const field=artistField(kind), raw=localStorage.getItem(field.key);
+      if (!field.dirty && !field.busy && field.base!==raw) {field.base=raw;field.draft=raw ?? (kind==='blocked' && selectedPerson==='Edyta' ? 'Slipknot' : '');field.status='Zaktualizowano z innej karty.';}
+      const input=document.getElementById(inputId);
+      if(input.value!==field.draft)input.value=field.draft;
+      input.dataset[kind==='seed'?'seedProfileId':'blockedProfileId']=selectedPerson.toLowerCase();
+      input.disabled=field.busy || saving;
+      document.getElementById(saveId).disabled=field.busy || saving;
+      document.getElementById(reloadId).disabled=field.busy || saving;
+    }
+    document.getElementById('artistSaveState').textContent=['seed','blocked'].map(kind=>artistField(kind).status).filter(Boolean).join(' · ');
+  }
+  for (const [kind,[inputId,saveId,reloadId]] of Object.entries(artistKinds)) {
+    document.getElementById(inputId).addEventListener('input',()=>{const field=artistField(kind);field.draft=document.getElementById(inputId).value;field.dirty=true;field.status='Niezapisane zmiany.';document.getElementById('artistSaveState').textContent=field.status;});
+    document.getElementById(saveId).addEventListener('click',async()=>{
+      const field=artistField(kind);if(field.busy || saving)return;
+      const value=field.draft.trim();field.busy=true;field.status='Zapisywanie…';renderArtistPreferences();
+      try {field.base=await OmmLocalState.edit(field.key,field.base,value);field.draft=field.base;field.dirty=false;field.status='Zapisano wykonawców lokalnie.';}
+      catch(error){field.status=error.name==='LocalStateConflict' ? 'Lista zmieniła się w innej karcie. Wczytaj zapisane dane i połącz zmiany przed ponownym zapisem.' : 'Nie zapisano listy. Zapisane dane i wpisane zmiany pozostają zachowane.';toast(field.status);}
+      finally{field.busy=false;renderArtistPreferences();}
+    });
+    document.getElementById(reloadId).addEventListener('click',()=>{
+      const field=artistField(kind);if(field.dirty && !confirm('Odrzucić niezapisane zmiany tej listy i wczytać zapisane dane?'))return;
+      field.base=localStorage.getItem(field.key);field.draft=field.base ?? (kind==='blocked' && selectedPerson==='Edyta' ? 'Slipknot' : '');field.dirty=false;field.status='Wczytano zapisanych wykonawców.';renderArtistPreferences();
+    });
+  }
+
+  window.addEventListener('beforeunload', event => {
+    if ([...artistFields.values()].some(field => field.dirty)) { event.preventDefault(); event.returnValue=''; }
+  });
+
   OmmLocalState.subscribe(() => {
+    renderArtistPreferences();
     if (saving) return;
     const raw=localStorage.getItem(STORAGE_KEY);
     if (raw===persistedRaw) return;
@@ -483,6 +538,8 @@
     toast('Oceny zaktualizowano z innej karty.');
   });
   renderPersonPicker();
+  const linkedPerson = PEOPLE.find(person => person.toLowerCase() === location.hash.slice(1));
+  if (linkedPerson) openPerson(linkedPerson);
   window.ommStorageReady = true;
 })();
 </script>

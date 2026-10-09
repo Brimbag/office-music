@@ -58,20 +58,21 @@ test('L2: wyczyszczenie osoby nie usuwa ocen dodanych po otwarciu starej kopii',
 }));
 test('L2: niezapisany draft wzorców pozostaje widoczny; starszy klient wywołuje konflikt przy zapisie',()=>pair(async(a,b)=>{
  await b.evaluate(()=>localStorage.setItem('office_seed_bartek','old'));
+ await a.locator('[data-person="Bartek"]').click();
  await a.waitForFunction(()=>document.querySelector('[data-seed-profile-id="bartek"]').value==='old');
- await a.locator('#manualPreferencesPanel > summary').click();await a.locator('[data-preferences-id="bartek"] > summary').click();
  const input=a.locator('[data-seed-profile-id="bartek"]');await input.fill('draft');
  await b.evaluate(()=>localStorage.setItem('office_seed_bartek','other'));
  await a.waitForTimeout(100);assert.equal(await input.inputValue(),'draft');
- await input.dispatchEvent('change');await a.waitForFunction(()=>document.querySelector('#localStateNotice')?.textContent.includes('innej karcie'));
- assert.equal(await a.evaluate(()=>localStorage.getItem('office_seed_bartek')),'other');assert.equal(await input.inputValue(),'other');
-},'/','/'));
+ await a.locator('#saveSeedArtists').click();await a.waitForFunction(()=>document.querySelector('#localStateNotice')?.textContent.includes('innej karcie'));
+ assert.equal(await a.evaluate(()=>localStorage.getItem('office_seed_bartek')),'other');assert.equal(await input.inputValue(),'draft');
+},'/taste.html','/'));
 test('L2: marker importu blokuje zapisy także w drugiej karcie; widok odświeża się po zakończeniu',()=>pair(async(a,b)=>{
  await a.evaluate(()=>{localStorage.setItem('omm_local_import_pending','1');localStorage.setItem('office_seed_bartek','imported');});
  const rejected=await b.evaluate(async()=>{try{await OmmLocalState.edit('office_seed_bartek',null,'unsafe');return false;}catch{return true;}});assert.equal(rejected,true);
  await a.evaluate(()=>localStorage.removeItem('omm_local_import_pending'));
+ await b.locator('[data-person="Bartek"]').click();
  await b.waitForFunction(()=>document.querySelector('[data-seed-profile-id="bartek"]').value==='imported');
-},'/','/'));
+},'/','/taste.html'));
 test('L2: 12 kolejnych równoległych zapisów nie gubi niezależnych zmian',()=>pair(async(a,b)=>{
  for(let iteration=0;iteration<12;iteration++){
   const initial=JSON.stringify(db());await a.evaluate(raw=>localStorage.setItem('office_taste_profile_v1',raw),initial);

@@ -65,3 +65,9 @@ L2 wdrożono jako v43.28.L2 (#26). L2.1, v43.29.L2.1, koryguje wyścig kończeni
 LF1 (#28, v43.30.LF1) rozdziela próby/sukcesy Last.fm oraz częściowe wyniki i backoff. Kolejny osobny LF3 (v43.31.LF3) monitoruje parę zalogowane Spotify → skonfigurowane Last.fm, bez przypisania do obecności profili i bez migracji D1. Dokument: LASTFM_SYNC_MONITORING_LF3.md. Nazwa P5 pozostaje zarezerwowana dla optymalizacji cache.
 
 Po LF3: U3 (artyści w ankiecie) → LF2 (kompaktowa baza Last.fm w chmurze) → LOG1 → LOG2 → M → V / S1 / S2 → COVER1 → COVER2. Zakresy algorytmiczne pozostają osobnymi, późniejszymi decyzjami.
+
+## U3 — artyści w ankiecie (2026-10-10)
+
+v43.32.U3 przenosi edycję wzorców i blokowanych wykonawców do ankiety, zachowując klucze, domyślne/puste wartości, konflikty i synchronizację L2. Dodatkowe gatunki pozostają dotychczasowe. Dokument: ARTISTS_SURVEY_U3.md.
+
+Następny zakres: LF2, kompaktowa baza Last.fm w chmurze. Najpierw ustalić kontrakt, limit rozmiaru, TTL, merge i zgodność starszych klientów, z wykorzystaniem rozdzielenia prób/sukcesów LF1 i obserwacji kont LF3. Raw cache i historia odsłuchów pozostają lokalne. Dalsza kolejność: LOG1 → LOG2 → M → V / S1 / S2 → COVER1 → COVER2; strojenie selekcji i T1 osobno.

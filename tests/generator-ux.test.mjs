@@ -25,7 +25,9 @@ test('presence supports keyboard selection without changing stored preferences',
     assert.equal(await page.locator('[data-presence-id="bartek"]').isDisabled(), true);
     await page.locator('#manualPreferencesPanel > summary').click();
     await page.locator('[data-preferences-id="asia"] > summary').click();
-    assert.equal(await page.locator('[data-seed-profile-id="asia"]').inputValue(), 'Enya');
+    assert.equal(await page.locator('[data-seed-profile-id="asia"]').count(), 0);
+    assert.equal(await page.locator('[data-preferences-id="asia"] a').getAttribute('href'), 'taste.html#asia');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('office_seed_asia')), 'Enya');
     assert.deepEqual(await page.evaluate(keys => Object.fromEntries(keys.map(k => [k,localStorage.getItem(k)])), Object.keys(initial)),initial);
     for (const id of ['generateButton','syncLastFmButton','exportStateButton','importStateButton','cloudUploadButton','cloudDownloadButton','clearHistoryButton']) assert.equal(await page.locator(`#${id}`).count(),1);
     await page.locator('#generatorTools > summary').click();
