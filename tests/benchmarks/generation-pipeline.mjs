@@ -8,18 +8,20 @@ const repetitions = Number(process.env.OMM_BENCH_REPETITIONS || 5);
 const transportDelayMs = Number(process.env.OMM_BENCH_API_DELAY_MS || 0);
 const instrument = process.env.OMM_BENCH_INSTRUMENT !== '0';
 const fixedClock = process.env.OMM_BENCH_FIXED_CLOCK === '1';
+const edges = process.env.OMM_BENCH_EDGES === '1';
+const matrix = process.env.OMM_BENCH_MATRIX === '1';
 const baseline = process.env.OMM_BENCH_BASELINE ? JSON.parse(readFileSync(process.env.OMM_BENCH_BASELINE, 'utf8')) : null;
 assert.ok(Number.isInteger(repetitions) && repetitions >= 1 && repetitions <= 20);
 assert.ok(Number.isFinite(transportDelayMs) && transportDelayMs >= 0 && transportDelayMs <= 1000);
 const harness = await startBrowserHarness();
 const results = [];
 try {
-  for (const people of [2, 4]) for (const cache of ['cold', 'warm']) {
+  for (const people of [2, 4]) for (const cache of edges ? ['cold'] : ['cold', 'warm']) for (const target of matrix ? [30, 60, 120] : [60]) for (const poolSize of matrix ? [80, 2000] : [2000]) for (const caseKind of edges ? ['no-results', 'blocked', 'expired-cache', 'changed-profiles', '429', 'network'] : ['normal']) {
     const samples = [];
     for (let iteration = 0; iteration <= repetitions; iteration++) {
       const session = await harness.page();
       try {
-        const output = await session.page.evaluate(async ({ people, cache, transportDelayMs, instrument, fixedClock, baseline }) => {
+        const output = await session.page.evaluate(async ({ people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind }) => {
           if (baseline) for (const [name, source] of Object.entries(baseline.functions)) window[name] = (0, eval)(`(${source})`);
           if (fixedClock) {
             const wallNow = Date.now;
@@ -45,7 +47,7 @@ try {
           const now = Date.now();
           const makeTrack = i => ({ id: `t${i}`, uri: `spotify:track:t${i}`, name: `Song ${i}${i >= 100 ? ' - Rework' : ''}`,
             artists: [{ id: `a${i}`, name: i < 100 ? `Good${i}` : `Unused${i % 1700}` }], album: { name: `Album ${i}` } });
-          const tracks = Array.from({ length: 2000 }, (_, i) => makeTrack(i));
+          const tracks = Array.from({ length: poolSize }, (_, i) => makeTrack(i));
           localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify(tracks.map(track => ({ track, queries: ['genre:"rock"'], savedAt: now }))));
           localStorage.setItem(LASTFM_ARTIST_POOL_KEY, JSON.stringify(Array.from({ length: 1800 }, (_, i) => ({
             artist: i < 100 ? `Good${i}` : `Unused${i - 100}`, tags: ['rock'], sources: ['tag'], savedAt: now
@@ -61,12 +63,13 @@ try {
           }))));
           localStorage.setItem(LASTFM_USER_KEY, 'benchmark'); lastFmUserInput.value = 'benchmark';
           const selected = ['bartek', 'asia', 'edyta', 'monika'].slice(0, people).map(id => ({
-            id, name: profiles[id].name, genres: ['rock'], manualGenres: [], artists: ['Seed missing'], blockedArtists: [],
+            id, name: profiles[id].name, genres: ['rock'], manualGenres: [], artists: people === 4 && target !== 60 ? ['Good0'] : ['Seed missing'], blockedArtists: [],
             categories: ['rock'], taste: { hasSurvey: true, likedGenres: ['Rock'], okGenres: [], blockedGenres: [] }
           }));
+          if (people === 4 && target !== 60) { tracks[1].artists = tracks[0].artists; localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify(tracks.map(track => ({ track, queries: ['genre:"rock"'], savedAt: now })))); }
           selectedProfiles = () => selected;
           getValidAccessToken = async () => 'mock-token';
-          playlistLength.value = '60'; discoveryLevel.value = '30';
+          playlistLength.value = String(target); discoveryLevel.value = '30';
           // Warm means fresh history/tag TTLs plus every page of the actual queries
           // this fixture will consider. Empty cached pages are valid negative cache.
           if (cache === 'warm') {
@@ -75,15 +78,17 @@ try {
             const rotationKey = 'office_lastfm_source_rotation_v1', rotation = localStorage.getItem(rotationKey);
             const names = selected.flatMap(p => lastFmArtistsForTags([...p.genres, ...p.categories.flatMap(commonCategoryLastFmTags)], 18, { includeRecent: p.id === 'bartek' }));
             if (rotation === null) localStorage.removeItem(rotationKey); else localStorage.setItem(rotationKey, rotation);
-            const queries = ['artist:"Seed missing"', 'genre:"rock"', ...tasteCommonGenreQueries(selected), ...exactCommonGenreQueries(selected), ...names.map(name => `artist:"${name}"`)];
+            const queries = [...selected.flatMap(p => p.artists.map(a => `artist:"${a}"`)), 'genre:"rock"', ...tasteCommonGenreQueries(selected), ...exactCommonGenreQueries(selected), ...names.map(name => `artist:"${name}"`)];
             for (const query of new Set(queries)) for (let offset = 0; offset <= 90; offset += 10) {
               const matching = tracks.filter(track => queryMatchesTrack(query, track));
               writeSearchCache(query, offset, matching.slice(offset, offset + 10));
             }
           }
+          if (caseKind === 'blocked') localStorage.setItem(FEEDBACK_BLOCKED_ARTISTS_KEY, JSON.stringify({ good0: { name: 'Good0' } }));
+          if (caseKind === 'expired-cache') localStorage.setItem(searchCacheKey('artist:"Seed missing"', 0), JSON.stringify({ savedAt: now - SEARCH_CACHE_TTL_MS - 1, items: [] }));
           const pools = () => ({ spotify: loadCandidatePool().length, artists: loadLastFmArtistPool().length, tracks: loadLastFmTrackPool().length });
           const before = pools(), requests = [], written = [];
-          let remoteState = {};
+          let remoteState = {}, searchRequests = 0;
           window.fetch = async (input, options = {}) => {
             const url = new URL(input, location.href), method = options.method || 'GET';
             const started = performance.now();
@@ -103,6 +108,11 @@ try {
               written.push(...JSON.parse(options.body).uris); return Response.json({ snapshot_id: 'mock' });
             }
             if (url.pathname === '/v1/search') {
+              searchRequests++;
+              if (caseKind === 'network') throw new TypeError('Mock Spotify network unavailable');
+              if (caseKind === '429' && searchRequests === 1) return Response.json({ error: { status: 429 } }, { status: 429, headers: { 'Retry-After': '1' } });
+              if (caseKind === 'changed-profiles' && searchRequests === 1) { await Promise.resolve(); selected.at(-1).taste.likedGenres = ['Jazz']; }
+              if (caseKind === 'no-results') return Response.json({ tracks: { items: [] } });
               const query = url.searchParams.get('q'), offset = Number(url.searchParams.get('offset'));
               return Response.json({ tracks: { items: tracks.filter(track => queryMatchesTrack(query, track)).slice(offset, offset + 10) } });
             }
@@ -114,7 +124,7 @@ try {
           };
           const metrics = {}, stack = [], originals = new Map();
           const functions = ['generateOfficePlaylist', 'cleanupOldOfficePlaylists', 'refreshLastFmBeforeGeneration', 'syncSpotifyRecentHistory',
-            'createCandidateAcquisition', 'primeManualSeedArtists', 'primeProfileGenres', 'primeCommonGroupQueries', 'acquisitionCoverage',
+            'createCandidateAcquisition', 'getAcquisitionCoverage', 'primeManualSeedArtists', 'primeProfileGenres', 'primeCommonGroupQueries', 'acquisitionCoverage',
             'buildGroupRecommendationContext', 'eligibleGroupCandidates', 'selectGroupPlaylist', 'sequencePlaylistForListening',
             'buildPlaylistDiagnostics', 'createPlaylist', 'addItemsToPlaylist', 'saveRecentPlaylistSnapshot', 'renderPlaylistResult', 'uploadCloudStateIfChanged',
             'readSearchCache', 'saveCandidatePool', 'retainSpotifyPool', 'loadCandidatePool', 'createLastFmEvidenceSnapshot', 'loadLastFmArtistPool', 'loadLastFmTrackPool',
@@ -148,25 +158,27 @@ try {
           await generateOfficePlaylist();
           for (const [name, original] of originals) window[name] = original;
           const snapshot = loadRecentPlaylists()[0];
-          if (!snapshot || written.length !== snapshot.tracks.length || !written.length) throw new Error(`Generation failed: ${playlistResult.textContent}`);
-          return { people, cache, appVersion: document.querySelector('h1 .version').textContent, before, after: pools(), metrics, requests, selection, searches: newSearchesThisGeneration,
-            length: written.length, ids: snapshot.tracks.map(track => track.id), disabled: generateButton.disabled,
-            diagnostics: snapshot.tracks.map(track => track.diagnostic),
+          const expectedFailure = ['network', 'changed-profiles'].includes(caseKind);
+          if (!expectedFailure && (!snapshot || written.length !== snapshot.tracks.length || !written.length)) throw new Error(`Generation failed: ${playlistResult.textContent}`);
+          if (expectedFailure && written.length) throw new Error('Expected failure wrote tracks');
+          return { people, cache, target, poolSize, caseKind, appVersion: document.querySelector('h1 .version').textContent, before, after: pools(), metrics, requests, selection: selection || null, searches: newSearchesThisGeneration,
+            length: written.length, ids: (snapshot?.tracks || []).map(track => track.id), disabled: generateButton.disabled,
+            diagnostics: (snapshot?.tracks || []).map(track => track.diagnostic),
             stateBytes: new TextEncoder().encode(JSON.stringify({ state: remoteState })).length };
-        }, { people, cache, transportDelayMs, instrument, fixedClock, baseline });
+        }, { people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind });
         assert.deepEqual(session.errors, []);
-        assert.deepEqual(output.before, { spotify: 2000, artists: 1800, tracks: 3000 });
-        assert.equal(output.disabled, false); assert.ok(output.searches <= 12);
-        assert.ok(output.selection.min >= 35);
-        assert.ok(output.selection.discovery <= output.selection.maxDiscovery);
-        assert.ok(Object.values(output.selection.artistCounts).every(count => count <= 2));
+        assert.deepEqual(output.before, { spotify: poolSize, artists: 1800, tracks: 3000 });
+        assert.equal(output.disabled, false); assert.ok(output.searches <= (target <= 60 ? 12 : 16));
+        if (output.selection) assert.ok(output.selection.min >= 35);
+        if (output.selection) assert.ok(output.selection.discovery <= output.selection.maxDiscovery);
+        if (output.selection) assert.ok(Object.values(output.selection.artistCounts).every(count => count <= 2));
         assert.ok(output.stateBytes <= 2 * 1024 * 1024);
         if (cache === 'warm') assert.equal(output.searches, 0);
         if (iteration) samples.push(output);
       } finally { await session.close(); }
     }
     const p95 = values => [...values].sort((a, b) => a - b)[Math.ceil(values.length * .95) - 1];
-    results.push({ people, cache, samples: samples.length,
+    results.push({ people, cache, target, poolSize, caseKind, samples: samples.length,
       totalP95Ms: p95(samples.map(row => row.metrics.generateOfficePlaylist.inclusiveMs)),
       functions: Object.fromEntries([...new Set(samples.flatMap(row => Object.keys(row.metrics)))].map(name => [name, {
         calls: samples.map(row => row.metrics[name]?.calls || 0),

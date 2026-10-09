@@ -3,9 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.22.P2</title>
+  <title>Office Music Mixer v43.23.P3</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
+    .generation-stages { padding-left: 1.5rem; }
+    .generation-stages [data-status="active"] { font-weight: bold; }
+    .generation-stages [data-status="waiting"] { opacity: .65; }
+    #progress pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
     :root {
       color-scheme: light dark;
       font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -366,7 +370,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.22.P2</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.23.P3</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -557,6 +561,7 @@
 <script src="artist-catalog-evidence.js"></script>
 <script src="pool-retention.js"></script>
 <script src="discovery-quota.js"></script>
+<script src="generation-progress.js"></script>
 <script>
 const clientId = "d207523201ce4426923cda4cc893f76f";
 const redirectUri = "https://office-music.pages.dev/";
@@ -1105,8 +1110,15 @@ function setCloudStatus(text, kind = "") {
   if (kind) cloudStatus.classList.add(kind);
 }
 
+async function generationCloudRequest(token, url, options) {
+  const current = localStorage.getItem("spotify_access_token");
+  const active = current && Number(localStorage.getItem("spotify_token_expires")) > Date.now()
+    ? current : localStorage.getItem("spotify_refresh_token") ? await getValidAccessToken() : token;
+  return fetch(url, { ...options, headers: { ...options.headers, Authorization: `Bearer ${active}` } });
+}
+
 async function cloudApiRequest(token, options = {}) {
-  const response = await fetch(CLOUD_STATE_ENDPOINT, {
+  const response = await generationCloudRequest(token, CLOUD_STATE_ENDPOINT, {
     ...options,
     headers: {
       ...(options.headers || {}),
@@ -1245,7 +1257,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.22.P2",
+      source: "Office Music Mixer v43.23.P3",
       storage: exportedStorageState()
     };
 
@@ -2131,29 +2143,96 @@ function saveTokens(data) {
   }
 }
 
-async function refreshAccessToken() {
-  const refreshToken = localStorage.getItem("spotify_refresh_token");
-  if (!refreshToken) return null;
+// IndexedDB transactions provide a coherent handoff across renderer processes;
+// Web Locks alone do not guarantee visibility of multiple localStorage writes.
+async function spotifyOAuthRotation(value = undefined) {
+  let db;
+  try {
+    db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("omm-spotify-oauth", 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("rotation");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error("OAuth storage blocked"));
+    });
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction("rotation", value === undefined ? "readonly" : "readwrite");
+      const store = transaction.objectStore("rotation");
+      const request = value === undefined ? store.get("current") : value === null ? store.delete("current") : store.put(value, "current");
+      let result; request.onsuccess = () => { result = request.result; };
+      transaction.oncomplete = () => resolve(result);
+      transaction.onerror = transaction.onabort = () => reject(transaction.error);
+    });
+  } catch {
+    throw new Error("Nie można bezpiecznie zsynchronizować odnowienia sesji Spotify między kartami. Sesja zachowana; spróbuj ponownie.");
+  } finally { db?.close(); }
+}
 
-  const response = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      client_id: clientId
-    })
-  });
+let spotifyRefreshInFlight = null;
 
-  const data = await response.json();
-  if (!response.ok) {
-    console.error(data);
-    clearTokens();
-    return null;
-  }
-
-  saveTokens(data);
-  return data.access_token;
+async function refreshAccessToken(rejectedToken = null) {
+  if (!localStorage.getItem("spotify_refresh_token")) return null;
+  if (spotifyRefreshInFlight) return spotifyRefreshInFlight;
+  const renew = async () => {
+    let refreshToken = localStorage.getItem("spotify_refresh_token");
+    let previousAccess = localStorage.getItem("spotify_access_token");
+    let expiry = Number(localStorage.getItem("spotify_token_expires"));
+    if (navigator.locks && refreshToken) {
+      const rotation = await spotifyOAuthRotation();
+      if (rotation && (rotation.previousRefresh === refreshToken || rotation.refresh === refreshToken) && rotation.expires > Date.now()) {
+        if (!localStorage.getItem("spotify_refresh_token")) throw new Error("Sesja Spotify została wylogowana. Zaloguj się ponownie.");
+        const observedRefresh = localStorage.getItem("spotify_refresh_token");
+        const observedAccess = localStorage.getItem("spotify_access_token");
+        if ((observedRefresh !== refreshToken && observedRefresh !== rotation.refresh) || (observedAccess !== previousAccess && observedAccess !== rotation.access)) {
+          if (observedAccess && Number(localStorage.getItem("spotify_token_expires")) > Date.now()) return observedAccess;
+          throw new Error("Sesja Spotify zmieniła się podczas odświeżania. Zaloguj się ponownie.");
+        }
+        saveTokens({ access_token: rotation.access, refresh_token: rotation.refresh, expires_in: (rotation.expires - Date.now() + 60000) / 1000 });
+        if (rejectedToken === null || rotation.access !== rejectedToken) return rotation.access;
+        refreshToken = rotation.refresh; previousAccess = rotation.access; expiry = rotation.expires;
+      }
+    }
+    if (previousAccess && expiry > Date.now() && (rejectedToken === null || previousAccess !== rejectedToken)) return previousAccess;
+    if (!refreshToken) return null;
+    activeGenerationProgress?.count("oauthAttempts");
+    activeGenerationProgress?.note("Sesja Spotify wygasła. Odświeżam połączenie…");
+    try {
+      const request = () => fetch("https://accounts.spotify.com/api/token", {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: clientId })
+      });
+      const response = activeGenerationProgress ? await activeGenerationProgress.measureAsync("oauth", request) : await request();
+      const data = await parseJsonSafely(response);
+      // Never erase a newer login/rotation or resurrect a session after logout.
+      if (localStorage.getItem("spotify_refresh_token") !== refreshToken || localStorage.getItem("spotify_access_token") !== previousAccess) {
+        const current = localStorage.getItem("spotify_access_token");
+        if (current && Number(localStorage.getItem("spotify_token_expires")) > Date.now()) return current;
+        throw new Error("Sesja Spotify zmieniła się podczas odświeżania. Zaloguj się ponownie.");
+      }
+      if (!response.ok) {
+        if ((response.status === 400 || response.status === 401) && data?.error === "invalid_grant") {
+          clearTokens();
+          throw new Error("Nie udało się odnowić sesji Spotify: refresh token został odrzucony. Zaloguj się ponownie.");
+        }
+        throw new Error(`Odświeżenie Spotify chwilowo niedostępne (HTTP ${response.status}). Sesja zachowana; spróbuj ponownie.`);
+      }
+      if (typeof data?.access_token !== "string" || !data.access_token || !Number.isFinite(Number(data.expires_in)) || Number(data.expires_in) <= 0) {
+        throw new Error("Niepoprawna odpowiedź odświeżenia Spotify. Sesja zachowana; spróbuj ponownie.");
+      }
+      saveTokens(data);
+      if (navigator.locks) await spotifyOAuthRotation({ previousRefresh: refreshToken, access: data.access_token, refresh: data.refresh_token || refreshToken, expires: Number(localStorage.getItem("spotify_token_expires")) });
+      activeGenerationProgress?.count("oauthSuccess");
+      activeGenerationProgress?.note("Połączenie Spotify odnowione. Kontynuuję generowanie…");
+      return data.access_token;
+    } catch (error) {
+      activeGenerationProgress?.count("oauthFailure");
+      if (error instanceof TypeError) throw new Error("Błąd połączenia podczas odświeżania Spotify. Sesja zachowana; spróbuj ponownie.");
+      throw error;
+    }
+  };
+  // Web Locks serializes refresh-token rotation between tabs on the same origin.
+  spotifyRefreshInFlight = (navigator.locks ? navigator.locks.request("omm-spotify-refresh", renew) : renew());
+  try { return await spotifyRefreshInFlight; } finally { spotifyRefreshInFlight = null; }
 }
 
 async function getValidAccessToken() {
@@ -2164,8 +2243,48 @@ async function getValidAccessToken() {
   return refreshAccessToken();
 }
 
+let activeGenerationProgress = null;
+let generationInFlight = false;
+let lastGenerationReport = null;
+
+async function spotifyGenerationRequest(token, url, options = {}, authState = { retried: false }) {
+  const current = localStorage.getItem("spotify_access_token");
+  let active = current && Number(localStorage.getItem("spotify_token_expires")) > Date.now()
+    ? current : localStorage.getItem("spotify_refresh_token") ? await getValidAccessToken() : token;
+  if (!active) throw new Error("Nie udało się odnowić sesji Spotify. Zaloguj się ponownie.");
+  const send = async () => {
+    if (String(url).includes("/v1/search")) {
+      if (!authState.searchCounted) { activeGenerationProgress?.count("searches"); authState.searchCounted = true; }
+      activeGenerationProgress?.count("searchRequests");
+    }
+    const operation = () => fetch(url, { ...options, headers: { ...options.headers, Authorization: `Bearer ${active}` } });
+    return activeGenerationProgress ? activeGenerationProgress.measureAsync("spotifyApi", operation) : operation();
+  };
+  let response = await send();
+  // An explicit Spotify 401 rejects authentication before performing the operation.
+  // Network failures, 5xx and ambiguous write outcomes are never replayed here.
+  if (response.status !== 401) return response;
+  if (authState.retried) throw new Error("Spotify nadal odrzuca sesję (401). Zaloguj się ponownie.");
+  authState.retried = true;
+  active = await refreshAccessToken(active);
+  if (!active) throw new Error("Nie udało się odnowić sesji Spotify. Zaloguj się ponownie.");
+  if (String(url).includes("/v1/search")) {
+    if (activeGenerationProgress) await activeGenerationProgress.measureAsync("throttle", waitForSearchSlot);
+    else await waitForSearchSlot();
+  }
+  response = await send();
+  if (response.status === 401) throw new Error("Spotify nadal odrzuca odnowioną sesję (401). Zaloguj się ponownie.");
+  return response;
+}
+
+function generationStage(index) { activeGenerationProgress?.stage(index); }
+function generationNote(message) {
+  if (activeGenerationProgress) activeGenerationProgress.note(message);
+  else progressBox.textContent = message;
+}
+
 async function getProfile(token) {
-  const response = await fetch("https://api.spotify.com/v1/me", {
+  const response = await spotifyGenerationRequest(token, "https://api.spotify.com/v1/me", {
     headers: { Authorization: `Bearer ${token}` }
   });
 
@@ -2510,7 +2629,8 @@ async function lastFmRequest(method, params = {}, ttlMs = LASTFM_CACHE_TTL_MS) {
     ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
   }).toString();
 
-  const response = await fetch(url);
+  const response = activeGenerationProgress
+    ? await activeGenerationProgress.measureAsync("lastfmApi", () => fetch(url)) : await fetch(url);
   const data = await parseJsonSafely(response);
   if (!response.ok || data?.error) {
     const msg = data?.message || `HTTP ${response.status}`;
@@ -3126,7 +3246,7 @@ async function syncSpotifyRecentHistory(token) {
     return 0;
   }
 
-  const response = await fetch(
+  const response = await spotifyGenerationRequest(token,
     "https://api.spotify.com/v1/me/player/recently-played?limit=50",
     { headers: { Authorization: `Bearer ${token}` } }
   );
@@ -3658,12 +3778,14 @@ async function searchTracks(token, query, offset = 0) {
     offset: String(offset)
   }).toString();
 
+  const authState = { retried: false };
   for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
-    await waitForSearchSlot();
+    if (activeGenerationProgress) await activeGenerationProgress.measureAsync("throttle", waitForSearchSlot);
+    else await waitForSearchSlot();
 
-    const response = await fetch(url, {
+    const response = await spotifyGenerationRequest(token, url, {
       headers: { Authorization: `Bearer ${token}` }
-    });
+    }, authState);
 
     const data = await parseJsonSafely(response);
 
@@ -3693,9 +3815,9 @@ async function searchTracks(token, query, offset = 0) {
         );
       }
 
-      progressBox.textContent =
-        `Spotify zwolniło zapytania. Czekam ${retrySeconds} s i próbuję ponownie...`;
-      await sleep(retrySeconds * 1000 + 250);
+      generationNote(`Spotify ogranicza zapytania (429). Czekam ${retrySeconds} s i próbuję ponownie…`);
+      if (activeGenerationProgress) await activeGenerationProgress.measureAsync("retryWait", () => sleep(retrySeconds * 1000 + 250));
+      else await sleep(retrySeconds * 1000 + 250);
       continue;
     }
 
@@ -4216,7 +4338,7 @@ async function cleanupOldOfficePlaylists(token) {
     let offset = 0;
 
     while (offset < 500) {
-      const response = await fetch(
+      const response = await spotifyGenerationRequest(token,
         `https://api.spotify.com/v1/me/playlists?limit=50&offset=${offset}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -4246,7 +4368,7 @@ async function cleanupOldOfficePlaylists(token) {
     let accepted = 0;
     for (let i = 0; i < uniqueOldUris.length; i += 40) {
       const batch = uniqueOldUris.slice(i, i + 40);
-      const response = await fetch(
+      const response = await spotifyGenerationRequest(token,
         `https://api.spotify.com/v1/me/library?uris=${encodeURIComponent(batch.join(","))}`,
         { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
       );
@@ -4266,7 +4388,7 @@ async function cleanupOldOfficePlaylists(token) {
       await sleep(350);
       let verifyOffset = 0;
       while (verifyOffset < 500) {
-        const response = await fetch(
+        const response = await spotifyGenerationRequest(token,
           `https://api.spotify.com/v1/me/playlists?limit=50&offset=${verifyOffset}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -4296,7 +4418,7 @@ async function createPlaylist(token, selected, total) {
   const names = selected.map(p => p.name).join(", ");
   const stamp = officePlaylistTimestamp();
 
-  const response = await fetch("https://api.spotify.com/v1/me/playlists", {
+  const response = await spotifyGenerationRequest(token, "https://api.spotify.com/v1/me/playlists", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -4324,7 +4446,7 @@ async function addItemsToPlaylist(token, playlistId, uris) {
   let lastData = null;
   for (let i = 0; i < uris.length; i += 100) {
     const chunk = uris.slice(i, i + 100);
-    const response = await fetch(
+    const response = await spotifyGenerationRequest(token,
       `https://api.spotify.com/v1/playlists/${playlistId}/items`,
       {
         method: "POST",
@@ -5416,16 +5538,61 @@ function acquisitionCoverage(selected, blocklists) {
   return { qualifying, byArtist, queryCapacity, artists: byArtist.size };
 }
 
+function acquisitionCoverageInputs(acquisition) {
+  return [CANDIDATE_POOL_KEY, LASTFM_ARTIST_POOL_KEY, LASTFM_TRACK_POOL_KEY, HISTORY_KEY,
+    FEEDBACK_KEY, FEEDBACK_BLOCKED_ARTISTS_KEY, OfficeArtistExclusions.KEY, LASTFM_USER_KEY, TASTE_STORAGE_KEY]
+    .map(key => localStorage.getItem(key)).concat([
+      JSON.stringify(acquisition.selected),
+      JSON.stringify(Object.fromEntries(Object.entries(acquisition.blocklists).map(([key, values]) => [key, [...values]]))),
+      JSON.stringify([discoveryLevel.value, recognizabilityLevel.value, trackBlockDays.value, artistCooldownHours.value, avoidRemixes.checked, avoidNonLatin.checked])
+    ]);
+}
+
+function acquisitionCoverageExpiry(inputs, now) {
+  let deadline = Infinity;
+  const boundary = value => { if (Number.isFinite(value) && value > now) deadline = Math.min(deadline, value); };
+  const rows = index => { try { const data = JSON.parse(inputs[index] || "[]"); return Array.isArray(data) ? data : []; } catch { return []; } };
+  for (const [index, age] of [[0, CANDIDATE_POOL_MAX_AGE_MS], [1, LASTFM_ARTIST_POOL_MAX_AGE_MS], [2, LASTFM_TRACK_POOL_MAX_AGE_MS]]) {
+    for (const row of rows(index)) boundary(Number(row?.savedAt || 0) + age + 1);
+  }
+  for (const row of rows(1)) for (const play of Array.isArray(row?.recentObservation?.plays) ? row.recentObservation.plays : []) {
+    if (!Number.isFinite(play)) continue;
+    boundary(play * 1000); boundary(play * 1000 + LASTFM_HISTORY_WINDOW_DAYS * 86400000 + 1);
+  }
+  for (const row of rows(3)) {
+    const at = new Date(row?.playedAt || 0).getTime();
+    for (const age of [Number(trackBlockDays.value) * 86400000, Number(artistCooldownHours.value) * 3600000, HISTORY_MAX_AGE_DAYS * 86400000]) boundary(at + age + 1);
+  }
+  return deadline;
+}
+
+function getAcquisitionCoverage(acquisition) {
+  const read = () => {
+    if (acquisition.blockProfiles) acquisition.blocklists = generationBlocklists(acquisition.blockProfiles);
+    const inputs = acquisitionCoverageInputs(acquisition), now = Date.now(), previous = acquisition.coverageCache;
+    if (previous && now >= previous.at && now < previous.until && inputs.every((value, index) => value === previous.inputs[index])) {
+      activeGenerationProgress?.count("coverageHits"); return previous.value;
+    }
+    const until = acquisitionCoverageExpiry(inputs, now);
+    const value = acquisitionCoverage(acquisition.selected, acquisition.blocklists);
+    acquisition.coverageCache = { inputs, at: now, until, value };
+    activeGenerationProgress?.update({ artists: value.artists, tracks: value.qualifying.length });
+    return value;
+  };
+  return activeGenerationProgress ? activeGenerationProgress.measure("coverageCheck", read) : read();
+}
+
 function createCandidateAcquisition(selected, blocklists = generationBlocklists(selected)) {
-  const coverage = acquisitionCoverage(selected, blocklists);
-  return { selected, blocklists, searched: new Set(), cachedQueries: new Set(), before: coverage.artists, cachedPages: 0 };
+  const acquisition = { selected, blocklists, searched: new Set(), cachedQueries: new Set(), before: 0, cachedPages: 0 };
+  acquisition.before = getAcquisitionCoverage(acquisition).artists;
+  return acquisition;
 }
 
 function reuseQualifyingCache(cachedRows, acquisition) {
   const existing = loadCandidatePool(), existingIds = new Set(existing.map(row => row.track.id));
-  const before = acquisitionCoverage(acquisition.selected, acquisition.blocklists);
   const additions = [...cachedRows.values()].filter(row => !existingIds.has(row.track.id));
   if (!additions.length) return;
+  const before = getAcquisitionCoverage(acquisition);
   const prospective = [...existing, ...additions];
   const ctx = acquisitionContext(acquisition.selected, prospective);
   const { eligible } = eligibleGroupCandidates(acquisition.selected, acquisition.blocklists, ctx, prospective);
@@ -5445,12 +5612,15 @@ function reuseQualifyingCache(cachedRows, acquisition) {
   if (!chosen.length) { rebuildCanonicalCleanVariantSignatures(existing); return; }
   // D.2 owns retention across all saved profiles, including redundant qualified rows.
   saveCandidatePool([...existing, ...chosen]);
+  activeGenerationProgress?.count("cacheContributed", chosen.length);
   rebuildCanonicalCleanVariantSignatures(loadCandidatePool());
   renderHistorySummary();
 }
 
 async function primeDiverseQueries(token, rows, maxNewSearches, acquisition, onSearched = () => {}) {
   const unique = [...new Map(rows.map(row => [canonicalQuery(row.query), row])).values()];
+  activeGenerationProgress?.count("queries", unique.length);
+  const skippedCovered = new Set();
   const feedback = feedbackArtistStats();
   const allowed = unique.filter(row => {
     const artist = normalizeArtistName(extractQuotedQueryValue(row.query, 'artist'));
@@ -5469,6 +5639,7 @@ async function primeDiverseQueries(token, rows, maxNewSearches, acquisition, onS
       const page = readSearchCache(row.query, offset);
       if (page === null) continue;
       acquisition.cachedPages++;
+      activeGenerationProgress?.count("cachePages");
       let acquiredAt = Date.now();
       try { acquiredAt = JSON.parse(localStorage.getItem(searchCacheKey(row.query, offset))).savedAt; } catch {}
       for (const track of page) if (queryMatchesTrack(row.query, track) && acquiredAt >= (acquiredTimes.get(track.id) || 0)) { tracks.set(track.id, track); acquiredTimes.set(track.id, acquiredAt); }
@@ -5487,12 +5658,18 @@ async function primeDiverseQueries(token, rows, maxNewSearches, acquisition, onS
   const before = newSearchesThisGeneration;
   const pending = [...allowed];
   while (pending.length && newSearchesThisGeneration - before < maxNewSearches && newSearchesThisGeneration < maxNewSearchesThisGeneration) {
-    const coverage = acquisitionCoverage(acquisition.selected, acquisition.blocklists);
+    const coverage = getAcquisitionCoverage(acquisition);
+    for (const row of pending) {
+      const artist = normalizeArtistName(extractQuotedQueryValue(row.query, "artist"));
+      const key = canonicalQuery(row.query);
+      if (artist && (coverage.byArtist.get(artist)?.size || 0) >= 2 && !skippedCovered.has(key)) { skippedCovered.add(key); activeGenerationProgress?.count("skipped"); }
+    }
     const capacity = row => coverage.queryCapacity.get(canonicalQuery(row.query)) || 0;
     const ranked = pending.map((row, order) => ({ row, order, capacity: capacity(row) })).sort((a, b) => a.capacity - b.capacity || a.order - b.order);
     const chosen = ranked.find(({ row }) => {
       const key = canonicalQuery(row.query), artist = normalizeArtistName(extractQuotedQueryValue(row.query, 'artist'));
-      return !acquisition.searched.has(key) && (!artist || (coverage.byArtist.get(artist)?.size || 0) < 2) &&
+      const blocked = artist && (acquisition.blocklists.explicitBlockedNames.has(artist) || acquisition.blocklists.feedbackBlockedNames.has(artist) || acquisition.blocklists.historyBlockedNames.has(artist) || artistFeedbackScore(feedbackArtistStats().get(artist)) <= ARTIST_FEEDBACK_EXCLUSION_SCORE);
+      return !blocked && !acquisition.searched.has(key) && (!artist || (coverage.byArtist.get(artist)?.size || 0) < 2) &&
         searchOffsetsForQuery(row.query).some(offset => !hasFreshSearchCache(row.query, offset));
     });
     if (!chosen) break;
@@ -5516,21 +5693,33 @@ async function primeCommonGroupQueries(token, selected, maxNewSearches = 3, acqu
 }
 
 async function generateOfficePlaylist() {
+  if (generationInFlight) return;
+  generationInFlight = true;
+  const total = Number(playlistLength.value);
+  const progress = OmmGenerationProgress.create(progressBox, total);
+  activeGenerationProgress = progress;
+  const originals = new Map();
+  for (const [name, metric] of [["loadCandidatePool", "localPool"], ["readSearchCache", "searchCache"], ["acquisitionCoverage", "coverage"], ["eligibleGroupCandidates", "qualification"]]) {
+    const original = window[name]; originals.set(name, original);
+    window[name] = function (...args) { return progress.measure(metric, () => { const value = original.apply(this, args); if (name === "loadCandidatePool") progress.update({ pool: value.length });
+      if (name === "readSearchCache") progress.count(value === null ? "cacheReadMisses" : "cacheReadHits"); return value; }); };
+  }
+  let createdPlaylist = null, finalLength = 0;
   try {
     generateButton.disabled = true;
     newSearchesThisGeneration = 0;
     queriesAttemptedThisGeneration = new Set();
     playlistBox.style.display = "none";
     playlistResult.textContent = "";
-    progressBox.textContent = "Przygotowuję profile...";
+    maxNewSearchesThisGeneration = searchBudgetForTarget(total);
+    progress.update({ budget: maxNewSearchesThisGeneration });
+    generationStage(0);
 
     const token = await getValidAccessToken();
     if (!token) throw new Error("Brak aktywnej sesji Spotify.");
 
-    const total = Number(playlistLength.value);
-    maxNewSearchesThisGeneration = searchBudgetForTarget(total);
 
-    progressBox.textContent = "Sprzątam playlisty Office Music Mixer starsze niż 72 godziny...";
+    generationStage(1);
     const playlistCleanupResult = await cleanupOldOfficePlaylists(token);
 
     const selected = selectedProfiles();
@@ -5545,28 +5734,29 @@ async function generateOfficePlaylist() {
     const mixProfiles = selected.filter(hasMusicProfile);
     const ignoredProfiles = selected.filter(profile => !hasMusicProfile(profile));
 
-    progressBox.textContent = "Sprawdzam świeżość Last.fm (historia 10 min, baza tagów 60 min)...";
+    generationStage(2);
     await refreshLastFmBeforeGeneration(mixProfiles, total);
 
-    progressBox.textContent = "Synchronizuję historię odtworzeń...";
+    generationStage(3);
     await syncSpotifyRecentHistory(token);
+    generationStage(4);
+    if (!document.hidden && globalThis.scheduler?.yield) await scheduler.yield();
     const acquisitionBlocklists = generationBlocklists(selected);
     const acquisition = createCandidateAcquisition(mixProfiles, acquisitionBlocklists);
+    acquisition.blockProfiles = selected;
 
-    progressBox.textContent =
-      `Odświeżam artystów wzorcowych (budżet ${maxNewSearchesThisGeneration} nowych wyszukiwań)...`;
     await primeManualSeedArtists(token, mixProfiles, 3, acquisition);
 
     const genrePrimeBudget = genrePrimeBudgetForTarget(total);
-    progressBox.textContent =
-      `Rozszerzam słabo reprezentowane gatunki (do ${genrePrimeBudget} nowych wyszukiwań)...`;
+    generationStage(5);
     await primeProfileGenres(token, mixProfiles, genrePrimeBudget, acquisition);
 
     const remainingSearchBudget = Math.max(0, maxNewSearchesThisGeneration - newSearchesThisGeneration);
-    progressBox.textContent = "Szukam wspólnego mianownika i różnych kwalifikowalnych wykonawców...";
+    generationStage(6);
     await primeCommonGroupQueries(token, mixProfiles, Math.min(3, remainingSearchBudget), acquisition);
 
-    progressBox.textContent = "Buduję model grupowy: satysfakcja, fairness, xQuAD i MMR...";
+    generationStage(7);
+    if (!document.hidden && globalThis.scheduler?.yield) await scheduler.yield();
     const blocklists = generationBlocklists(selected);
     const ctx = buildGroupRecommendationContext(mixProfiles, loadCandidatePool(), createLastFmEvidenceSnapshot());
     const { eligible, stats } = eligibleGroupCandidates(mixProfiles, blocklists, ctx);
@@ -5576,7 +5766,7 @@ async function generateOfficePlaylist() {
     }
 
     const groupResult = selectGroupPlaylist(eligible, total, ctx, stats);
-    groupResult.acquisition = { before: acquisition.before, after: acquisitionCoverage(mixProfiles, blocklists).artists, cachedPages: acquisition.cachedPages, newSearches: newSearchesThisGeneration };
+    groupResult.acquisition = { before: acquisition.before, after: getAcquisitionCoverage(acquisition).artists, cachedPages: acquisition.cachedPages, newSearches: newSearchesThisGeneration };
     const finalTracks = sequencePlaylistForListening(groupResult.tracks, 5);
     groupResult.tracks = finalTracks;
 
@@ -5584,16 +5774,18 @@ async function generateOfficePlaylist() {
       throw new Error("Algorytm grupowy nie wybrał żadnego utworu.");
     }
 
-    progressBox.textContent =
-      `Tworzę playlistę i zapisuję ${finalTracks.length} utworów...`;
+    generationStage(8);
 
     const playlist = await createPlaylist(token, selected, finalTracks.length);
+    createdPlaylist = playlist; progress.created();
     await addItemsToPlaylist(
       token,
       playlist.id,
       finalTracks.map(track => track.uri)
     );
 
+    finalLength = finalTracks.length;
+    generationStage(9);
     recordSeedArtistSelections(finalTracks, selected);
     // Both Spotify writes have completed. Read fresh evidence again so feedback
     // or history changed while awaiting the API is reflected in diagnostics.
@@ -5615,20 +5807,31 @@ async function generateOfficePlaylist() {
     // Pula Spotify jest kosztowna do odbudowy, więc po udanym generowaniu zapisujemy
     // jej skompaktowaną wersję do D1 razem z trwałymi preferencjami. Błąd chmury
     // nie może unieważnić poprawnie utworzonej playlisty.
+    generationStage(10);
     try {
       await uploadCloudStateIfChanged(token, { status: true });
     } catch (cloudErr) {
       console.error("Cloud sync after generation:", cloudErr);
       setCloudStatus(`po generowaniu: ${cloudErr.message}`, "error");
+      progress.warn("Playlista gotowa; synchronizacja chmury nie powiodła się. Lokalny wynik został zachowany.");
     }
-    progressBox.textContent = "";
+    progress.finish(null, finalLength);
 
   } catch (err) {
     console.error(err);
-    playlistResult.textContent = err.message;
+    progress.finish(err, finalLength);
+    if (!finalLength) {
+      const previous = loadRecentPlaylists()[0];
+      if (previous) renderStoredPlaylistSnapshot(previous);
+      else playlistResult.textContent = "";
+    }
+    const errorMessage = document.createElement("p"); errorMessage.className = "error"; errorMessage.textContent = err.message; playlistResult.prepend(errorMessage);
+    if (createdPlaylist && !finalLength) appendSpotifyPlaylistLinks(playlistResult, createdPlaylist);
     playlistBox.style.display = "block";
-    progressBox.textContent = "";
   } finally {
+    lastGenerationReport = progress.report();
+    for (const [name, original] of originals) window[name] = original;
+    activeGenerationProgress = null; generationInFlight = false;
     generateButton.disabled = false;
   }
 }
@@ -5882,9 +6085,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.22.P2: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.23.P3: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.22.P2 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.23.P3 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -6023,6 +6226,7 @@ function renderPlaylistResult(
 }
 
 function clearTokens() {
+  if (navigator.locks) void navigator.locks.request("omm-spotify-refresh", () => spotifyOAuthRotation(null)).catch(() => {});
   localStorage.removeItem("spotify_access_token");
   localStorage.removeItem("spotify_refresh_token");
   localStorage.removeItem("spotify_token_expires");
@@ -6081,10 +6285,7 @@ async function init() {
       statusBox.textContent = "Niepołączony";
     }
   } catch (err) {
-    console.error(err);
-    clearTokens();
-    statusBox.innerHTML =
-      '<span class="error">Sesja Spotify wygasła. Zaloguj się ponownie.</span>';
+    statusBox.textContent = err.message;
   }
 }
 

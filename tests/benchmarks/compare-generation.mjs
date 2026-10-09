@@ -12,7 +12,7 @@ assert.equal(before.transportDelayMs, after.transportDelayMs);
 assert.equal(before.instrument, after.instrument);
 assert.equal(before.results.length, after.results.length);
 const semantic = row => ({
-  people: row.people, cache: row.cache, before: row.before, after: row.after,
+  people: row.people, cache: row.cache, caseKind: row.caseKind || 'normal', ...(row.target !== undefined ? { target: row.target, poolSize: row.poolSize } : {}), before: row.before, after: row.after,
   ids: row.ids, length: row.length, selection: row.selection, diagnostics: row.diagnostics,
   searches: row.searches, requests: row.requests.map(({ serviceMs, ...request }) => request),
   stateBytes: row.stateBytes, disabled: row.disabled
@@ -35,7 +35,7 @@ const results = before.results.map((old, index) => {
   const newTimes = current.raw.map(row => row.metrics.generateOfficePlaylist.inclusiveMs);
   const baselineMedian = median(oldTimes), candidateMedian = median(newTimes);
   const result = semantic(old.raw[0]);
-  return { people: old.people, cache: old.cache, samples: old.raw.length,
+  return { people: old.people, cache: old.cache, caseKind: old.caseKind || 'normal', ...(old.target !== undefined ? { target: old.target, poolSize: old.poolSize } : {}), samples: old.raw.length,
     baselineMedianMs: baselineMedian, candidateMedianMs: candidateMedian,
     baselineP95Ms: percentile(oldTimes), candidateP95Ms: percentile(newTimes),
     medianImprovementPercent: 100 * (baselineMedian - candidateMedian) / baselineMedian,
