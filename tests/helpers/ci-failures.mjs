@@ -8,6 +8,9 @@ const failures=[...new Set(lines.filter(line=>/^✖ /u.test(line) && !line.inclu
 if(!failures.length)failures.push(...lines.filter(line=>/^not ok \d+/.test(line)));
 for(const failure of failures.slice(0,20)){
  const detailStart=lines.findIndex((line,index)=>line===failure && lines.slice(Math.max(0,index-3),index).some(x=>/^test at /.test(x)));
- const excerpt=detailStart<0?failure:lines.slice(detailStart,detailStart+30).join('\n');
+ const first=lines.indexOf(failure);
+ const context=lines.slice(Math.max(0,first-8),first).filter(line=>/Error:|unhandledRejection|asynchronous activity/.test(line)).join('\n');
+ const detail=detailStart<0?failure:lines.slice(detailStart,detailStart+30).join('\n');
+ const excerpt=[context,detail].filter(Boolean).join('\n');
  process.stdout.write(`::${level} title=Regression failure::${escape(excerpt.slice(0,6000))}\n`);
 }
