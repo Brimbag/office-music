@@ -1,0 +1,251 @@
+{
+  "baselineCommit": "bd3bb534909d52eb8d4331bb2cf59d07fa52de2a",
+  "target": 16,
+  "controlledFixtures": true,
+  "results": [
+    {
+      "people": 2,
+      "cases": [
+        {
+          "scenario": "compatible",
+          "before": {
+            "length": 16,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 64
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          },
+          "after": {
+            "length": 16,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 64
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          }
+        },
+        {
+          "scenario": "shortage",
+          "before": {
+            "length": 16,
+            "min": 34,
+            "weak": 4,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 56.5
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          },
+          "after": {
+            "length": 12,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 64
+            },
+            "artists": 6,
+            "discovery": 0,
+            "rejected": 4
+          }
+        },
+        {
+          "scenario": "replacements",
+          "before": {
+            "length": 16,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 64
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          },
+          "after": {
+            "length": 16,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 64
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 4
+          }
+        },
+        {
+          "scenario": "noCommonGround",
+          "before": {
+            "length": 16,
+            "min": 34,
+            "weak": 16,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 34
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          },
+          "after": {
+            "length": 0,
+            "min": null,
+            "weak": 0,
+            "averages": {
+              "bartek": 0,
+              "asia": 0
+            },
+            "artists": 0,
+            "discovery": 0,
+            "rejected": 16
+          }
+        }
+      ],
+      "fetches": 0
+    },
+    {
+      "people": 4,
+      "cases": [
+        {
+          "scenario": "compatible",
+          "before": {
+            "length": 16,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 86.03999999999998,
+              "edyta": 86.03999999999998,
+              "monika": 64
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          },
+          "after": {
+            "length": 16,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 86.03999999999998,
+              "edyta": 86.03999999999998,
+              "monika": 64
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          }
+        },
+        {
+          "scenario": "shortage",
+          "before": {
+            "length": 16,
+            "min": 34,
+            "weak": 4,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 86.03999999999998,
+              "edyta": 86.03999999999998,
+              "monika": 56.5
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          },
+          "after": {
+            "length": 12,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 86.03999999999998,
+              "edyta": 86.03999999999998,
+              "monika": 64
+            },
+            "artists": 6,
+            "discovery": 0,
+            "rejected": 4
+          }
+        },
+        {
+          "scenario": "replacements",
+          "before": {
+            "length": 16,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 86.03999999999998,
+              "edyta": 86.03999999999998,
+              "monika": 64
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          },
+          "after": {
+            "length": 16,
+            "min": 64,
+            "weak": 0,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 86.03999999999998,
+              "edyta": 86.03999999999998,
+              "monika": 64
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 4
+          }
+        },
+        {
+          "scenario": "noCommonGround",
+          "before": {
+            "length": 16,
+            "min": 34,
+            "weak": 16,
+            "averages": {
+              "bartek": 86.03999999999998,
+              "asia": 86.03999999999998,
+              "edyta": 86.03999999999998,
+              "monika": 34
+            },
+            "artists": 8,
+            "discovery": 0,
+            "rejected": 0
+          },
+          "after": {
+            "length": 0,
+            "min": null,
+            "weak": 0,
+            "averages": {
+              "bartek": 0,
+              "asia": 0,
+              "edyta": 0,
+              "monika": 0
+            },
+            "artists": 0,
+            "discovery": 0,
+            "rejected": 16
+          }
+        }
+      ],
+      "fetches": 0
+    }
+  ]
+}
