@@ -116,7 +116,7 @@ try {
           const functions = ['generateOfficePlaylist', 'cleanupOldOfficePlaylists', 'refreshLastFmBeforeGeneration', 'syncSpotifyRecentHistory',
             'createCandidateAcquisition', 'primeManualSeedArtists', 'primeProfileGenres', 'primeCommonGroupQueries', 'acquisitionCoverage',
             'buildGroupRecommendationContext', 'eligibleGroupCandidates', 'selectGroupPlaylist', 'sequencePlaylistForListening',
-            'createPlaylist', 'addItemsToPlaylist', 'saveRecentPlaylistSnapshot', 'renderPlaylistResult', 'uploadCloudStateIfChanged',
+            'buildPlaylistDiagnostics', 'createPlaylist', 'addItemsToPlaylist', 'saveRecentPlaylistSnapshot', 'renderPlaylistResult', 'uploadCloudStateIfChanged',
             'readSearchCache', 'saveCandidatePool', 'retainSpotifyPool', 'loadCandidatePool', 'createLastFmEvidenceSnapshot', 'loadLastFmArtistPool', 'loadLastFmTrackPool',
             'lastFmEvidenceForTrack', 'recognizabilityScore', 'trackDiagnostic', 'waitForSearchSlot', 'fetch'];
           let selection;

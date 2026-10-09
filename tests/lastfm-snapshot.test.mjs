@@ -187,7 +187,9 @@ test('generowanie tworzy nowy snapshot po pozyskiwaniu i po await zapisu; kolejn
     getValidAccessToken = async () => 'mock'; selectedProfiles = () => selected;
     cleanupOldOfficePlaylists = async () => ({}); refreshLastFmBeforeGeneration = async () => {}; syncSpotifyRecentHistory = async () => {};
     primeManualSeedArtists = async () => {}; primeProfileGenres = async () => {};
-    let generation = 0, snapshots = 0;
+    let generation = 0, snapshots = 0, diagnosticCalls = 0;
+    const originalDiagnostic = trackDiagnostic;
+    trackDiagnostic = (...args) => { diagnosticCalls++; return originalDiagnostic(...args); };
     const originalSnapshot = createLastFmEvidenceSnapshot;
     createLastFmEvidenceSnapshot = () => { snapshots++; return originalSnapshot(); };
     primeCommonGroupQueries = async () => { await Promise.resolve(); localStorage.setItem(FEEDBACK_KEY, JSON.stringify({
@@ -210,9 +212,10 @@ test('generowanie tworzy nowy snapshot po pozyskiwaniu i po await zapisu; kolejn
       outputs.push({ ids: snapshot.tracks.map(t => t.id), diagnostic: snapshot.tracks.find(t => t.id === 't5').diagnostic,
         text: playlistResult.textContent, json: JSON.stringify(snapshot), written: written.at(-1) });
     }
-    return { outputs, snapshots };
+    return { outputs, snapshots, diagnosticCalls };
   });
   assert.equal(r.snapshots, 4);
+  assert.equal(r.diagnosticCalls, 10);
   for (const [i, row] of r.outputs.entries()) {
     assert.ok(!row.ids.includes(`t${i}`)); assert.equal(row.ids.length, 5);
     assert.equal(row.written.length, row.ids.length);
