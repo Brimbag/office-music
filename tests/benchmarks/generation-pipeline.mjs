@@ -1,11 +1,14 @@
 // Read-only production audit: runs the real pipeline against local synthetic state
 // and a closed mock transport. No application code or live services are changed.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { startBrowserHarness } from '../helpers/browser.mjs';
 
 const repetitions = Number(process.env.OMM_BENCH_REPETITIONS || 5);
 const transportDelayMs = Number(process.env.OMM_BENCH_API_DELAY_MS || 0);
 const instrument = process.env.OMM_BENCH_INSTRUMENT !== '0';
+const fixedClock = process.env.OMM_BENCH_FIXED_CLOCK === '1';
+const baseline = process.env.OMM_BENCH_BASELINE ? JSON.parse(readFileSync(process.env.OMM_BENCH_BASELINE, 'utf8')) : null;
 assert.ok(Number.isInteger(repetitions) && repetitions >= 1 && repetitions <= 20);
 assert.ok(Number.isFinite(transportDelayMs) && transportDelayMs >= 0 && transportDelayMs <= 1000);
 const harness = await startBrowserHarness();
@@ -16,7 +19,28 @@ try {
     for (let iteration = 0; iteration <= repetitions; iteration++) {
       const session = await harness.page();
       try {
-        const output = await session.page.evaluate(async ({ people, cache, transportDelayMs, instrument }) => {
+        const output = await session.page.evaluate(async ({ people, cache, transportDelayMs, instrument, fixedClock, baseline }) => {
+          if (baseline) for (const [name, source] of Object.entries(baseline.functions)) window[name] = (0, eval)(`(${source})`);
+          if (fixedClock) {
+            const wallNow = Date.now;
+            const modelNow = Date.parse('2026-10-09T09:00:00Z');
+            Date.now = () => modelNow;
+            let randomState = 123456789;
+            crypto.getRandomValues = array => {
+              for (let i = 0; i < array.length; i++) {
+                randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
+                array[i] = randomState;
+              }
+              return array;
+            };
+            // Freeze model/cache timestamps for paired parity checks, while
+            // preserving the actual 700ms request pacing on the wall clock.
+            waitForSearchSlot = async () => {
+              const elapsed = wallNow() - lastSearchRequestAt;
+              if (elapsed < SEARCH_REQUEST_GAP_MS) await sleep(SEARCH_REQUEST_GAP_MS - elapsed);
+              lastSearchRequestAt = wallNow();
+            };
+          }
           Math.random = () => 0.25;
           const now = Date.now();
           const makeTrack = i => ({ id: `t${i}`, uri: `spotify:track:t${i}`, name: `Song ${i}${i >= 100 ? ' - Rework' : ''}`,
@@ -93,7 +117,7 @@ try {
             'createCandidateAcquisition', 'primeManualSeedArtists', 'primeProfileGenres', 'primeCommonGroupQueries', 'acquisitionCoverage',
             'buildGroupRecommendationContext', 'eligibleGroupCandidates', 'selectGroupPlaylist', 'sequencePlaylistForListening',
             'createPlaylist', 'addItemsToPlaylist', 'saveRecentPlaylistSnapshot', 'renderPlaylistResult', 'uploadCloudStateIfChanged',
-            'readSearchCache', 'saveCandidatePool', 'retainSpotifyPool', 'loadCandidatePool', 'loadLastFmArtistPool', 'loadLastFmTrackPool',
+            'readSearchCache', 'saveCandidatePool', 'retainSpotifyPool', 'loadCandidatePool', 'createLastFmEvidenceSnapshot', 'loadLastFmArtistPool', 'loadLastFmTrackPool',
             'lastFmEvidenceForTrack', 'recognizabilityScore', 'trackDiagnostic', 'waitForSearchSlot', 'fetch'];
           let selection;
           for (const name of instrument ? functions : ['generateOfficePlaylist', 'selectGroupPlaylist']) {
@@ -127,8 +151,9 @@ try {
           if (!snapshot || written.length !== snapshot.tracks.length || !written.length) throw new Error(`Generation failed: ${playlistResult.textContent}`);
           return { people, cache, appVersion: document.querySelector('h1 .version').textContent, before, after: pools(), metrics, requests, selection, searches: newSearchesThisGeneration,
             length: written.length, ids: snapshot.tracks.map(track => track.id), disabled: generateButton.disabled,
+            diagnostics: snapshot.tracks.map(track => track.diagnostic),
             stateBytes: new TextEncoder().encode(JSON.stringify({ state: remoteState })).length };
-        }, { people, cache, transportDelayMs, instrument });
+        }, { people, cache, transportDelayMs, instrument, fixedClock, baseline });
         assert.deepEqual(session.errors, []);
         assert.deepEqual(output.before, { spotify: 2000, artists: 1800, tracks: 3000 });
         assert.equal(output.disabled, false); assert.ok(output.searches <= 12);
@@ -149,6 +174,6 @@ try {
         exclusiveP95Ms: p95(samples.map(row => row.metrics[name]?.exclusiveMs || 0))
       }])), raw: samples });
   }
-  console.log(JSON.stringify({ appVersion: results[0].raw[0].appVersion, repetitions, transportDelayMs, instrument,
+  console.log(JSON.stringify({ appVersion: results[0].raw[0].appVersion, baselineCommit: baseline?.commit || null, fixedClock, repetitions, transportDelayMs, instrument,
     note: 'Synthetic Chromium full-pipeline audit, no live network. Cold/warm application caches, not machine disk cache. Original 700ms search pacing preserved. Nested inclusive times overlap; exclusive times partition each run. Last.fm cold mock returns valid empty responses, not a populated network backfill. p95 with five samples is the sample maximum, not a production percentile.', results }, null, 2));
 } finally { await harness.close(); }
