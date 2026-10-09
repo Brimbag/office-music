@@ -3,13 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.24.P4</title>
+  <title>Office Music Mixer v43.25.U1</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
     .generation-stages [data-status="active"] { font-weight: bold; }
     .generation-stages [data-status="waiting"] { opacity: .65; }
     #progress pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+
+    :focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+    summary { cursor: pointer; font-weight: 650; padding: 8px 0; }
+    .person:has(.main input:checked) { border-color: var(--link); }
+    .person:not(:has(.main input:checked)) { background: var(--surface-2); }
+    .person .main { min-height: 44px; }
+    .person details { margin-top: 8px; }
+    .generate-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
+    #generateButton { padding: 14px 22px; }
+    .generator-details { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 8px; }
+    .result-heading { font-size: 22px; font-weight: 750; margin-bottom: 8px; }
+    .fit-cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .fit-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 10px 14px; }
+    #playlistResult, .person { overflow-wrap: anywhere; }
     :root {
       color-scheme: light dark;
       font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -370,7 +384,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.24.P4</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.25.U1</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -388,33 +402,14 @@
   <div class="box" id="mixerBox" style="display:none;">
     <h2>Kto dziś jest w biurze?</h2>
     <div id="people" class="people"></div>
-    <p class="small"><a href="taste.html">🎵 Ankieta gustu</a> · osobna podstrona do budowania dokładniejszych profili muzycznych. Wyniki są zapisywane lokalnie; generator wykorzystuje ❤️ jako aktywne discovery, 🙂 jako wspólny mianownik, a 🚫 wyłącza daną gałąź z discovery.</p>
+    <p id="presenceSummary" class="small" aria-live="polite"></p>
+    <p class="small"><a href="taste.html">Edytuj ankiety gustu</a> · Bartek zawsze uczestniczy w miksie. Preferencje ręczne pozostają dostępne w kafelkach osób.</p>
 
-    <div class="settings-panel lastfm-panel">
-      <div class="settings-row lastfm-row">
-        <label>
-          Użytkownik Last.fm (opcjonalnie)
-          <input id="lastFmUser" type="text" placeholder="nazwa użytkownika Last.fm">
-        </label>
-        <div class="lastfm-actions">
-          <button id="syncLastFmButton" type="button" class="secondary">Odśwież bazę Last.fm</button>
-        </div>
-      </div>
-      <div id="lastFmStatus" class="small"></div>
-      <details>
-        <summary>Porównanie wykonawców Spotify–Last.fm</summary>
-        <p class="small">Porównanie całej lokalnej bazy po utworach i albumach. Wyniki są wskazówkami do sprawdzenia; nie zmieniają playlist, ocen ani powiązań wykonawców.</p>
-        <button id="catalogEvidenceButton" type="button" class="secondary">Porównaj lokalną bazę</button>
-        <label class="small">Filtruj wyniki po nazwie <input id="catalogEvidenceFilter" type="search" maxlength="200" placeholder="np. Days of the New"></label>
-        <p id="catalogEvidenceSummary" class="small" role="status"></p>
-        <div id="catalogEvidenceRows"></div>
-      </details>
-      <p class="small lastfm-note">
-        Last.fm służy jako dodatkowa baza wykonawców dla wybranych gatunków. Historia Last.fm z ostatnich 14 dni jest głównym źródłem faktycznych odsłuchań do blokad anty-powtórkowych. Starsze scrobble są ignorowane.
-        Dane rekomendacyjne: <a href="https://www.last.fm/" target="_blank" rel="noopener noreferrer">Last.fm</a>.
-      </p>
+
+    <div class="generate-actions">
+      <button id="generateButton" type="button">Generuj playlistę</button>
+      <span class="small">Wybierz obecne osoby i ustawienia poniżej.</span>
     </div>
-
     <div class="settings-panel">
       <div class="settings-row">
         <label>
@@ -478,13 +473,10 @@
       </div>
     </div>
 
-    <p class="small">
-      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm. v38 rozszerza diagnostykę zatrzymania selekcji. v39 wykorzystuje te dane: awaryjny próg 35–43 wymaga już tylko, by żadna obecna osoba nie miała wyniku poniżej 35, a podczas końcowego fallbacku górna quota discovery jest liczona względem docelowej długości playlisty, aby krótki wynik nie blokował sam siebie. v43 wyklucza we wszystkich ścieżkach utwór, gdy dowolny wykonawca ma karę feedbacku <= -40; nie tworzy trwałej blokady ani nie przenosi kary na współwykonawców. v41 dodał ręczną synchronizację trwałych preferencji z Cloudflare D1. v42 automatyzuje synchronizację po zalogowaniu i po zmianach, przenosi do D1 także skompaktowaną pulę kandydatów Spotify oraz warunkowo odświeża Last.fm przed generowaniem; algorytm doboru muzyki pozostaje bez zmian.
-      Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
-      Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
-    </p>
-
-
+    <details class="generator-details">
+      <summary>Jak dobieramy muzykę?</summary>
+      <p class="small">Każdy utwór jest dopasowywany do wszystkich obecnych osób. Uwzględniamy ankiety, artystów wzorcowych, ręczne gatunki i dowody Last.fm/Spotify. Chronimy indywidualne dopasowanie, blokady, brak powtórek i różnorodność wykonawców. Wynik może być krótszy od zamówionego, gdy zabraknie kandydatów spełniających warunki.</p>
+    </details>
 
     <div class="rmf-panel">
       <div class="rmf-head">
@@ -513,8 +505,33 @@
       </p>
     </div>
 
+    <details class="generator-details" id="generatorTools">
+      <summary>Narzędzia i dane</summary>
+    <div class="settings-panel lastfm-panel">
+      <div class="settings-row lastfm-row">
+        <label>
+          Użytkownik Last.fm (opcjonalnie)
+          <input id="lastFmUser" type="text" placeholder="nazwa użytkownika Last.fm">
+        </label>
+        <div class="lastfm-actions">
+          <button id="syncLastFmButton" type="button" class="secondary">Odśwież bazę Last.fm</button>
+        </div>
+      </div>
+      <div id="lastFmStatus" class="small"></div>
+      <details>
+        <summary>Porównanie wykonawców Spotify–Last.fm</summary>
+        <p class="small">Porównanie całej lokalnej bazy po utworach i albumach. Wyniki są wskazówkami do sprawdzenia; nie zmieniają playlist, ocen ani powiązań wykonawców.</p>
+        <button id="catalogEvidenceButton" type="button" class="secondary">Porównaj lokalną bazę</button>
+        <label class="small">Filtruj wyniki po nazwie <input id="catalogEvidenceFilter" type="search" maxlength="200" placeholder="np. Days of the New"></label>
+        <p id="catalogEvidenceSummary" class="small" role="status"></p>
+        <div id="catalogEvidenceRows"></div>
+      </details>
+      <p class="small lastfm-note">
+        Last.fm służy jako dodatkowa baza wykonawców dla wybranych gatunków. Historia Last.fm z ostatnich 14 dni jest głównym źródłem faktycznych odsłuchań do blokad anty-powtórkowych. Starsze scrobble są ignorowane.
+        Dane rekomendacyjne: <a href="https://www.last.fm/" target="_blank" rel="noopener noreferrer">Last.fm</a>.
+      </p>
+    </div>
     <div class="toolbar">
-      <button id="generateButton">Generuj playlistę</button>
       <button id="clearHistoryButton" class="secondary">Wyczyść historię aplikacji</button>
       <button id="exportStateButton" type="button" class="secondary">Eksportuj bazę</button>
       <button id="importStateButton" type="button" class="secondary">Importuj bazę</button>
@@ -525,11 +542,12 @@
     <div class="small lastfm-note">Eksport obejmuje lokalną bazę, cache, historię, feedback, blokady, profile i ustawienia RMF. Tokeny logowania Spotify nie są eksportowane.</div>
     <div class="small lastfm-note">Cloudflare D1 synchronizuje trwałe preferencje oraz skompaktowaną pulę kandydatów Spotify (maks. 2000 utworów). Surowe cache Spotify/Last.fm, baza rekomendacyjna Last.fm i historia odsłuchań pozostają lokalne. Synchronizacja chmury działa automatycznie; przyciski ręczne zostają jako awaryjne.</div>
     <div id="historySummary" class="history-summary"></div>
+    </details>
     <div id="progress" class="progress"></div>
   </div>
 
   <div class="box" id="playlistBox" style="display:none;">
-    <strong>Wynik:</strong>
+    <h2>Twoja playlista</h2>
     <div id="recentPlaylists" class="small" style="margin:8px 0 12px;"></div>
     <div id="playlistResult"></div>
     <div class="feedback-toolbar">
@@ -1257,7 +1275,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.24.P4",
+      source: "Office Music Mixer v43.25.U1",
       storage: exportedStorageState()
     };
 
@@ -2389,9 +2407,20 @@ function renderProfiles() {
       localStorage.setItem(`office_blocked_${id}`, blockedInput.value.trim());
     });
 
-    card.append(mainLabel, genreLabel, genreInput, seedLabel, seedInput, blockedLabel, blockedInput);
+    const preferences = document.createElement("details");
+    const preferenceTitle = document.createElement("summary");
+    preferenceTitle.textContent = `Preferencje ręczne: ${profile.name}`;
+    preferences.append(preferenceTitle, genreLabel, genreInput, seedLabel, seedInput, blockedLabel, blockedInput);
+    checkbox.addEventListener("change", updatePresenceSummary);
+    card.append(mainLabel, preferences);
     peopleDiv.appendChild(card);
   }
+  updatePresenceSummary();
+}
+
+function updatePresenceSummary() {
+  const names = [...peopleDiv.querySelectorAll("input[data-profile-id]:checked")].map(input => profiles[input.dataset.profileId].name);
+  document.getElementById("presenceSummary").textContent = `Obecni (${names.length}): ${names.join(", ")}.`;
 }
 
 function normalizeGenreName(name) {
@@ -6078,20 +6107,27 @@ function renderPlaylistResult(
   diagnostics = null
 ) {
   playlistResult.textContent = "";
+  const diagnosticsPanel = document.createElement("details");
+  diagnosticsPanel.className = "generator-details";
+  diagnosticsPanel.id = "playlistDiagnostics";
+  const diagnosticsTitle = document.createElement("summary");
+  diagnosticsTitle.textContent = "Diagnostyka doboru utworów";
+  diagnosticsPanel.append(diagnosticsTitle);
   const discoveryTarget = groupResult?.discoveryQuota?.target ?? Number(discoveryLevel.value || 0) / 100;
   const discoveryPercent = Math.round(discoveryTarget * 100);
 
   const summary = document.createElement("p");
+  summary.className = "result-heading";
   summary.textContent = tracks.length < requestedTotal
-    ? `Utworzono ${tracks.length} z ${requestedTotal} utworów dla: ${selected.map(p => p.name).join(", ")}. Algorytm nie dobija wyniku przypadkowymi utworami tylko po to, żeby zgadzał się licznik.`
+    ? `Utworzono ${tracks.length} z ${requestedTotal} utworów dla: ${selected.map(p => p.name).join(", ")}. Zabrakło kandydatów spełniających wszystkie warunki doboru.`
     : `Utworzono ${tracks.length} utworów dla: ${selected.map(p => p.name).join(", ")}.`;
 
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.24.P4: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.25.U1: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.24.P4 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.25.U1 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -6100,7 +6136,26 @@ function renderPlaylistResult(
     `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(requestedTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami. ` +
     `v42 przed generowaniem odświeża historię Last.fm najwyżej raz na 10 min i bazę tagową najwyżej raz na 60 min; po generowaniu synchronizuje z D1 również skompaktowaną pulę kandydatów Spotify.`;
 
-  playlistResult.append(summary, model);
+  playlistResult.append(summary);
+  if (tracks.length < requestedTotal && groupResult?.discoveryRepair?.removed > 0) {
+    const reason = document.createElement("p");
+    reason.className = "small";
+    reason.textContent = `Po doborze wstępnym korekta udziału odkryć pominęła ${groupResult.discoveryRepair.removed} utworów. Szczegóły filtrów i limitów są w diagnostyce poniżej.`;
+    playlistResult.append(reason);
+  }
+  if (groupResult) {
+    const fit = document.createElement("div"); fit.className = "fit-cards";
+    for (const profile of selected) {
+      const row = groupResult.satisfaction?.[profile.id]; if (!row) continue;
+      const card = document.createElement("div"); card.className = "fit-card";
+      card.textContent = `${profile.name}: ${Math.round(row.average)}/100`; fit.append(card);
+    }
+    playlistResult.append(fit);
+    const discoveries = document.createElement("p"); discoveries.className = "small";
+    discoveries.textContent = `Odkrycia: ${groupResult.discoveryCount || 0}/${tracks.length} utworów (${tracks.length ? Math.round((groupResult.discoveryCount || 0) / tracks.length * 100) : 0}%) · cel ${discoveryPercent}%. Dopasowanie w kafelkach to średnia ocena dla każdej osoby.`;
+    playlistResult.append(discoveries);
+  }
+  diagnosticsPanel.append(model);
 
   const tasteProfiles = selected.filter(profile => profile.taste?.hasSurvey);
   if (tasteProfiles.length) {
@@ -6114,7 +6169,7 @@ function renderPlaylistResult(
       const added = (profile.taste?.likedGenres || []).filter(g => !manualSet.has(normalizeGenreName(g))).length;
       return `${profile.name} ❤️ ${liked}, 🙂 ${ok}, 🚫 ${no}; +${added} gatunków do aktywnego discovery`;
     }).join(" · ") + ".";
-    playlistResult.append(tasteDiag);
+    diagnosticsPanel.append(tasteDiag);
   }
 
   if (groupResult) {
@@ -6133,7 +6188,7 @@ function renderPlaylistResult(
       `Dopasowanie grupowe: ${satParts.join(" · ")}. Odkrycia w wyniku: ${groupResult.discoveryCount || 0}/${tracks.length} (${discoveryPct}%). ` +
       `Polska muzyka rozpoznana przez Last.fm: ${groupResult.polishCount || 0}/${tracks.length}. ` +
       `Quota discovery dla celu ${discoveryPercent}%: dolny cel ${groupResult.discoveryQuota?.min ?? 0}, twarde maksimum ${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}; pomocniczy limit selekcji wstępnej dla docelowych ${requestedTotal}: ${groupResult.requestedDiscoveryQuota?.max ?? requestedTotal}.`;
-    playlistResult.append(satisfaction);
+    diagnosticsPanel.append(satisfaction);
     if (groupResult.discoveryRepair) {
       const repair = groupResult.discoveryRepair;
       const correction = document.createElement("p");
@@ -6145,7 +6200,7 @@ function renderPlaylistResult(
           : `Dolny cel discovery spełniony. `) +
         `Discovery powyżej dozwolonego maksimum: ${Math.max(0, repair.afterDiscovery - groupResult.discoveryQuota.max)} po korekcie; ` +
         `nadmiar w doborze wstępnym: ${Math.max(0, repair.beforeDiscovery - discoveryQuotaForTotal(repair.beforeLength, discoveryTarget).max)}.`;
-      playlistResult.append(correction);
+      diagnosticsPanel.append(correction);
     }
 
 
@@ -6163,7 +6218,7 @@ function renderPlaylistResult(
       `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}, ` +
       `dobrane przez próg awaryjny ${r.fallbackSelections || 0}` +
       (r.lowFinalScoreStop ? `, kandydaci poza końcowym zestawem przy skróconym wyniku: ${r.lowFinalScoreStop}` : "") + `.`;
-    playlistResult.append(rejection);
+    diagnosticsPanel.append(rejection);
 
     if (r.selectionStopDiagnostics) {
       const d = r.selectionStopDiagnostics;
@@ -6177,7 +6232,7 @@ function renderPlaylistResult(
         `Kandydaci >=35: ${d.fallbackRange || 0}; min profilu <35: ${d.fallbackFailMinUser || 0}, ` +
         `mocny negatywny feedback <= -40: ${d.fallbackStrongNegativeFeedback || 0}, ` +
         `bezpiecznych dla fallbacku: ${d.fallbackSafe || 0}.`;
-      playlistResult.append(stopDiag);
+      diagnosticsPanel.append(stopDiag);
     }
   }
 
@@ -6186,7 +6241,7 @@ function renderPlaylistResult(
     const genreDiag = document.createElement("p");
     genreDiag.className = "small";
     genreDiag.textContent = `Diagnostyka gatunków ❤️: ${genreDiagText}`;
-    playlistResult.append(genreDiag);
+    diagnosticsPanel.append(genreDiag);
   }
 
   const seedDiagText = seedArtistDiagnosticText(selected, tracks);
@@ -6194,7 +6249,7 @@ function renderPlaylistResult(
     const seedDiag = document.createElement("p");
     seedDiag.className = "small";
     seedDiag.textContent = `Diagnostyka artystów wzorcowych: ${seedDiagText}`;
-    playlistResult.append(seedDiag);
+    diagnosticsPanel.append(seedDiag);
   }
 
   if (playlistCleanupResult) {
@@ -6206,7 +6261,7 @@ function renderPlaylistResult(
       cleanupInfo.textContent = `Porządki Spotify: znaleziono ${playlistCleanupResult.found || 0} playlist starszych niż 72 h, usunięto ${playlistCleanupResult.removed || 0}, nadal widoczne ${playlistCleanupResult.remaining || 0}.` +
         (playlistCleanupResult.unparseable ? ` Pominięto ${playlistCleanupResult.unparseable} playlist Office Music Mixer bez daty możliwej do odczytania z nazwy.` : "");
     }
-    playlistResult.append(cleanupInfo);
+    diagnosticsPanel.append(cleanupInfo);
   }
 
   if (ignoredProfiles.length) {
@@ -6219,12 +6274,14 @@ function renderPlaylistResult(
     playlistResult.append(warning);
   }
 
+  appendSpotifyPlaylistLinks(playlistResult, playlist);
+  playlistResult.append(diagnosticsPanel);
+
   const list = buildRatedTrackList(
     tracks,
     track => diagnostics?.get(track) ?? trackDiagnostic(track, groupResult?.details?.get?.(track.id) || null, selected, evidenceSnapshot)
   );
   playlistResult.append(list);
-  appendSpotifyPlaylistLinks(playlistResult, playlist);
   renderRecentPlaylistNav(playlist?.id || "");
   playlistBox.style.display = "block";
 }
