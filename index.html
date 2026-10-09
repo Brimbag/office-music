@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.25.U1</title>
+  <title>Office Music Mixer v43.26.U2</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -377,6 +377,34 @@
         --shadow: none;
       }
     }
+
+    body { max-width: 1040px; }
+    #mixerBox { border: 0; padding: 0; background: transparent; box-shadow: none; }
+    .presence-section, .playlist-panel, #generatorTools { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); padding: 18px; box-shadow: var(--shadow); }
+    .rmf-panel { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); padding: 18px; box-shadow: var(--shadow); }
+    #mixerBox > details { background: var(--surface); padding: 12px 18px; border-radius: 14px; }
+    .connection-meta > span { padding: 6px 9px; border-radius: 999px; background: var(--secondary); font-size: 12px; }
+    .people { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .person { padding: 0; border: 0; background: transparent !important; }
+    .presence-tile { width: 100%; min-height: 92px; position: relative; text-align: left; padding: 14px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+    .presence-tile[aria-pressed="true"] { border: 2px solid #1db954; background: rgba(29,185,84,.09); padding: 13px; }
+    .presence-tile[aria-pressed="true"]::after { content: '✓'; position: absolute; right: 10px; top: 8px; }
+    .presence-tile:disabled { opacity: 1; }
+    .presence-name { display: block; font-size: 17px; padding-right: 18px; }
+    .presence-meta { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+    .manual-preferences { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+    .manual-preferences details { min-width: 0; }
+    .manual-preferences .small { display: block; margin: 8px 0 4px; }
+    .playlist-panel { display: grid; grid-template-columns: 1.05fr 1.95fr; gap: 18px; margin-top: 18px; }
+    .generate-actions { margin: 0; padding: 18px; border-radius: 14px; background: linear-gradient(135deg,#15191d,#252b31); color: #fff; flex-direction: column; align-items: stretch; justify-content: space-between; }
+    .generate-actions h3 { font-size: 23px; margin-bottom: 4px; }
+    .generate-actions .small { color: #c6ccd2; }
+    #generateButton { background: #1db954; color: #08130c; font-size: 20px; padding: 16px 18px; }
+    .playlist-panel .settings-panel { border: 0; padding: 0; margin: 0; }
+    .playlist-panel .settings-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .playlist-panel label:has(#discoveryLevel) { grid-column: 1 / -1; order: 1; }
+    @media(max-width:800px) { .people { grid-template-columns: repeat(2,minmax(0,1fr)); } .playlist-panel { grid-template-columns: 1fr; } }
+    @media(max-width:470px) { .manual-preferences, .playlist-panel .settings-row { grid-template-columns: 1fr; } }
   </style>
 </head>
 
@@ -384,31 +412,40 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.25.U1</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.26.U2</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
         <span id="status">Niepołączony</span>
         <span id="profileBox" style="display:none;">Spotify: <span id="profile"></span></span>
         <span id="cloudStatus">Chmura: czeka na Spotify</span>
+        <span id="lastFmStatus">Last.fm: stan lokalny</span>
       </div>
     </div>
     <div class="connection-actions">
+      <button id="syncLastFmButton" type="button" class="secondary">Odśwież Last.fm</button>
       <button id="loginButton">Połącz ze Spotify</button>
       <button id="logoutButton" class="secondary" style="display:none;">Wyloguj</button>
     </div>
   </div>
 
   <div class="box" id="mixerBox" style="display:none;">
+    <section class="presence-section">
     <h2>Kto dziś jest w biurze?</h2>
     <div id="people" class="people"></div>
     <p id="presenceSummary" class="small" aria-live="polite"></p>
-    <p class="small"><a href="taste.html">Edytuj ankiety gustu</a> · Bartek zawsze uczestniczy w miksie. Preferencje ręczne pozostają dostępne w kafelkach osób.</p>
+    <p class="small"><a href="taste.html">Edytuj ankiety gustu</a> · Bartek zawsze uczestniczy w miksie. Preferencje ręczne pozostają dostępne poniżej.</p>
 
 
+    <details class="generator-details" id="manualPreferencesPanel">
+      <summary>Preferencje ręczne</summary>
+      <div id="manualPreferences" class="manual-preferences"></div>
+    </details>
+    </section>
+    <div class="playlist-panel">
     <div class="generate-actions">
+      <div><h3>Nowa playlista</h3><p id="mixNames" class="small"></p></div>
       <button id="generateButton" type="button">Generuj playlistę</button>
-      <span class="small">Wybierz obecne osoby i ustawienia poniżej.</span>
     </div>
     <div class="settings-panel">
       <div class="settings-row">
@@ -473,6 +510,7 @@
       </div>
     </div>
 
+    </div>
     <details class="generator-details">
       <summary>Jak dobieramy muzykę?</summary>
       <p class="small">Każdy utwór jest dopasowywany do wszystkich obecnych osób. Uwzględniamy ankiety, artystów wzorcowych, ręczne gatunki i dowody Last.fm/Spotify. Chronimy indywidualne dopasowanie, blokady, brak powtórek i różnorodność wykonawców. Wynik może być krótszy od zamówionego, gdy zabraknie kandydatów spełniających warunki.</p>
@@ -514,10 +552,9 @@
           <input id="lastFmUser" type="text" placeholder="nazwa użytkownika Last.fm">
         </label>
         <div class="lastfm-actions">
-          <button id="syncLastFmButton" type="button" class="secondary">Odśwież bazę Last.fm</button>
+
         </div>
       </div>
-      <div id="lastFmStatus" class="small"></div>
       <details>
         <summary>Porównanie wykonawców Spotify–Last.fm</summary>
         <p class="small">Porównanie całej lokalnej bazy po utworach i albumach. Wyniki są wskazówkami do sprawdzenia; nie zmieniają playlist, ocen ani powiązań wykonawców.</p>
@@ -1275,7 +1312,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.25.U1",
+      source: "Office Music Mixer v43.26.U2",
       storage: exportedStorageState()
     };
 
@@ -2342,16 +2379,22 @@ async function showLoggedIn(token) {
 
 function renderProfiles() {
   peopleDiv.textContent = "";
+  document.getElementById("manualPreferences").textContent = "";
 
   for (const [id, profile] of Object.entries(profiles)) {
     const card = document.createElement("div");
     card.className = "person";
 
-    const mainLabel = document.createElement("label");
-    mainLabel.className = "main";
+    const mainLabel = document.createElement("button");
+    mainLabel.type = "button";
+    mainLabel.className = "presence-tile";
+    mainLabel.dataset.presenceId = id;
+    mainLabel.setAttribute("aria-pressed", "true");
+    mainLabel.disabled = id === "bartek";
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
+    checkbox.hidden = true;
     checkbox.dataset.profileId = id;
     checkbox.checked = true;
     if (id === "bartek") {
@@ -2360,9 +2403,16 @@ function renderProfiles() {
     }
 
     const name = document.createElement("span");
-    name.textContent = id === "bartek" ? `${profile.name} · główny profil` : profile.name;
-
-    mainLabel.append(checkbox, name);
+    name.className = "presence-name";
+    name.textContent = profile.name;
+    const meta = document.createElement("span"); meta.className = "presence-meta";
+    const taste = tasteStateForPerson(profile.name);
+    meta.textContent = `${id === "bartek" ? "główny profil · " : ""}❤️${taste.likedGenres.length} 🙂${taste.okGenres.length} 🚫${taste.blockedGenres.length}`;
+    mainLabel.append(name, meta);
+    mainLabel.addEventListener("click", () => {
+      checkbox.checked = !checkbox.checked;
+      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    });
 
     const genreLabel = document.createElement("label");
     genreLabel.className = "small";
@@ -2411,8 +2461,13 @@ function renderProfiles() {
     const preferenceTitle = document.createElement("summary");
     preferenceTitle.textContent = `Preferencje ręczne: ${profile.name}`;
     preferences.append(preferenceTitle, genreLabel, genreInput, seedLabel, seedInput, blockedLabel, blockedInput);
-    checkbox.addEventListener("change", updatePresenceSummary);
-    card.append(mainLabel, preferences);
+    preferences.dataset.preferencesId = id;
+    checkbox.addEventListener("change", () => {
+      mainLabel.setAttribute("aria-pressed", String(checkbox.checked));
+      updatePresenceSummary();
+    });
+    document.getElementById("manualPreferences").append(preferences);
+    card.append(checkbox, mainLabel);
     peopleDiv.appendChild(card);
   }
   updatePresenceSummary();
@@ -2420,6 +2475,7 @@ function renderProfiles() {
 
 function updatePresenceSummary() {
   const names = [...peopleDiv.querySelectorAll("input[data-profile-id]:checked")].map(input => profiles[input.dataset.profileId].name);
+  document.getElementById("mixNames").textContent = names.join(" + ");
   document.getElementById("presenceSummary").textContent = `Obecni (${names.length}): ${names.join(", ")}.`;
 }
 
@@ -6125,9 +6181,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.25.U1: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.26.U2: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.25.U1 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.26.U2 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +

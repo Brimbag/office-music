@@ -11,12 +11,20 @@ test('presence supports keyboard selection without changing stored preferences',
   try {
     await page.evaluate(() => { mixerBox.style.display='block'; renderProfiles(); });
     assert.match(await page.locator('#presenceSummary').textContent(), /Obecni \(4\)/);
-    const asia = page.locator('[data-profile-id="asia"]');
+    const asia = page.locator('[data-presence-id="asia"]');
     await asia.focus(); await page.keyboard.press('Space');
     assert.match(await page.locator('#presenceSummary').textContent(), /Obecni \(3\): Bartek, Edyta, Monika/);
     assert.equal(await page.locator('[data-profile-id="bartek"]').isDisabled(), true);
-    assert.equal(await page.locator('.person details[open]').count(), 0);
-    await page.locator('.person').filter({has:asia}).locator('summary').click();
+    assert.equal(await page.locator('#manualPreferences details[open]').count(), 0);
+    assert.equal(await asia.getAttribute('aria-pressed'), 'false');
+    await page.keyboard.press('Enter');
+    assert.equal(await asia.getAttribute('aria-pressed'), 'true');
+    await asia.click();
+    assert.equal(await asia.getAttribute('aria-pressed'), 'false');
+    await asia.click();
+    assert.equal(await page.locator('[data-presence-id="bartek"]').isDisabled(), true);
+    await page.locator('#manualPreferencesPanel > summary').click();
+    await page.locator('[data-preferences-id="asia"] > summary').click();
     assert.equal(await page.locator('[data-seed-profile-id="asia"]').inputValue(), 'Enya');
     assert.deepEqual(await page.evaluate(keys => Object.fromEntries(keys.map(k => [k,localStorage.getItem(k)])), Object.keys(initial)),initial);
     for (const id of ['generateButton','syncLastFmButton','exportStateButton','importStateButton','cloudUploadButton','cloudDownloadButton','clearHistoryButton']) assert.equal(await page.locator(`#${id}`).count(),1);
