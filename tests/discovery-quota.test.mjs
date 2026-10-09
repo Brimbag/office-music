@@ -251,6 +251,7 @@ test('diagnostyka UI odróżnia miękki niedobór od nadmiaru wstępnego i potwi
     discoveryLevel.value = '30'; Math.random = () => 0.25;
     const selected = [{ id: 'bartek', name: 'Bartek', artists: [], taste: {} }];
     return ['below', 'excess'].map(mode => {
+      discoveryLevel.value = '30';
       const ctx = buildGroupRecommendationContext(selected);
       const items = Array.from({ length: mode === 'below' ? 5 : 4 }, (_, i) => {
         const track = { id: `${mode}${i}`, uri: `spotify:track:${mode}${i}`, name: `Song ${i}`, artists: [{ name: `Artist ${i}` }] };
@@ -259,10 +260,13 @@ test('diagnostyka UI odróżnia miękki niedobór od nadmiaru wstępnego i potwi
         return item;
       });
       const output = selectGroupPlaylist(items, mode === 'below' ? 5 : 60, ctx, newRejectionStats(items.length));
+      discoveryLevel.value = '100'; // Settings can change while Spotify saves the already selected set.
       renderPlaylistResult({ id: 'test', external_urls: { spotify: 'https://open.spotify.com/playlist/test' } }, output.tracks, selected, [], mode === 'below' ? 5 : 60, null, output);
       return playlistResult.textContent;
     });
   });
+  assert.match(result[0], /Quota discovery dla celu 30%/);
+  assert.doesNotMatch(result[0], /Quota discovery dla celu 100%/);
   assert.match(result[0], /Discovery poniżej celu: brak bezpiecznych odkryć/);
   assert.match(result[0], /Discovery powyżej dozwolonego maksimum: 0 po korekcie; nadmiar w doborze wstępnym: 0/);
   assert.match(result[1], /Discovery powyżej dozwolonego maksimum: 0 po korekcie; nadmiar w doborze wstępnym: 2/);

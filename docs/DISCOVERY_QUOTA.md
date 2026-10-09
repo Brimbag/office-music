@@ -23,7 +23,7 @@ Czysty lokalny `discovery-quota.js` otrzymuje tylko zakwalifikowane rekordy spe�
 
 Poprawny pełny wynik ma szybką ścieżkę bez tworzenia deskryptorów korekty. Jeśli pierwotny poprawny wynik jest tak samo długi jak najlepsza alternatywa, zachowuje jego ID, kolejność i dynamiczne szczegóły. Każdy plan utrzymuje ID/sygnatury alternatywnych wydań i maks. dwa utwory każdego współwykonawcy według istniejącego `trackArtistKeys` (nazwy). C nie zmienia tożsamości ani blokad F2. Soft spacing realizuje istniejący `sequencePlaylistForListening`.
 
-Przy zmianie zestawu odbudowuje stan: indywidualne satysfakcje, szczegóły, discovery, PL, aspekty i licznik faktycznie wybranych fallbacków. Wzory fairness/MMR nie zmieniają się; ponownie obliczone bonusy odnoszą się do nowego zestawu. Diagnostyka odróżnia niedobór bezpiecznych odkryć możliwych do dodania w zamówionym limicie bez usunięcia znanych od przekroczenia dozwolonego maksimum (po korekcie zero).
+Przy zmianie zestawu odbudowuje stan: indywidualne satysfakcje, szczegóły, discovery, PL, aspekty i licznik faktycznie wybranych fallbacków. Wzory fairness/MMR nie zmieniają się; ponownie obliczone bonusy odnoszą się do nowego zestawu. Diagnostyka zachowuje target użyty przy selekcji także po zmianie suwaka podczas zapisu do Spotify. Odróżnia niedobór bezpiecznych odkryć możliwych do dodania w zamówionym limicie bez usunięcia znanych od przekroczenia dozwolonego maksimum (po korekcie zero).
 
 To trzy ograniczone heurystyki, nie globalne przeszukanie wszystkich kombinacji. Nie gwarantują optimum przy złożonych duetach i duplikatach. Naprawa jest co najmniej tak długa jak samo odcinanie discovery; indeksy ID/sygnatur/artystów ograniczają koszt zastąpień, a każda iteracja zmniejsza liczbę discovery.
 

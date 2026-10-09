@@ -4771,8 +4771,7 @@ function discoveryBalanceBonus(staticInfo, state) {
   return 0;
 }
 
-function discoveryQuotaForTotal(total) {
-  const target = Math.max(0, Math.min(1, Number(discoveryLevel.value || 0) / 100));
+function discoveryQuotaForTotal(total, target = Math.max(0, Math.min(1, Number(discoveryLevel.value || 0) / 100))) {
   const tolerance = target > 0 && target < 1 ? 0.05 : 0;
   return {
     target,
@@ -5817,6 +5816,8 @@ function renderPlaylistResult(
   groupResult = null
 ) {
   playlistResult.textContent = "";
+  const discoveryTarget = groupResult?.discoveryQuota?.target ?? Number(discoveryLevel.value || 0) / 100;
+  const discoveryPercent = Math.round(discoveryTarget * 100);
 
   const summary = document.createElement("p");
   summary.textContent = tracks.length < requestedTotal
@@ -5831,7 +5832,7 @@ function renderPlaylistResult(
     `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.18.C koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
-    `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
+    `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
     (groupResult?.acquisition ? `Pozyskiwanie: kwalifikowalni wykonawcy ${groupResult.acquisition.before} → ${groupResult.acquisition.after}; ponownie użyte strony cache ${groupResult.acquisition.cachedPages}; nowe wyszukiwania ${groupResult.acquisition.newSearches}. ` : "") +
     `Wyszukiwania Spotify są buforowane przez 24 h, lokalna pula żyje 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS}), a budżet tego generowania wynosił maks. ${maxNewSearchesThisGeneration} nowych wyszukiwań. ` +
     `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(requestedTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami. ` +
@@ -5869,7 +5870,7 @@ function renderPlaylistResult(
     satisfaction.textContent =
       `Dopasowanie grupowe: ${satParts.join(" · ")}. Odkrycia w wyniku: ${groupResult.discoveryCount || 0}/${tracks.length} (${discoveryPct}%). ` +
       `Polska muzyka rozpoznana przez Last.fm: ${groupResult.polishCount || 0}/${tracks.length}. ` +
-      `Quota discovery dla celu ${discoveryLevel.value}%: dolny cel ${groupResult.discoveryQuota?.min ?? 0}, twarde maksimum ${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}; pomocniczy limit selekcji wstępnej dla docelowych ${requestedTotal}: ${groupResult.requestedDiscoveryQuota?.max ?? requestedTotal}.`;
+      `Quota discovery dla celu ${discoveryPercent}%: dolny cel ${groupResult.discoveryQuota?.min ?? 0}, twarde maksimum ${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}; pomocniczy limit selekcji wstępnej dla docelowych ${requestedTotal}: ${groupResult.requestedDiscoveryQuota?.max ?? requestedTotal}.`;
     playlistResult.append(satisfaction);
     if (groupResult.discoveryRepair) {
       const repair = groupResult.discoveryRepair;
@@ -5881,7 +5882,7 @@ function renderPlaylistResult(
           ? `Discovery poniżej celu: brak bezpiecznych odkryć do dodania w zamówionym limicie bez usuwania znanych utworów; niedobór ${repair.minimumShortfall}. `
           : `Dolny cel discovery spełniony. `) +
         `Discovery powyżej dozwolonego maksimum: ${Math.max(0, repair.afterDiscovery - groupResult.discoveryQuota.max)} po korekcie; ` +
-        `nadmiar w doborze wstępnym: ${Math.max(0, repair.beforeDiscovery - discoveryQuotaForTotal(repair.beforeLength).max)}.`;
+        `nadmiar w doborze wstępnym: ${Math.max(0, repair.beforeDiscovery - discoveryQuotaForTotal(repair.beforeLength, discoveryTarget).max)}.`;
       playlistResult.append(correction);
     }
 
