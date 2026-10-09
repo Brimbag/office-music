@@ -79,11 +79,12 @@ test('historia blokuje odsłuchania, nie samo wygenerowanie', () => withPage(asy
   assert.deepEqual(result, { tracks: ['heard'], artists: ['artist'] });
 }));
 
-test('v42: silny feedback blokuje fallback, normalna ścieżka nadal dopuszcza', () => withPage(async page => {
+test('v43 A: kara wykonawcy blokuje normalną selekcję i fallback', () => withPage(async page => {
   const result = await page.evaluate(() => {
     const ctx = buildGroupRecommendationContext([{ id: 'bartek', artists: [], taste: {} }]);
     const track = { id: 'one', uri: 'spotify:track:one', name: 'One', artists: [{ name: 'Artist' }] };
     const item = groupCandidateStatic(track, ctx);
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify({ 'other|artist': { value: -1, artists: ['artist'] } }));
     item.features.feedback = -55;
     item.groupBase = 60;
     item.minScore = 60;
@@ -92,10 +93,10 @@ test('v42: silny feedback blokuje fallback, normalna ścieżka nadal dopuszcza',
     const fallback = selectGroupPlaylist([item], 1, ctx, newRejectionStats(1));
     return { normal: normal.tracks.length, fallback: fallback.tracks.length };
   });
-  assert.deepEqual(result, { normal: 1, fallback: 0 });
+  assert.deepEqual(result, { normal: 0, fallback: 0 });
 }));
 
-test('v42: fallback discovery używa zamówionej długości', () => withPage(async page => {
+test('v43 C: końcowy fallback discovery respektuje faktyczną długość', () => withPage(async page => {
   const result = await page.evaluate(() => {
     Math.random = () => 0.25;
     discoveryLevel.value = '30';
@@ -109,9 +110,10 @@ test('v42: fallback discovery używa zamówionej długości', () => withPage(asy
     const result = selectGroupPlaylist(items, 60, ctx, newRejectionStats(items.length));
     return { count: result.tracks.length, discovery: result.discoveryCount, targetMax: result.requestedDiscoveryQuota.max, actualMax: result.discoveryQuota.max };
   });
-  assert.equal(result.count, 21);
-  assert.equal(result.discovery, result.targetMax);
-  assert.ok(result.discovery > result.actualMax);
+  assert.equal(result.count, 0);
+  assert.equal(result.discovery, 0);
+  assert.equal(result.targetMax, 21);
+  assert.ok(result.discovery <= result.actualMax);
 }));
 
 test('wersje live/remix i remaster ze zwykłym wydaniem', () => withPage(async page => {

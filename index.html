@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43</title>
+  <title>Office Music Mixer v43.18.C</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     :root {
@@ -366,7 +366,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43 beta</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.18.C</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -397,6 +397,14 @@
         </div>
       </div>
       <div id="lastFmStatus" class="small"></div>
+      <details>
+        <summary>Porównanie wykonawców Spotify–Last.fm</summary>
+        <p class="small">Porównanie całej lokalnej bazy po utworach i albumach. Wyniki są wskazówkami do sprawdzenia; nie zmieniają playlist, ocen ani powiązań wykonawców.</p>
+        <button id="catalogEvidenceButton" type="button" class="secondary">Porównaj lokalną bazę</button>
+        <label class="small">Filtruj wyniki po nazwie <input id="catalogEvidenceFilter" type="search" maxlength="200" placeholder="np. Days of the New"></label>
+        <p id="catalogEvidenceSummary" class="small" role="status"></p>
+        <div id="catalogEvidenceRows"></div>
+      </details>
       <p class="small lastfm-note">
         Last.fm służy jako dodatkowa baza wykonawców dla wybranych gatunków. Historia Last.fm z ostatnich 14 dni jest głównym źródłem faktycznych odsłuchań do blokad anty-powtórkowych. Starsze scrobble są ignorowane.
         Dane rekomendacyjne: <a href="https://www.last.fm/" target="_blank" rel="noopener noreferrer">Last.fm</a>.
@@ -467,7 +475,7 @@
     </div>
 
     <p class="small">
-      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm. v38 rozszerza diagnostykę zatrzymania selekcji. v39 wykorzystuje te dane: awaryjny próg 35–43 wymaga już tylko, by żadna obecna osoba nie miała wyniku poniżej 35, a podczas końcowego fallbacku górna quota discovery jest liczona względem docelowej długości playlisty, aby krótki wynik nie blokował sam siebie. v40 blokuje w końcowym fallbacku kandydatów z mocno negatywnym feedbackiem. v41 dodał ręczną synchronizację trwałych preferencji z Cloudflare D1. v42 automatyzuje synchronizację po zalogowaniu i po zmianach, przenosi do D1 także skompaktowaną pulę kandydatów Spotify oraz warunkowo odświeża Last.fm przed generowaniem; algorytm doboru muzyki pozostaje bez zmian.
+      Bartek pozostaje głównym profilem i zawsze bierze udział w miksie, ale od v31 nie ma już sztywnego podziału 75/25. Każdy utwór jest oceniany osobno dla wszystkich obecnych osób, a wynik grupowy łączy średnie dopasowanie, zasadę least misery, fairness, pokrycie różnych gustów i różnorodność. v33 rozdziela dowód gatunkowy od samego źródła wyszukania: tag utworu z Last.fm jest najmocniejszy, tag wykonawcy słabszy, a genre query Spotify jest tylko lekką wskazówką. Discovery jest pilnowane względem faktycznej długości wyniku. v35 wzmacnia fairness dla osoby słabiej reprezentowanej, nie zatrzymuje wyboru tylko przez karę MMR i po wyborze zestawu losuje kolejność, zachowując możliwie duży odstęp między utworami tego samego wykonawcy. v36 wzmacnia filtr alternatywnych wersji, pamięta trzy ostatnie playlisty do późniejszej oceny i dodaje diagnostykę kolejki RMF. v37 dodaje bezpieczny próg awaryjny dla krótkich wyników oraz lekko promuje polską muzykę zgodną z gustami na podstawie tagów Last.fm. v38 rozszerza diagnostykę zatrzymania selekcji. v39 wykorzystuje te dane: awaryjny próg 35–43 wymaga już tylko, by żadna obecna osoba nie miała wyniku poniżej 35, a podczas końcowego fallbacku górna quota discovery jest liczona względem docelowej długości playlisty, aby krótki wynik nie blokował sam siebie. v43 wyklucza we wszystkich ścieżkach utwór, gdy dowolny wykonawca ma karę feedbacku <= -40; nie tworzy trwałej blokady ani nie przenosi kary na współwykonawców. v41 dodał ręczną synchronizację trwałych preferencji z Cloudflare D1. v42 automatyzuje synchronizację po zalogowaniu i po zmianach, przenosi do D1 także skompaktowaną pulę kandydatów Spotify oraz warunkowo odświeża Last.fm przed generowaniem; algorytm doboru muzyki pozostaje bez zmian.
       Artyści wzorcowi nadal mają mocną wagę, a wykonawca jawnie zablokowany przez dowolną obecną osobę nie trafi na playlistę. Ocena 🚫 przy gatunku obniża dopasowanie tej osoby, ale nie kasuje automatycznie całego wykonawcy, bo muzycy uparcie odmawiają życia w jednej szufladce.
       Ankiety gustu są głównym źródłem preferencji gatunkowych; ręczne pola mogą je uzupełniać. Filtr rozpoznawalności korzysta z lokalnej bazy Last.fm, a mocno dopasowane odkrycia mogą przejść także wtedy, gdy są jeszcze słabiej rozpoznane. Last.fm pozostaje głównym źródłem historii faktycznych odsłuchań, Spotify służy do wyszukiwania, URI i tworzenia playlist.
     </p>
@@ -525,10 +533,30 @@
       <button id="clearFeedbackButton" type="button" class="secondary">Wyczyść oceny</button>
       <button id="clearBlockedFeedbackButton" type="button" class="secondary">Wyczyść blokady wykonawców</button>
     </div>
-    <div class="small">👍 premiuje utwór i wykonawcę, 👎 mocno obniża ich ranking, 🚫 blokuje głównego wykonawcę, a ▶ YT otwiera małe okno wyszukiwania YouTube. Samo pojawienie się utworu na wcześniejszej wygenerowanej playliście nie wpływa na kolejne losowanie.</div>
+    <div class="small">👍 premiuje utwór i wykonawcę, 👎 mocno obniża ich ranking, 🚫 pozwala wybrać wykonawcę i powód blokady, a ▶ YT otwiera małe okno wyszukiwania YouTube. Samo pojawienie się utworu na wcześniejszej wygenerowanej playliście nie wpływa na kolejne losowanie.</div>
   </div>
 
+<dialog id="artistExclusionDialog" aria-labelledby="artistExclusionHeading" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;max-width:520px;width:calc(100% - 40px);">
+  <h2 id="artistExclusionHeading">Dlaczego blokujesz wykonawcę?</h2>
+  <p id="artistExclusionTrack"></p>
+  <label>Wykonawca <select id="artistExclusionArtist"></select></label>
+  <p><a id="artistExclusionLink" target="_blank" rel="noopener noreferrer">Sprawdź wykonawcę na Spotify</a></p>
+  <p id="artistExclusionCurrent" class="small" aria-live="polite"></p>
+  <p class="small">Blokada dotyczy wskazanego katalogu Spotify i kolejnych generowań. Nie zmienia obecnej playlisty.</p>
+  <div class="toolbar">
+    <button id="artistExclusionDislike" type="button">Nie lubię</button>
+    <button id="artistExclusionWrong" type="button">Nie ten wykonawca</button>
+    <button id="artistExclusionRevoke" type="button" class="secondary">Odwołaj blokadę</button>
+    <button id="artistExclusionCancel" type="button" class="secondary">Anuluj</button>
+  </div>
+  <div id="artistExclusionCandidates" class="small"></div>
+  <p id="artistExclusionError" class="error" role="alert"></p>
+</dialog>
 <script src="taste-state.js"></script>
+<script src="artist-exclusions.js"></script>
+<script src="artist-catalog-evidence.js"></script>
+<script src="pool-retention.js"></script>
+<script src="discovery-quota.js"></script>
 <script>
 const clientId = "d207523201ce4426923cda4cc893f76f";
 const redirectUri = "https://office-music.pages.dev/";
@@ -820,6 +848,7 @@ lastFmUserInput.addEventListener("change", () => {
   const next = lastFmUserInput.value.trim();
   localStorage.setItem(LASTFM_USER_KEY, next);
   renderLastFmStatus();
+  renderHistorySummary();
 });
 
 // Trwałe ustawienia zmieniają się głównie przez formularze i feedback.
@@ -838,6 +867,7 @@ const LASTFM_CACHE_TTL_MS = 60 * 60 * 1000;
 const LASTFM_RECENT_CACHE_TTL_MS = 10 * 60 * 1000;
 const LASTFM_HISTORY_WINDOW_DAYS = 14;
 const LASTFM_RECENT_COUNT_KEY = "office_lastfm_recent_count_v1";
+const LASTFM_RECENT_OBSERVATION_KEY = "office_lastfm_recent_observation_v1";
 const LASTFM_ARTIST_POOL_KEY = "office_lastfm_artist_pool_v1";
 const LASTFM_TRACK_POOL_KEY = "office_lastfm_track_pool_v1";
 const LASTFM_ARTIST_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
@@ -880,6 +910,7 @@ const HISTORY_MAX_AGE_DAYS = 90;
 
 const FEEDBACK_KEY = "office_music_feedback_v1";
 const FEEDBACK_BLOCKED_ARTISTS_KEY = "office_music_feedback_blocked_artists_v1";
+const ARTIST_FEEDBACK_EXCLUSION_SCORE = -40;
 const SEED_ARTIST_ROTATION_KEY = "office_seed_artist_rotation_v1";
 const RMF_SHOW_ID = "2BeZqsvzZUSldlZWvjeGe3";
 const RMF_SETTINGS_KEY = "office_rmf_settings_v2";
@@ -900,6 +931,7 @@ const STATE_EXPORT_VERSION = 1;
 const CLOUD_STATE_ENDPOINT = "/api/state";
 const CLOUD_EXACT_KEYS = [
   TASTE_STORAGE_KEY,
+  OfficeArtistExclusions.KEY,
   FEEDBACK_KEY,
   FEEDBACK_BLOCKED_ARTISTS_KEY,
   SEED_ARTIST_ROTATION_KEY,
@@ -995,14 +1027,14 @@ function mergedCandidatePool(localRaw, cloudRaw) {
       map.set(id, { ...item, queries: [...new Set(item.queries || [])] });
       continue;
     }
-    const newer = Number(item.savedAt || 0) >= Number(prev.savedAt || 0) ? item : prev;
+    const newer = Number(item.savedAt || 0) > Number(prev.savedAt || 0) ? item :
+      Number(item.savedAt || 0) < Number(prev.savedAt || 0) ? prev :
+      JSON.stringify(slimTrack(item.track)) < JSON.stringify(slimTrack(prev.track)) ? item : prev;
     const queries = [...new Set([...(prev.queries || []), ...(item.queries || [])])]
       .filter(query => queryMatchesTrack(query, newer.track));
-    map.set(id, { ...newer, queries });
+    map.set(id, { ...newer, queries: queries.sort(), lastUsedAt: Math.max(Number(item.lastUsedAt || 0), Number(prev.lastUsedAt || 0)) });
   }
-  return [...map.values()]
-    .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
-    .slice(0, CANDIDATE_POOL_MAX_ITEMS);
+  return retainSpotifyPool([...map.values()]);
 }
 
 function applyCloudStateWithMerge(remoteState) {
@@ -1016,6 +1048,11 @@ function applyCloudStateWithMerge(remoteState) {
     if (!remoteHas) continue;
     const cloudValue = remote[key];
 
+    if (key === OfficeArtistExclusions.KEY) {
+      saveArtistExclusions(OfficeArtistExclusions.merge(localStorage.getItem(key), cloudValue));
+      applied++;
+      continue;
+    }
     if (key === "office_candidate_pool_v1") {
       const merged = mergedCandidatePool(localStorage.getItem(key), cloudValue);
       if (merged.length) localStorage.setItem(key, JSON.stringify(merged));
@@ -1079,23 +1116,35 @@ async function cloudApiRequest(token, options = {}) {
   });
   const data = await parseJsonSafely(response);
   if (!response.ok) {
-    throw new Error(data?.error || `Cloudflare D1 HTTP ${response.status}`);
+    const error = new Error(data?.error || `Cloudflare D1 HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
 
 async function uploadCloudStateIfChanged(token, { force = false, status = true } = {}) {
-  const state = durableLocalStateForCloud();
-  const fingerprint = cloudStateFingerprint(state);
-  if (!force && fingerprint === lastCloudFingerprint) return { saved: 0, skipped: true };
-
+  if (!force && cloudStateFingerprint() === lastCloudFingerprint) return { saved: 0, skipped: true };
   if (status) setCloudStatus("zapisuję…");
-  const result = await cloudApiRequest(token, {
-    method: "PUT",
-    body: JSON.stringify({ state })
-  });
+  let result, state, fingerprint;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let base;
+    if (localStorage.getItem(OfficeArtistExclusions.KEY) !== null) {
+      const remote = await cloudApiRequest(token, { method: "GET" });
+      base = remote?.state?.[OfficeArtistExclusions.KEY] ?? null;
+      saveArtistExclusions(OfficeArtistExclusions.merge(localStorage.getItem(OfficeArtistExclusions.KEY), base));
+    }
+    state = durableLocalStateForCloud();
+    fingerprint = cloudStateFingerprint(state);
+    if (state[OfficeArtistExclusions.KEY] === null) delete state[OfficeArtistExclusions.KEY];
+    const body = JSON.stringify({ state, artistExclusionsBase: base });
+    if (new TextEncoder().encode(body).byteLength > 2 * 1024 * 1024) throw new Error("Stan przekracza limit synchronizacji 2 MiB; dane lokalne zachowano.");
+    try { result = await cloudApiRequest(token, { method: "PUT", body }); break; }
+    catch (err) { if (err.status !== 409 || attempt === 2) throw err; }
+  }
   lastCloudFingerprint = fingerprint;
   saveCloudShadow(state);
+  refreshArtistExclusionUi();
   const poolCount = candidatePoolSize();
   if (status) setCloudStatus(`zsynchronizowano ${result?.saved ?? Object.keys(state).length} kluczy · pula Spotify ${poolCount}`, "ok");
   return result;
@@ -1170,8 +1219,6 @@ async function autoSyncCloudState(token) {
     // Po scaleniu wysyłamy stan z powrotem. Dzięki temu istniejąca chmura v41
     // dostanie od razu nowy klucz z pulą Spotify, a brakujące lokalne dane nie zginą.
     const uploadResult = await uploadCloudStateIfChanged(token, { force: true, status: false });
-    lastCloudFingerprint = cloudStateFingerprint();
-    saveCloudShadow(durableLocalStateForCloud());
     cloudAutoSyncReady = true;
     setCloudStatus(`zsynchronizowano ${uploadResult?.saved ?? cloudStateKeys().length} kluczy · pula Spotify ${candidatePoolSize()}`, "ok");
   } catch (err) {
@@ -1198,7 +1245,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43",
+      source: "Office Music Mixer v43.18.C",
       storage: exportedStorageState()
     };
 
@@ -1247,7 +1294,7 @@ async function importLocalStateFromFile(event) {
     }
 
     const confirmed = window.confirm(
-      `Import zastąpi obecną lokalną bazę danymi z pliku (${entries.length} wpisów). Logowanie Spotify pozostanie bez zmian. Kontynuować?`
+      `Import zastąpi obecną lokalną bazę danymi z pliku (${entries.length} wpisów). Nowe blokady wykonawców zostaną scalone, aby stara kopia nie odtworzyła odwołanych decyzji. Logowanie Spotify pozostanie bez zmian. Kontynuować?`
     );
     if (!confirmed) return;
 
@@ -1256,8 +1303,20 @@ async function importLocalStateFromFile(event) {
       const key = localStorage.key(i);
       if (key?.startsWith(APP_STORAGE_PREFIX)) appKeys.push(key);
     }
-    for (const key of appKeys) localStorage.removeItem(key);
-    for (const [key, value] of entries) localStorage.setItem(key, value);
+    const before = exportedStorageState(), incoming = Object.fromEntries(entries);
+    const archivedIdentityKey = 'office_artist_identity_v2';
+    if (before[archivedIdentityKey] !== undefined && incoming[archivedIdentityKey] === undefined) incoming[archivedIdentityKey] = before[archivedIdentityKey];
+    if (before[OfficeArtistExclusions.KEY] !== undefined || incoming[OfficeArtistExclusions.KEY] !== undefined) {
+      incoming[OfficeArtistExclusions.KEY] = JSON.stringify(OfficeArtistExclusions.merge(before[OfficeArtistExclusions.KEY], incoming[OfficeArtistExclusions.KEY]));
+    }
+    try {
+      for (const key of appKeys) localStorage.removeItem(key);
+      for (const [key, value] of Object.entries(incoming)) localStorage.setItem(key, value);
+    } catch (err) {
+      for (const key of Object.keys(incoming)) localStorage.removeItem(key);
+      for (const [key, value] of Object.entries(before)) localStorage.setItem(key, value);
+      throw err;
+    }
 
     window.alert(`Zaimportowano ${entries.length} wpisów. Strona zostanie odświeżona.`);
     window.location.reload();
@@ -1268,6 +1327,195 @@ async function importLocalStateFromFile(event) {
 }
 
 
+
+let artistExclusionCacheRaw, artistExclusionCacheState;
+function loadArtistExclusions() {
+  const raw = localStorage.getItem(OfficeArtistExclusions.KEY);
+  if (raw !== artistExclusionCacheRaw || !artistExclusionCacheState) {
+    artistExclusionCacheState = OfficeArtistExclusions.parse(raw);
+    artistExclusionCacheRaw = raw;
+  }
+  return artistExclusionCacheState;
+}
+function saveArtistExclusions(state) {
+  const raw = JSON.stringify(OfficeArtistExclusions.merge(state, null));
+  if (new TextEncoder().encode(JSON.stringify(raw)).byteLength > 1536 * 1024) throw new Error("Blokady przekraczają limit zapisu; wyeksportuj bazę.");
+  localStorage.setItem(OfficeArtistExclusions.KEY, raw);
+}
+function artistExclusionStatus(id) {
+  return OfficeArtistExclusions.status(loadArtistExclusions(), id || "");
+}
+function trackHasArtistExclusion(track) {
+  const state = loadArtistExclusions();
+  return (track?.artists || []).some(a => a?.id && OfficeArtistExclusions.status(state, a.id).blocked);
+}
+function setArtistExclusion(track, artistId, reason) {
+  const artist = (track?.artists || []).find(a => a?.id === artistId);
+  if (!artist || !OfficeArtistExclusions.validId(artistId)) throw new Error("Brakuje poprawnego Spotify Artist ID wskazanego wykonawcy.");
+  if (reason !== null && !['dislike', 'wrong_artist'].includes(reason)) throw new Error("Nieprawidłowy powód blokady.");
+  const value = reason === null ? null : {
+    artistId, name: artist.name || "", reason,
+    trackId: track.id || "", trackName: track.name || "",
+    artists: track.artists.map(a => ({ id: a?.id || "", name: a?.name || "" })),
+    source: "playlist_block", updatedAt: new Date().toISOString()
+  };
+  saveArtistExclusions(OfficeArtistExclusions.decide(loadArtistExclusions(), artistId, value));
+  scheduleAutomaticCloudSync();
+  refreshArtistExclusionUi();
+}
+function artistExclusionReasonText(status) {
+  const reasons = [...new Set(status.entries.map(e => e.reason === 'wrong_artist' ? 'nie ten wykonawca' : 'nie lubię'))];
+  return status.conflict ? `konflikt decyzji (${reasons.join(' / ')}); blokada aktywna do rozstrzygnięcia` : reasons.join(' / ');
+}
+function refreshArtistExclusionUi() {
+  renderFeedbackSummary();
+  for (const row of document.querySelectorAll('[data-artist-exclusion-row]')) row.refreshArtistExclusion?.();
+  if (document.getElementById('artistExclusionDialog').open) refreshArtistExclusionDialog();
+}
+function cachedArtistCatalogAlternatives(name, excludedId) {
+  const tracks = [...loadCandidatePool().map(row => row.track), ...loadRecentPlaylists().flatMap(row => row.tracks || [])];
+  const candidates = new Map();
+  for (const track of tracks) for (const artist of track.artists || []) {
+    if (!OfficeArtistExclusions.validId(artist?.id) || artist.id === excludedId || normalizeArtistName(artist.name) !== normalizeArtistName(name)) continue;
+    if (!candidates.has(artist.id)) candidates.set(artist.id, { id: artist.id, name: artist.name, track: track.name || "" });
+  }
+  return [...candidates.values()];
+}
+let artistExclusionDialogTrack = null;
+function localArtistCatalogEvidence() {
+  const exclusions = loadArtistExclusions();
+  const wrongArtistIds = Object.keys(exclusions.artists).filter(id =>
+    OfficeArtistExclusions.status(exclusions, id).entries.some(e => e.reason === 'wrong_artist')
+  );
+  return OfficeArtistCatalogEvidence.analyze({
+    spotifyTracks: [...loadCandidatePool().map(row => row.track), ...loadRecentPlaylists().flatMap(row => row.tracks || [])],
+    lastfmTracks: loadLastFmTrackPool(),
+    lastfmArtists: loadLastFmArtistPool(),
+    wrongArtistIds
+  });
+}
+function catalogEvidenceStatusText(status) {
+  return ({
+    supported: 'Zgodność co najmniej dwóch tytułów z albumami; propozycja wymaga sprawdzenia',
+    ambiguous: 'Kilka Spotify ID ma zgodne tytuły — wynik niejednoznaczny',
+    lastfm_ambiguous: 'Last.fm: niespójne MBID lub niepełna historia dowodów — wynik niejednoznaczny',
+    negative_conflict: 'Dowody wskazują ID zgłoszony jako niewłaściwy — wynik wymaga sprawdzenia',
+    insufficient: 'Za mało zgodnych utworów z albumami',
+    collaboration_only: 'Zgodność tylko dla współwykonawców — nie ustalamy właściciela katalogu',
+    missing_lastfm: 'Brak wykonawcy w lokalnej bazie Last.fm',
+    missing_spotify: 'Brak katalogu w lokalnej puli Spotify',
+    name_only: 'Wspólna nazwa bez zgodności repertuaru'
+  })[status] || 'Brak rozstrzygnięcia';
+}
+function appendCatalogEvidence(target, row) {
+  const status = document.createElement('p');
+  status.textContent = catalogEvidenceStatusText(row.status);
+  target.append(status);
+  for (const catalog of row.catalogs) {
+    const p = document.createElement('p'), a = document.createElement('a');
+    a.href = `https://open.spotify.com/artist/${encodeURIComponent(catalog.id)}`;
+    a.target = '_blank'; a.rel = 'noopener noreferrer';
+    a.textContent = `${catalog.name} [${catalog.id}]`;
+    p.append(a, ` · zgodne tytuły: ${catalog.matchedTitles}; z albumem: ${catalog.albumMatchedTitles}`);
+    if (artistExclusionStatus(catalog.id).blocked) p.append(' · zablokowany');
+    target.append(p);
+    if (catalog.matches.length) {
+      const details = document.createElement('details'), summary = document.createElement('summary');
+      summary.textContent = 'Zobacz dowody zgodności';
+      details.append(summary);
+      const list = document.createElement('ul');
+      for (const match of catalog.matches) {
+        const li = document.createElement('li');
+        li.textContent = `${match.title}${match.albums.length ? ` — album: ${match.albums.join(' / ')}` : ' — brak wspólnego albumu'}`;
+        list.append(li);
+      }
+      details.append(list); target.append(details);
+    }
+  }
+}
+function renderArtistCatalogEvidence() {
+  const summary = document.getElementById('catalogEvidenceSummary'), rows = document.getElementById('catalogEvidenceRows');
+  rows.replaceChildren();
+  try {
+    const report = localArtistCatalogEvidence(), s = report.summary;
+    summary.textContent = `Last.fm: ${s.lastfmNames} nazw; z katalogiem Spotify: ${s.lastfmNamesWithSpotify}; ` +
+      `Spotify: ${s.spotifyCatalogs} katalogów; nazwy z kilkoma ID: ${s.multiIdNames}. ` +
+      `Propozycje z repertuaru i albumów: ${s.proposals}/${s.lastfmNames} (${Math.round(s.coverage * 100)}%). ` +
+      `Sprzeczne ze zgłoszeniem „nie ten wykonawca”: ${s.negativeContradictions}. ` +
+      'Trafność nie została zweryfikowana; to nie jest odsetek poprawnych dopasowań. Nie zmieniono powiązań ani preferencji.';
+    const filter = OfficeArtistCatalogEvidence.key(document.getElementById('catalogEvidenceFilter').value);
+    const ordered = report.rows.filter(row => !filter || row.nameKey.includes(filter)).sort((a, b) => Number(b.catalogs.length > 1) - Number(a.catalogs.length > 1) || a.nameKey.localeCompare(b.nameKey));
+    summary.textContent += ` Pokazano ${Math.min(100, ordered.length)} z ${ordered.length} wyników${filter ? ' filtra' : ''}; podsumowanie dotyczy całej bazy.`;
+    for (const row of ordered.slice(0, 100)) {
+      const details = document.createElement('details'), title = document.createElement('summary');
+      title.textContent = `${row.name} — ${catalogEvidenceStatusText(row.status)}`;
+      details.append(title); appendCatalogEvidence(details, row); rows.append(details);
+    }
+  } catch (err) { summary.textContent = `Nie udało się porównać lokalnej bazy: ${err.message}`; }
+}
+function openArtistExclusionDialog(track) {
+  const dialog = document.getElementById('artistExclusionDialog');
+  const select = document.getElementById('artistExclusionArtist');
+  artistExclusionDialogTrack = track;
+  select.replaceChildren();
+  const seen = new Set();
+  for (const artist of track?.artists || []) {
+    if (!OfficeArtistExclusions.validId(artist?.id) || seen.has(artist.id)) continue;
+    seen.add(artist.id);
+    select.add(new Option(`${artist.name || 'Wykonawca'} [${artist.id}]`, artist.id));
+  }
+  document.getElementById('artistExclusionTrack').textContent = track?.name || "";
+  document.getElementById('artistExclusionError').textContent = "";
+  document.getElementById('artistExclusionCancel').textContent = 'Anuluj';
+  refreshArtistExclusionDialog();
+  if (!dialog.open) dialog.showModal();
+}
+function refreshArtistExclusionDialog() {
+  const id = document.getElementById('artistExclusionArtist').value;
+  const artist = artistExclusionDialogTrack?.artists?.find(a => a.id === id);
+  const link = document.getElementById('artistExclusionLink');
+  link.hidden = !artist;
+  if (artist) link.href = `https://open.spotify.com/artist/${encodeURIComponent(id)}`;
+  const current = document.getElementById('artistExclusionCurrent');
+  const candidates = document.getElementById('artistExclusionCandidates');
+  candidates.replaceChildren();
+  let status;
+  try { status = artistExclusionStatus(id); }
+  catch (err) { document.getElementById('artistExclusionError').textContent = err.message; }
+  const ready = Boolean(artist && status);
+  document.getElementById('artistExclusionDislike').disabled = !ready;
+  document.getElementById('artistExclusionWrong').disabled = !ready;
+  document.getElementById('artistExclusionRevoke').disabled = !ready || !status.blocked;
+  current.textContent = !artist ? 'Brakuje Spotify Artist ID — nie zapisujemy blokady po samej nazwie.' : status?.blocked ? `Obecna blokada: ${artistExclusionReasonText(status)}.` : 'Brak blokady tego katalogu Spotify.';
+  if (artist && loadFeedbackBlockedArtists()[normalizeArtistName(artist.name)]) current.textContent += ' Istnieje również dawna blokada nazwy; odwołanie blokady ID jej nie usuwa.';
+  if (status?.entries.some(e => e.reason === 'wrong_artist')) {
+    const evidence = localArtistCatalogEvidence().rows.find(row => row.nameKey === OfficeArtistCatalogEvidence.key(artist.name));
+    if (evidence) {
+      const p = document.createElement('p');
+      p.textContent = 'Automatyczne porównanie lokalnego repertuaru Spotify–Last.fm:';
+      candidates.append(p); appendCatalogEvidence(candidates, evidence);
+      return;
+    }
+    const alternatives = cachedArtistCatalogAlternatives(artist.name, id);
+    const explanation = document.createElement('p');
+    explanation.textContent = alternatives.length ? 'Inne katalogi o tej nazwie z lokalnej bazy — wymagają sprawdzenia, nie są automatycznie dopasowane:' : 'Brak innego katalogu w lokalnej bazie. Zgłoszony ID pozostaje zablokowany. Automatyczne dopasowanie nie zostało wykonane.';
+    candidates.append(explanation);
+    for (const option of alternatives) {
+      const p = document.createElement('p'), a = document.createElement('a');
+      a.href = `https://open.spotify.com/artist/${encodeURIComponent(option.id)}`;
+      a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.textContent = `${option.name} [${option.id}] · np. ${option.track}`;
+      p.append(a); candidates.append(p);
+    }
+  }
+}
+function submitArtistExclusion(reason) {
+  try {
+    setArtistExclusion(artistExclusionDialogTrack, document.getElementById('artistExclusionArtist').value, reason);
+    if (reason === 'wrong_artist') document.getElementById('artistExclusionCancel').textContent = 'Zamknij';
+    else document.getElementById('artistExclusionDialog').close();
+  } catch (err) { document.getElementById('artistExclusionError').textContent = err.message; }
+}
 
 function loadFeedback() {
   try {
@@ -1325,27 +1573,38 @@ function feedbackArtistTotals(data = loadFeedback()) {
   return totals;
 }
 
-function feedbackScore(track) {
-  const data = loadFeedback();
+function artistFeedbackScore(row = { ups: 0, downs: 0, balance: 0 }) {
+  let score = 0;
+  if (row.balance > 0) score += Math.min(90, row.balance * 18);
+  if (row.balance < 0) score += Math.max(-220, row.balance * 55);
+  if (row.downs >= 2 && row.ups === 0) score -= 140 + (row.downs - 2) * 45;
+  if (row.ups >= 2 && row.downs === 0) score += 30 + (row.ups - 2) * 12;
+  return score;
+}
+
+function hasStrongNegativeArtistFeedback(track, artistStats = feedbackArtistStats()) {
+  return (track?.artists || []).some(artist => {
+    const key = normalizeArtistName(artist?.name || "");
+    return key && artistFeedbackScore(artistStats.get(key)) <= ARTIST_FEEDBACK_EXCLUSION_SCORE;
+  });
+}
+
+function feedbackScore(track, snapshot = null) {
+  const data = snapshot?.data || loadFeedback();
   const signature = trackSignature(track);
   const trackValue = Number(data[signature]?.value || 0);
 
   // Feedback jest celowo silny: ma z czasem korygować katalogowe rekomendacje.
   let score = trackValue > 0 ? 90 : trackValue < 0 ? -320 : 0;
-  const artistStats = feedbackArtistStats(data);
-  const hardBlocked = feedbackBlockedArtistNames();
+  const artistStats = snapshot?.artistStats || feedbackArtistStats(data);
+  const hardBlocked = snapshot?.hardBlocked || feedbackBlockedArtistNames();
 
   for (const artist of track?.artists || []) {
     const key = normalizeArtistName(artist?.name || "");
     if (!key) continue;
     if (hardBlocked.has(key)) return -100000;
 
-    const row = artistStats.get(key) || { ups: 0, downs: 0, balance: 0 };
-    if (row.balance > 0) score += Math.min(90, row.balance * 18);
-    if (row.balance < 0) score += Math.max(-220, row.balance * 55);
-
-    if (row.downs >= 2 && row.ups === 0) score -= 140 + (row.downs - 2) * 45;
-    if (row.ups >= 2 && row.downs === 0) score += 30 + (row.ups - 2) * 12;
+    score += artistFeedbackScore(artistStats.get(key));
   }
   return score;
 }
@@ -1424,7 +1683,7 @@ function recordSeedArtistSelections(tracks, selectedProfilesList) {
   saveSeedArtistRotation(rotation);
 }
 
-async function primeManualSeedArtists(token, selectedProfilesList, maxNewSearches = 2) {
+async function primeManualSeedArtists(token, selectedProfilesList, maxNewSearches = 2, acquisition = createCandidateAcquisition(selectedProfilesList)) {
   const rotation = loadSeedArtistRotation();
   const rows = [];
   for (const profile of selectedProfilesList || []) {
@@ -1448,14 +1707,7 @@ async function primeManualSeedArtists(token, selectedProfilesList, maxNewSearche
     return b.ageBonus - a.ageBonus;
   });
 
-  const startSearches = newSearchesThisGeneration;
-  for (const row of unique) {
-    if (newSearchesThisGeneration - startSearches >= maxNewSearches) break;
-    if (candidatePoolForQueries([row.query]).length >= 3) continue;
-    const offsets = searchOffsetsForQuery(row.query);
-    const offset = offsets[0] ?? 0;
-    await searchTracks(token, row.query, offset);
-  }
+  await primeDiverseQueries(token, unique, maxNewSearches, acquisition);
 }
 
 function setTrackFeedback(track, value) {
@@ -1476,30 +1728,14 @@ function setTrackFeedback(track, value) {
   saveFeedback(data);
 }
 
-function togglePrimaryArtistBlock(track) {
-  const primary = track?.artists?.[0];
-  const key = normalizeArtistName(primary?.name || "");
-  if (!key) return false;
-  const data = loadFeedbackBlockedArtists();
-  if (data[key]) {
-    delete data[key];
-  } else {
-    data[key] = {
-      name: primary.name || key,
-      blockedAt: new Date().toISOString(),
-      source: "playlist_feedback"
-    };
-  }
-  saveFeedbackBlockedArtists(data);
-  return Boolean(data[key]);
-}
-
 function renderFeedbackSummary() {
   if (!feedbackSummary) return;
   const entries = Object.values(loadFeedback());
   const ups = entries.filter(x => Number(x?.value) > 0).length;
   const downs = entries.filter(x => Number(x?.value) < 0).length;
-  const blocked = Object.keys(loadFeedbackBlockedArtists()).length;
+  let blocked;
+  try { blocked = Object.keys(loadFeedbackBlockedArtists()).length + Object.keys(loadArtistExclusions().artists).filter(id => artistExclusionStatus(id).blocked).length; }
+  catch (err) { feedbackSummary.textContent = err.message; return; }
   feedbackSummary.textContent = `Preferencje z feedbacku: ${ups} 👍 / ${downs} 👎 / ${blocked} 🚫 wykonawców`;
 }
 
@@ -1514,8 +1750,14 @@ function clearFeedback() {
 
 function clearFeedbackArtistBlocks() {
   if (!confirm("Wyczyścić wszystkie blokady wykonawców dodane przyciskiem 🚫?")) return;
+  try {
+    let state = loadArtistExclusions();
+    for (const id of Object.keys(state.artists)) state = OfficeArtistExclusions.decide(state, id, null);
+    saveArtistExclusions(state);
+  } catch (err) { alert(err.message); return; }
   localStorage.removeItem(FEEDBACK_BLOCKED_ARTISTS_KEY);
-  renderFeedbackSummary();
+  scheduleAutomaticCloudSync();
+  refreshArtistExclusionUi();
   document.querySelectorAll(".vote-btn").forEach(btn => btn.classList.remove("active-block"));
 }
 
@@ -2196,11 +2438,16 @@ function readLastFmCache(method, params, ttlMs = LASTFM_CACHE_TTL_MS) {
   }
 }
 
+function compactLastFmCatalogMetadata(item) {
+  const evidence = OfficeArtistCatalogEvidence.metadata(item);
+  return { ...(evidence.album ? { album: { "#text": evidence.album } } : {}), ...(evidence.trackMbid ? { mbid: evidence.trackMbid } : {}) };
+}
+
 function compactLastFmCacheData(method, data) {
   if (method === "tag.getTopArtists") {
     return {
       topartists: {
-        artist: (data?.topartists?.artist || []).map(item => ({ name: item?.name || "" }))
+        artist: (data?.topartists?.artist || []).map(item => ({ name: item?.name || "", ...(OfficeArtistCatalogEvidence.metadata({ artist: item }).artistMbid ? { mbid: item.mbid } : {}) }))
       }
     };
   }
@@ -2209,7 +2456,8 @@ function compactLastFmCacheData(method, data) {
       tracks: {
         track: (data?.tracks?.track || []).map(item => ({
           name: item?.name || "",
-          artist: { name: item?.artist?.name || item?.artist?.["#text"] || "" }
+          artist: { name: item?.artist?.name || item?.artist?.["#text"] || "", mbid: OfficeArtistCatalogEvidence.metadata(item).artistMbid },
+          ...compactLastFmCatalogMetadata(item)
         }))
       }
     };
@@ -2221,8 +2469,10 @@ function compactLastFmCacheData(method, data) {
           name: item?.name || "",
           artist: {
             "#text": item?.artist?.["#text"] || item?.artist?.name || "",
-            name: item?.artist?.name || item?.artist?.["#text"] || ""
+            name: item?.artist?.name || item?.artist?.["#text"] || "",
+            mbid: OfficeArtistCatalogEvidence.metadata(item).artistMbid
           },
+          ...compactLastFmCatalogMetadata(item),
           ...(item?.date?.uts ? { date: { uts: item.date.uts } } : {})
         })),
         "@attr": { totalPages: data?.recenttracks?.["@attr"]?.totalPages || "1" }
@@ -2247,7 +2497,10 @@ function writeLastFmCache(method, params, data) {
 
 async function lastFmRequest(method, params = {}, ttlMs = LASTFM_CACHE_TTL_MS) {
   const cached = readLastFmCache(method, params, ttlMs);
-  if (cached) return cached;
+  if (cached) {
+    try { Object.defineProperty(cached, "ommAcquiredAt", { value: JSON.parse(localStorage.getItem(lastFmCacheKey(method, params))).savedAt }); } catch {}
+    return cached;
+  }
 
   const url = new URL(lastFmApiRoot);
   url.search = new URLSearchParams({
@@ -2268,12 +2521,46 @@ async function lastFmRequest(method, params = {}, ttlMs = LASTFM_CACHE_TTL_MS) {
   return data;
 }
 
+// History evidence is local, owned by a Last.fm account, and never renewed by tags.
+function lastFmRecentEvidenceCount(item, now = Date.now()) {
+  const observation = item?.recentObservation;
+  const user = String(localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase();
+  if (!user || observation?.user !== user || !Array.isArray(observation.plays)) return 0;
+  const cutoff = now / 1000 - LASTFM_HISTORY_WINDOW_DAYS * 86400;
+  return observation.plays.filter(uts => Number.isFinite(uts) && uts >= cutoff && uts <= now / 1000).length;
+}
+
+function applyLastFmRecentObservation(names, plays, observation) {
+  const pool = loadLastFmArtistPool();
+  const map = new Map(pool.map(item => [normalizeArtistName(item.artist), item]));
+  if (observation.complete) {
+    for (const item of map.values()) {
+      item.recentCount = 0;
+      item.recentObservation = { ...observation, plays: [] };
+    }
+  }
+  for (const [key, timestamps] of plays) {
+    const item = map.get(key) || { artist: names.get(key), tags: [], sources: [], savedAt: observation.observedAt };
+    item.sources = [...new Set([...(item.sources || []), "recent"])];
+    const validPlays = timestamps.filter(uts => Number.isFinite(uts) && uts >= observation.observedAt / 1000 - LASTFM_HISTORY_WINDOW_DAYS * 86400 && uts <= observation.observedAt / 1000).slice(0, 600);
+    item.recentCount = validPlays.length;
+    item.recentObservation = { ...observation, plays: validPlays };
+    item.savedAt = observation.observedAt;
+    map.set(key, item);
+  }
+  return saveLastFmArtistPool([...map.values()]);
+}
+
 function loadLastFmArtistPool() {
   try {
     const parsed = JSON.parse(localStorage.getItem(LASTFM_ARTIST_POOL_KEY) || "[]");
     if (!Array.isArray(parsed)) return [];
     const cutoff = Date.now() - LASTFM_ARTIST_POOL_MAX_AGE_MS;
-    return parsed.filter(item => item?.artist && Number(item.savedAt || 0) >= cutoff);
+    return parsed.filter(item => item?.artist && Number(item.savedAt || 0) >= cutoff)
+      .map(item => {
+        const recentCount = lastFmRecentEvidenceCount(item);
+        return { ...item, recentCount, sources: (item.sources || []).filter(source => source !== "recent" || recentCount > 0) };
+      });
   } catch {
     return [];
   }
@@ -2282,17 +2569,16 @@ function loadLastFmArtistPool() {
 function saveLastFmArtistPool(pool) {
   try {
     const cutoff = Date.now() - LASTFM_ARTIST_POOL_MAX_AGE_MS;
-    const cleaned = pool
-      .filter(item => item?.artist && Number(item.savedAt || 0) >= cutoff)
-      .sort((a, b) => Number(b.recentCount || 0) - Number(a.recentCount || 0) || Number(b.savedAt || 0) - Number(a.savedAt || 0))
-      .slice(0, 1800);
+    const cleaned = retainLastFmPool(pool.filter(item => item?.artist && Number(item.savedAt || 0) >= cutoff), 1800, false);
     localStorage.setItem(LASTFM_ARTIST_POOL_KEY, JSON.stringify(cleaned));
+    return true;
   } catch (err) {
     console.warn("Nie udało się zapisać puli Last.fm.", err);
+    return false;
   }
 }
 
-function addLastFmArtists(items, { tags = [], source = "tag", recentCounts = null } = {}) {
+function addLastFmArtists(items, { tags = [], source = "tag", acquiredAt = Date.now() } = {}) {
   if (!Array.isArray(items) || !items.length) return;
   const pool = loadLastFmArtistPool();
   const map = new Map(pool.map(item => [normalizeArtistName(item.artist), item]));
@@ -2308,13 +2594,20 @@ function addLastFmArtists(items, { tags = [], source = "tag", recentCounts = nul
       tags: [],
       sources: [],
       recentCount: 0,
-      savedAt: now
+      savedAt: acquiredAt
     };
     current.artist = artist;
+    const artistMbid = OfficeArtistCatalogEvidence.metadata({ artist: raw }).artistMbid;
+    if (artistMbid) {
+      const mbids = [...new Set([...(Array.isArray(current.catalogMbids) ? current.catalogMbids : []), artistMbid])];
+      current.catalogMbids = mbids.slice(-4);
+      if (mbids.length > 4) current.catalogEvidenceTruncated = true;
+    }
     current.tags = [...new Set([...(current.tags || []), ...tags.map(normalizeGenreName).filter(Boolean)])];
     current.sources = [...new Set([...(current.sources || []), source])];
-    current.recentCount = Math.max(Number(current.recentCount || 0), Number(recentCounts?.get?.(key) || 0));
-    current.savedAt = now;
+    current.recentCount = lastFmRecentEvidenceCount(current);
+    current.savedAt = Math.max(Number(current.savedAt || 0), Number(acquiredAt || now));
+    current.lastUsedAt = now;
     map.set(key, current);
   }
 
@@ -2336,17 +2629,14 @@ function loadLastFmTrackPool() {
 function saveLastFmTrackPool(pool) {
   try {
     const cutoff = Date.now() - LASTFM_TRACK_POOL_MAX_AGE_MS;
-    const cleaned = pool
-      .filter(item => item?.track && item?.artist && Number(item.savedAt || 0) >= cutoff)
-      .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
-      .slice(0, 3000);
+    const cleaned = retainLastFmPool(pool.filter(item => item?.track && item?.artist && Number(item.savedAt || 0) >= cutoff), 3000, true);
     localStorage.setItem(LASTFM_TRACK_POOL_KEY, JSON.stringify(cleaned));
   } catch (err) {
     console.warn("Nie udało się zapisać puli utworów Last.fm.", err);
   }
 }
 
-function addLastFmTracks(items, { tags = [], source = "tag" } = {}) {
+function addLastFmTracks(items, { tags = [], source = "tag", acquiredAt = Date.now() } = {}) {
   if (!Array.isArray(items) || !items.length) return;
   const pool = loadLastFmTrackPool();
   const map = new Map(pool.map(item => [
@@ -2361,12 +2651,16 @@ function addLastFmTracks(items, { tags = [], source = "tag" } = {}) {
     if (!track || !artist) continue;
     const key = `${normalizeArtistName(artist)}|${normalizeForSignature(track)}`;
     if (!key || key === "|") continue;
-    const current = map.get(key) || { track, artist, tags: [], sources: [], savedAt: now };
+    const current = map.get(key) || { track, artist, tags: [], sources: [], savedAt: acquiredAt };
     current.track = track;
     current.artist = artist;
+    const evidence = OfficeArtistCatalogEvidence.mergeMetadata(current.catalogEvidence, OfficeArtistCatalogEvidence.metadata(raw));
+    if (evidence.records.length) current.catalogEvidence = evidence.records;
+    if (evidence.truncated) current.catalogEvidenceTruncated = true;
     current.tags = [...new Set([...(current.tags || []), ...tags.map(normalizeGenreName).filter(Boolean)])];
     current.sources = [...new Set([...(current.sources || []), source])];
-    current.savedAt = now;
+    current.savedAt = Math.max(Number(current.savedAt || 0), Number(acquiredAt || now));
+    current.lastUsedAt = now;
     map.set(key, current);
   }
 
@@ -2423,7 +2717,7 @@ function lastFmTracksForTags(tags, limit = 30) {
   const candidates = loadLastFmTrackPool().filter(item =>
     (item.tags || []).some(tag => lastFmTagMatchesWanted(tag, wanted))
   );
-  return shuffle(candidates).slice(0, limit);
+  return rotateLastFmPool(candidates, tags, limit, "tracks");
 }
 
 function lastFmArtistPoolSize() {
@@ -2445,21 +2739,19 @@ function commonCategoryLastFmTags(category) {
 function lastFmArtistsForTags(tags, limit = 12, { includeRecent = false } = {}) {
   const wanted = new Set((tags || []).map(normalizeGenreName).filter(Boolean));
   const candidates = loadLastFmArtistPool().filter(item => {
-    if (includeRecent && (item.sources || []).includes("recent")) return true;
+    if (includeRecent && item.recentCount > 0) return true;
     return (item.tags || []).some(tag => lastFmTagMatchesWanted(tag, wanted));
   });
 
-  candidates.sort((a, b) =>
-    Number(b.recentCount || 0) - Number(a.recentCount || 0) ||
-    Number(b.savedAt || 0) - Number(a.savedAt || 0)
-  );
-
-  const head = candidates.slice(0, Math.max(limit * 3, limit));
-  return shuffle(head).slice(0, limit).map(item => item.artist);
+  return rotateLastFmPool(candidates, tags, limit, includeRecent ? "artists-recent" : "artists").map(item => item.artist);
 }
 
 function lastFmRecentCount() {
-  const value = Number(localStorage.getItem(LASTFM_RECENT_COUNT_KEY) || 0);
+  let observation;
+  try { observation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
+  const user = String(localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase();
+  if (!observation || observation.user !== user || Date.now() - observation.observedAt > LASTFM_RECENT_CACHE_TTL_MS) return 0;
+  const value = Number(observation.count || 0);
   return Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
@@ -2471,7 +2763,10 @@ function renderLastFmStatus(extra = "") {
   const parts = [`Baza Last.fm: ${pool} wykonawców, ${trackPool} utworów`];
   if (user) {
     parts.push(`konto: ${user}`);
-    parts.push(`scrobble ${LASTFM_HISTORY_WINDOW_DAYS} dni: ${lastFmRecentCount()}`);
+    let observation;
+    try { observation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
+    const valid = observation?.user === user.trim().toLowerCase() && Date.now() - observation.observedAt <= LASTFM_RECENT_CACHE_TTL_MS;
+    parts.push(valid ? `scrobble zaobserwowane: ${lastFmRecentCount()} · okno ${LASTFM_HISTORY_WINDOW_DAYS} dni, ${observation.complete ? "pełne" : "częściowe (maks. 3 strony)"}` : "historia Last.fm: brak świeżej obserwacji");
   }
   if (extra) parts.push(extra);
   lastFmStatus.textContent = parts.join(" · ");
@@ -2518,7 +2813,7 @@ async function syncLastFmSources(
           forceApi ? -1 : LASTFM_CACHE_TTL_MS
         );
         const artists = data?.topartists?.artist || [];
-        addLastFmArtists(artists, { tags: [tag], source: "tag" });
+        addLastFmArtists(artists, { tags: [tag], source: "tag", acquiredAt: data.ommAcquiredAt || Date.now() });
       } catch (err) {
         console.warn(`Last.fm top artists ${tag}:`, err);
       }
@@ -2532,7 +2827,7 @@ async function syncLastFmSources(
           forceApi ? -1 : LASTFM_CACHE_TTL_MS
         );
         const tracks = data?.tracks?.track || [];
-        addLastFmTracks(tracks, { tags: [tag], source: "tag" });
+        addLastFmTracks(tracks, { tags: [tag], source: "tag", acquiredAt: data.ommAcquiredAt || Date.now() });
       } catch (err) {
         console.warn(`Last.fm top tracks ${tag}:`, err);
       }
@@ -2551,9 +2846,13 @@ async function syncLastFmSources(
       // Zaokrąglamy początek do pełnej godziny, żeby 10-minutowy cache Last.fm był użyteczny.
       const rawFrom = Date.now() - LASTFM_HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
       const fromSeconds = Math.floor(rawFrom / 1000 / 3600) * 3600;
+      const observedAt = Date.now();
       const historyEntries = [];
       const recentPoolItems = [];
-      const counts = new Map();
+      const plays = new Map();
+      const seenPlays = new Set();
+      let validPagination = true;
+      let expectedPages = null;
       const names = new Map();
 
       let page = 1;
@@ -2565,9 +2864,16 @@ async function syncLastFmSources(
           { user, limit: 200, from: fromSeconds, extended: 0, page },
           forceApi ? -1 : LASTFM_RECENT_CACHE_TTL_MS
         );
-        const tracks = data?.recenttracks?.track || [];
+        if (!data?.recenttracks || !Array.isArray(data.recenttracks.track)) throw new Error("nieprawidłowa odpowiedź historii");
+        const tracks = data.recenttracks.track;
         const attr = data?.recenttracks?.["@attr"] || {};
-        totalPages = Math.max(1, Number(attr.totalPages || 1));
+        const reportedPages = Number(attr.totalPages);
+        validPagination = validPagination && Number.isInteger(reportedPages) && reportedPages >= 0
+          && (expectedPages === null || expectedPages === reportedPages)
+          && (!attr.page || Number(attr.page) === page)
+          && (reportedPages !== 0 || tracks.length === 0);
+        expectedPages = reportedPages;
+        totalPages = Math.max(1, Number.isFinite(reportedPages) ? reportedPages : 1);
 
         for (const track of tracks) {
           const name = track?.artist?.["#text"] || track?.artist?.name || "";
@@ -2576,10 +2882,14 @@ async function syncLastFmSources(
           if (!key) continue;
 
           const uts = Number(track?.date?.uts || 0);
-          if (!title || uts <= 0) continue;
+          if (!title || uts < observedAt / 1000 - LASTFM_HISTORY_WINDOW_DAYS * 86400 || uts > observedAt / 1000) continue;
+          const playKey = JSON.stringify([key, title, uts]);
+          if (seenPlays.has(playKey)) { validPagination = false; continue; }
+          seenPlays.add(playKey);
 
           recentScrobbleCount++;
-          counts.set(key, (counts.get(key) || 0) + 1);
+          if (!plays.has(key)) plays.set(key, []);
+          plays.get(key).push(uts);
           names.set(key, name);
 
           historyEntries.push({
@@ -2591,19 +2901,22 @@ async function syncLastFmSources(
             playedAt: new Date(uts * 1000).toISOString(),
             source: "lastfm"
           });
-          recentPoolItems.push({ name: title, artist: { name } });
+          recentPoolItems.push({ name: title, artist: { name, mbid: track?.artist?.mbid || "" }, ...compactLastFmCatalogMetadata(track) });
         }
 
         page++;
       } while (page <= totalPages && page <= maxPages);
 
+      if (String(localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase() !== user.toLowerCase()) throw new Error("konto Last.fm zmieniło się podczas synchronizacji");
+      let latestObservation;
+      try { latestObservation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
+      if (latestObservation?.user === user.toLowerCase() && Number(latestObservation.observedAt) > observedAt) throw new Error("nowsza obserwacja historii jest już zapisana");
       if (historyEntries.length) mergeHistoryEntries(historyEntries);
       if (recentPoolItems.length) addLastFmTracks(recentPoolItems, { source: "recent" });
-      const recentArtists = [...counts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 40)
-        .map(([key]) => names.get(key));
-      addLastFmArtists(recentArtists, { source: "recent", recentCounts: counts });
+      // Do not publish an observation if the account changed while awaiting the API.
+      const complete = validPagination && page > totalPages;
+      if (!applyLastFmRecentObservation(names, plays, { user: user.toLowerCase(), from: fromSeconds, to: Math.floor(observedAt / 1000), observedAt, complete })) throw new Error("nie udało się zapisać obserwacji historii");
+      safeSetSmallStorageItem(LASTFM_RECENT_OBSERVATION_KEY, JSON.stringify({ user: user.toLowerCase(), observedAt, complete, count: recentScrobbleCount }), "obserwacji historii Last.fm");
 
       localStorage.setItem(LASTFM_RECENT_COUNT_KEY, String(recentScrobbleCount));
       safeSetSmallStorageItem(LASTFM_AUTO_RECENT_SYNC_KEY, String(Date.now()), "czasu synchronizacji historii Last.fm");
@@ -2621,6 +2934,7 @@ async function syncLastFmSources(
   const bits = [];
   if (includeTags) bits.push(`tagi ${syncTags.length}, w tym ${polishTags.length} PL`);
   if (includeRecent) bits.push(user ? (recentOk ? "historia świeża" : "błąd historii") : "brak konta historii");
+  renderHistorySummary();
   renderLastFmStatus(bits.length ? `odświeżono: ${bits.join(" · ")}` : "cache aktualny");
 }
 
@@ -2629,7 +2943,11 @@ async function refreshLastFmBeforeGeneration(selected, total) {
   const lastTags = Number(localStorage.getItem(LASTFM_AUTO_TAG_SYNC_KEY) || 0);
   const lastRecent = Number(localStorage.getItem(LASTFM_AUTO_RECENT_SYNC_KEY) || 0);
   const tagsDue = !lastTags || now - lastTags >= LASTFM_AUTO_TAG_SYNC_TTL_MS;
-  const recentDue = !lastRecent || now - lastRecent >= LASTFM_AUTO_RECENT_SYNC_TTL_MS;
+  let observation;
+  try { observation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
+  const user = String(lastFmUserInput?.value || localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase();
+  const ownerChanged = Boolean(user) && observation?.user !== user;
+  const recentDue = ownerChanged || !lastRecent || now - lastRecent >= LASTFM_AUTO_RECENT_SYNC_TTL_MS;
 
   if (!tagsDue && !recentDue) {
     renderLastFmStatus("automatyka: cache aktualny");
@@ -2891,8 +3209,8 @@ function renderHistorySummary() {
   const lastFmPoolCount = lastFmArtistPoolSize();
   const lastFmTrackCount = lastFmTrackPoolSize();
   historySummary.textContent = history.length
-    ? `Historia lokalna: ${history.length} wpisów (${lastFmCount} z Last.fm, ${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji). Last.fm: ${lastFmRecentCount()} scrobbli z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`
-    : `Historia lokalna jest jeszcze pusta. Last.fm: ${lastFmRecentCount()} scrobbli z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`;
+    ? `Historia lokalna: ${history.length} wpisów (${lastFmCount} z Last.fm, ${spotifyCount} ze Spotify, ${generatedCount} z playlist aplikacji). Last.fm: ${lastFmRecentCount()} zaobserwowanych scrobbli (maks. 3 strony) z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`
+    : `Historia lokalna jest jeszcze pusta. Last.fm: ${lastFmRecentCount()} zaobserwowanych scrobbli (maks. 3 strony) z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni. Lokalna pula Spotify: ${poolCount} utworów. Baza Last.fm: ${lastFmPoolCount} wykonawców i ${lastFmTrackCount} utworów.`;
 }
 
 function clearAppHistory() {
@@ -2972,7 +3290,7 @@ function saveGenrePrimeState(state) {
   );
 }
 
-async function primeProfileGenres(token, profilesToPrime, maxNewSearches = 6) {
+async function primeProfileGenres(token, profilesToPrime, maxNewSearches = 6, acquisition = createCandidateAcquisition(profilesToPrime)) {
   const byQuery = new Map();
   const state = loadGenrePrimeState();
 
@@ -3017,19 +3335,13 @@ async function primeProfileGenres(token, profilesToPrime, maxNewSearches = 6) {
     a.genre.localeCompare(b.genre, "pl")
   );
 
-  const before = newSearchesThisGeneration;
-  for (const item of candidates) {
-    if (newSearchesThisGeneration - before >= maxNewSearches) break;
-    if (newSearchesThisGeneration >= maxNewSearchesThisGeneration) break;
-    const offsets = searchOffsetsForQuery(item.query);
-    if (!offsets.length) continue;
-    await searchTracks(token, item.query, offsets[0]);
+  await primeDiverseQueries(token, candidates, maxNewSearches, acquisition, item => {
     state[item.key] = {
       genre: item.genre,
       lastPrimedAt: Date.now(),
       count: Number(state[item.key]?.count || 0) + 1
     };
-  }
+  });
   saveGenrePrimeState(state);
 }
 const RECENT_HISTORY_SYNC_KEY = "office_recent_history_sync_v1";
@@ -3092,6 +3404,93 @@ function writeSearchCache(query, offset, items) {
   }
 }
 
+// Retention evaluates every saved profile, including people absent today.
+function retentionProfiles() {
+  return Object.entries(profiles).map(([id, profile]) => {
+    const read = (selector, key, fallback = "") => document.querySelector(selector)?.value ?? localStorage.getItem(key) ?? fallback;
+    const manualGenres = splitCommaList(read(`input[data-genre-profile-id="${id}"]`, `office_genres_${id}`, profile.genres.join(", ")));
+    const artists = splitCommaList(read(`input[data-seed-profile-id="${id}"]`, `office_seed_${id}`));
+    const blockedArtists = splitCommaList(read(`input[data-blocked-profile-id="${id}"]`, `office_blocked_${id}`, id === "edyta" ? "Slipknot" : ""));
+    const taste = tasteStateForPerson(profile.name);
+    return { id, ...profile, manualGenres, artists, blockedArtists, taste };
+  });
+}
+
+function retentionCoverage(tags, allProfiles) {
+  const coverage = new Set((tags || []).map(normalizeGenreName).filter(Boolean).map(tag => `tag:${tag}`));
+  for (const profile of allProfiles) {
+    const wanted = new Set([...(profile.taste.likedGenres || []), ...(profile.taste.okGenres || []), ...profile.manualGenres].map(normalizeGenreName));
+    if ((tags || []).some(tag => lastFmTagMatchesWanted(tag, wanted))) coverage.add(`profile:${profile.id}`);
+  }
+  return [...coverage];
+}
+
+function retainLastFmPool(pool, limit, tracks) {
+  const allProfiles = retentionProfiles();
+  const seeds = new Set(allProfiles.flatMap(p => p.artists).map(normalizeArtistName));
+  return OfficePoolRetention.retain(pool.map(row => {
+    const artist = normalizeArtistName(row.artist), coverage = retentionCoverage(row.tags, allProfiles);
+    for (const profile of allProfiles) if (profile.artists.some(name => normalizeArtistName(name) === artist)) coverage.push(`profile:${profile.id}`);
+    const recent = lastFmRecentEvidenceCount(row) > 0;
+    return { row, key: tracks ? `${artist}|${normalizeForSignature(row.track)}` : artist, artist,
+      savedAt: row.savedAt, protected: recent || seeds.has(artist) || coverage.some(k => k.startsWith("profile:")), coverage };
+  }), limit);
+}
+
+function retainSpotifyPool(pool) {
+  if (pool.length <= CANDIDATE_POOL_MAX_ITEMS) return pool.sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0) || a.track.id.localeCompare(b.track.id));
+  const allProfiles = retentionProfiles();
+  const ctx = buildGroupRecommendationContext(allProfiles, pool);
+  const feedback = loadFeedback(), artistStats = feedbackArtistStats(feedback), hardBlocked = feedbackBlockedArtistNames();
+  ctx.retentionSnapshot = { artists: [...ctx.artistPool.values()], exact: new Set(loadLastFmTrackPool().map(row => trackSignatureFromParts(row.track, [row.artist]))), feedback };
+  ctx.retentionFeedback = { data: feedback, artistStats, hardBlocked };
+  const singleContexts = allProfiles.map(profile => ({ ...ctx, selected: [profile], staticCache: new Map() }));
+  const previousClean = canonicalCleanVariantSignatures;
+  try {
+    rebuildCanonicalCleanVariantSignatures(pool, ctx.artistPool);
+    const entries = pool.map(row => {
+      const track = row.track, artistNames = (track.artists || []).map(a => normalizeArtistName(a.name));
+      const hard = trackHasArtistExclusion(track) || Number(feedback[trackSignature(track)]?.value || 0) < 0 ||
+        artistNames.some(name => hardBlocked.has(name)) || hasStrongNegativeArtistFeedback(track, artistStats) ||
+        looksLikeUnwantedVariant(track, ctx.artistPool);
+      const coverage = new Set();
+      if (!hard) {
+        for (const single of singleContexts) {
+          const profile = single.selected[0];
+          if (profile.blockedArtists.some(name => artistNames.includes(normalizeArtistName(name)))) continue;
+          const info = groupCandidateStatic(track, single);
+          const strongDiscovery = Number(discoveryLevel.value || 0) > 0 && info.maxScore >= 72 && (info.likedByAny || info.seedByAny);
+          if (!recognizabilityPass(track, ctx.retentionSnapshot) && !strongDiscovery) continue;
+          if (info.maxScore < 45) continue;
+          if (info.groupBase >= GROUP_HARD_MIN_BASE_SCORE ||
+              (info.groupBase >= GROUP_FALLBACK_MIN_BASE_SCORE && info.minScore >= GROUP_FALLBACK_MIN_USER_SCORE && info.features.feedback > GROUP_FALLBACK_MIN_FEEDBACK)) {
+            coverage.add(`profile:${profile.id}`);
+            for (const aspect of info.features.aspects) coverage.add(`genre:${aspect}`);
+          }
+        }
+      }
+      const primary = track.artists?.[0];
+      return { row, key: track.id, artist: primary?.id ? `id:${primary.id}` : `name:${normalizeArtistName(primary?.name || "") || track.id}`,
+        savedAt: row.savedAt, protected: coverage.size > 0, coverage: [...coverage] };
+    });
+    return OfficePoolRetention.retain(entries, CANDIDATE_POOL_MAX_ITEMS);
+  } finally { canonicalCleanVariantSignatures = previousClean; }
+}
+
+function rotateLastFmPool(pool, tags, limit, kind) {
+  const storageKey = "office_lastfm_source_rotation_v1";
+  let state;
+  try { state = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch {}
+  if (!state || typeof state !== "object" || Array.isArray(state)) state = {};
+  const key = JSON.stringify([kind, ...[...new Set(tags.map(normalizeGenreName))].sort()]);
+  const result = OfficePoolRetention.rotate(pool.map(row => ({ row, key: kind === "tracks" ? `${normalizeArtistName(row.artist)}|${normalizeForSignature(row.track)}` : normalizeArtistName(row.artist),
+    artist: normalizeArtistName(row.artist), savedAt: row.savedAt })), limit, Number(state[key]?.cursor || 0));
+  state[key] = { cursor: result.cursor, usedAt: Date.now() };
+  const bounded = Object.fromEntries(Object.entries(state).sort((a, b) => Number(b[1]?.usedAt || 0) - Number(a[1]?.usedAt || 0)).slice(0, 64));
+  safeSetSmallStorageItem(storageKey, JSON.stringify(bounded), "rotacji źródeł Last.fm");
+  return result.rows;
+}
+
 function slimTrack(track) {
   return {
     id: track?.id || "",
@@ -3125,10 +3524,7 @@ function loadCandidatePool() {
 function saveCandidatePool(pool) {
   try {
     const cutoff = Date.now() - CANDIDATE_POOL_MAX_AGE_MS;
-    const cleaned = pool
-      .filter(item => item?.track?.id && Number(item.savedAt || 0) >= cutoff)
-      .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
-      .slice(0, CANDIDATE_POOL_MAX_ITEMS);
+    const cleaned = mergedCandidatePool(pool, []);
     localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify(cleaned));
   } catch (err) {
     console.warn("Nie udało się zapisać lokalnej puli kandydatów.", err);
@@ -3159,7 +3555,7 @@ function queryMatchesTrack(query, track) {
   return true;
 }
 
-function addToCandidatePool(query, items) {
+function addToCandidatePool(query, items, { fromCache = false, acquiredAt = Date.now() } = {}) {
   if (!query || !Array.isArray(items) || !items.length) return;
   const pool = loadCandidatePool();
   const map = new Map(pool.map(item => [item.track.id, item]));
@@ -3170,7 +3566,8 @@ function addToCandidatePool(query, items) {
     if (!queryMatchesTrack(query, track)) continue;
     const existing = map.get(track.id);
     if (existing) {
-      existing.savedAt = now;
+      if (!fromCache) existing.savedAt = now;
+      existing.lastUsedAt = now;
       existing.track = slimTrack(track);
       const mergedQueries = [...(existing.queries || []), query];
       const seen = new Set();
@@ -3184,7 +3581,8 @@ function addToCandidatePool(query, items) {
       map.set(track.id, {
         track: slimTrack(track),
         queries: [query],
-        savedAt: now
+        savedAt: fromCache ? acquiredAt : now,
+        lastUsedAt: now
       });
     }
   }
@@ -3241,7 +3639,9 @@ async function searchTracks(token, query, offset = 0) {
   const cached = readSearchCache(query, offset);
   if (cached) {
     const validCached = cached.filter(track => queryMatchesTrack(query, track));
-    addToCandidatePool(query, validCached);
+    let acquiredAt = Date.now();
+    try { acquiredAt = JSON.parse(localStorage.getItem(searchCacheKey(query, offset))).savedAt; } catch {}
+    addToCandidatePool(query, validCached, { fromCache: true, acquiredAt });
     return validCached;
   }
 
@@ -3343,6 +3743,38 @@ function hasRemasterMarker(text) {
   return variantContextRegex(REMASTER_WORDS).test(text || "");
 }
 
+function hasAlternativeVersionMarker(track, artistPool = null) {
+  const title = track?.name || "";
+  const album = track?.album?.name || "";
+  // Keep signature normalization unchanged: adding markers there would change
+  // keys of existing feedback/history. These new markers are filter-only.
+  const hardWords = HARD_VARIANT_WORDS.replace("|orchestra|variation(?:s)?", "") + "|rework(?:ed)?";
+  const hardContext = text => text.replace(/\b(orchestra(?:l)?)\s+(?:version|arrangement|recording|mix)\b/gi, "$1");
+  if ([title, album].some(text => variantContextRegex(hardWords).test(hardContext(text)))) return true;
+
+  const primaryName = normalizeArtistName(track?.artists?.[0]?.name || "");
+  const artistRow = artistPool instanceof Map ? artistPool.get(primaryName) : loadLastFmArtistPool().find(row => normalizeArtistName(row.artist) === primaryName);
+  const tags = (artistRow?.tags || []).map(normalizeGenreName);
+  const modernTags = new Set(["rock", "pop", "metal", "punk", "blues", "hip hop", "hip-hop", "electronic", "dance", "reggae", "soul", "r&b"]);
+  const modernEvidence = tags.some(tag => modernTags.has(tag) ||
+    /(?:^|[\s/-])(?:rock|pop|metal|punk|blues|hip[\s-]?hop)(?:$|[\s/-])/.test(tag));
+  const classicalTags = new Set(["classical", "classical music", "contemporary classical", "modern classical", "baroque", "opera"]);
+  const orchestralOnly = tags.some(tag => tag === "orchestral" || tag === "symphonic");
+  const classicalWork = /\b(?:symphony|concerto|sonata|suite|variation(?:s)?)\s+(?:no\.?\s*)?\d|\b(?:op\.?|bwv|kv|hob\.?)\s*\d/i.test(`${title} ${album}`);
+  if (classicalWork || tags.some(tag => classicalTags.has(tag)) || (orchestralOnly && !modernEvidence)) return false;
+
+  if ([title, album].some(text => variantContextRegex("orchestra|orchestral|variation(?:s)?").test(text))) return true;
+  if (/^(?:orchestral|orchestra)\s+(?:version|arrangement|rework|recording)$/i.test(album.trim())) return true;
+
+  // An orchestra credit alone is not proof of an alternative recording.
+  // Require strong Last.fm evidence for a modern primary performer; no genre
+  // query fallback, popularity heuristic or rejection of orchestra-led work.
+  const orchestraCredit = name => /\b(?:philharmonic|symphony)\s+orchestra\b/i.test(name || "");
+  return !orchestraCredit(track?.artists?.[0]?.name) &&
+    modernEvidence &&
+    (track?.artists || []).slice(1).some(artist => orchestraCredit(artist?.name));
+}
+
 function normalizeTrackTitleForSignature(value) {
   let text = (value || "")
     .normalize("NFKD")
@@ -3412,19 +3844,19 @@ function containsNonLatinLetters(text) {
 
 let canonicalCleanVariantSignatures = new Set();
 
-function rebuildCanonicalCleanVariantSignatures(rows) {
+function rebuildCanonicalCleanVariantSignatures(rows, artistPool = null) {
   const clean = new Set();
   for (const row of rows || []) {
     const track = row?.track;
     if (!track?.id) continue;
     const title = track?.name || "";
-    if (hasHardVariantMarker(title) || hasHardVariantMarker(track?.album?.name || "") || hasRemasterMarker(title)) continue;
+    if (hasAlternativeVersionMarker(track, artistPool) || hasRemasterMarker(title)) continue;
     for (const sig of trackDuplicateSignatures(track)) clean.add(sig);
   }
   canonicalCleanVariantSignatures = clean;
 }
 
-function looksLikeUnwantedVariant(track) {
+function looksLikeUnwantedVariant(track, artistPool = null) {
   const languageText = [
     track?.name || "",
     track?.album?.name || "",
@@ -3434,8 +3866,7 @@ function looksLikeUnwantedVariant(track) {
   if (!avoidRemixes.checked) return false;
 
   const title = track?.name || "";
-  const album = track?.album?.name || "";
-  if (hasHardVariantMarker(title) || hasHardVariantMarker(album)) return true;
+  if (hasAlternativeVersionMarker(track, artistPool)) return true;
 
   // Remaster sam w sobie nie musi być gorszy. Odrzucamy go wtedy, gdy w lokalnej
   // puli mamy zwykłe wydanie tego samego utworu; canonical title pilnuje też deduplikacji.
@@ -3445,13 +3876,13 @@ function looksLikeUnwantedVariant(track) {
   return false;
 }
 
-function lastFmEvidenceForTrack(track) {
+function lastFmEvidenceForTrack(track, snapshot = null) {
   const signature = trackSignature(track);
-  const exact = loadLastFmTrackPool().find(item =>
+  const exact = snapshot ? snapshot.exact.has(signature) : loadLastFmTrackPool().find(item =>
     trackSignatureFromParts(item.track, [item.artist]) === signature
   );
 
-  const artistPool = loadLastFmArtistPool();
+  const artistPool = snapshot?.artists || loadLastFmArtistPool();
   const artistRows = (track?.artists || []).map(a => {
     const key = normalizeArtistName(a?.name || "");
     return artistPool.find(item => normalizeArtistName(item.artist) === key) || null;
@@ -3460,22 +3891,22 @@ function lastFmEvidenceForTrack(track) {
   const maxTags = artistRows.reduce((m, row) => Math.max(m, (row.tags || []).length), 0);
   const recentCount = artistRows.reduce((m, row) => Math.max(m, Number(row.recentCount || 0)), 0);
   const sources = new Set(artistRows.flatMap(row => row.sources || []));
-  const positiveFeedback = Number(loadFeedback()[signature]?.value || 0) > 0;
+  const positiveFeedback = Number((snapshot?.feedback || loadFeedback())[signature]?.value || 0) > 0;
 
   return { exact: Boolean(exact), maxTags, recentCount, sourceCount: sources.size, positiveFeedback };
 }
 
-function recognizabilityPass(track) {
+function recognizabilityPass(track, snapshot = null) {
   const level = recognizabilityLevel?.value || "medium";
   if (level === "low") return true;
-  const e = lastFmEvidenceForTrack(track);
+  const e = lastFmEvidenceForTrack(track, snapshot);
   if (e.positiveFeedback) return true;
   if (level === "medium") return e.exact || e.maxTags >= 1 || e.recentCount > 0 || e.sourceCount >= 1;
   return e.exact || e.recentCount > 0 || e.maxTags >= 2 || e.sourceCount >= 2;
 }
 
-function recognizabilityScore(track) {
-  const e = lastFmEvidenceForTrack(track);
+function recognizabilityScore(track, snapshot = null) {
+  const e = lastFmEvidenceForTrack(track, snapshot);
   let score = 0;
   if (e.exact) score += 28;
   score += Math.min(18, e.maxTags * 5);
@@ -3539,6 +3970,7 @@ async function collectFromQueries(
     preferredArtistNames = []
   } = options;
   const uniqueQueries = [...new Set(queries)];
+  const artistFeedback = feedbackArtistStats();
   const discovery = Number(discoveryLevel.value);
   const perSearchCap = discovery >= 60 ? 3 : 2;
 
@@ -3567,8 +3999,8 @@ async function collectFromQueries(
       if (result.length >= wanted || added >= cap) break;
       if (!track?.id || !track?.uri) continue;
       // v23: 👎 dla konkretnego utworu jest twardym wykluczeniem.
-      // Kara artysty nadal działa miękko na jego pozostałe utwory.
       if (trackFeedbackValue(track) < 0) continue;
+      if (hasStrongNegativeArtistFeedback(track, artistFeedback) || trackHasArtistExclusion(track)) continue;
       if (looksLikeUnwantedVariant(track)) continue;
       if (recognizabilityOverride === "low" ? false : !recognizabilityPass(track)) continue;
 
@@ -3966,7 +4398,7 @@ function extractGenreQueryValue(query) {
   return match ? match[1] : "";
 }
 
-function buildGroupRecommendationContext(selected) {
+function buildGroupRecommendationContext(selected, poolRows = loadCandidatePool()) {
   const tasteLabelToId = new Map();
   for (const [id, def] of Object.entries(TASTE_GENRE_DEFS)) {
     tasteLabelToId.set(genrePreferenceKey(def.label), id);
@@ -3982,7 +4414,6 @@ function buildGroupRecommendationContext(selected) {
     profilePrefs.set(profile.id, { liked, ok, blocked, manual, seeds });
   }
 
-  const poolRows = loadCandidatePool();
   const poolByTrack = new Map(poolRows.map(item => [item.track.id, item]));
   const artistPool = new Map(
     loadLastFmArtistPool().map(item => [normalizeArtistName(item.artist), item])
@@ -4133,8 +4564,8 @@ function groupTrackFeatures(track, ctx) {
     exactLastFm,
     recentCount,
     sourceCount,
-    recognizability: recognizabilityScore(track),
-    feedback: feedbackScore(track),
+    recognizability: recognizabilityScore(track, ctx.retentionSnapshot),
+    feedback: feedbackScore(track, ctx.retentionFeedback),
     discovery: !exactLastFm && recentCount <= 0,
     isPolish
   };
@@ -4346,19 +4777,29 @@ function discoveryBalanceBonus(staticInfo, state) {
   return 0;
 }
 
-function discoveryQuotaForTotal(total) {
-  const target = Math.max(0, Math.min(1, Number(discoveryLevel.value || 0) / 100));
+function discoveryQuotaForTotal(total, target = Math.max(0, Math.min(1, Number(discoveryLevel.value || 0) / 100))) {
   const tolerance = target > 0 && target < 1 ? 0.05 : 0;
   return {
     target,
-    min: Math.max(0, Math.floor(total * Math.max(0, target - tolerance))),
-    max: Math.min(total, Math.ceil(total * Math.min(1, target + tolerance)))
+    min: Math.max(0, Math.ceil(total * Math.max(0, target - tolerance) - 1e-9)),
+    max: Math.min(total, Math.floor(total * Math.min(1, target + tolerance) + 1e-9))
   };
 }
 
 const GROUP_HARD_MIN_BASE_SCORE = 44;
 const GROUP_FALLBACK_MIN_BASE_SCORE = 35;
-const GROUP_FALLBACK_MIN_USER_SCORE = 35;
+const GROUP_MIN_USER_SCORE = 35;
+const GROUP_FALLBACK_MIN_USER_SCORE = GROUP_MIN_USER_SCORE;
+
+// Individual satisfaction is computed before all group and dynamic bonuses.
+// Read each present profile explicitly: a high average or stale minScore
+// cannot hide a weak, missing or invalid individual score.
+function satisfiesIndividualMinimum(item, ctx) {
+  return Boolean(ctx.selected?.length) && ctx.selected.every(profile => {
+    const score = item.byUser?.[profile.id]?.score;
+    return Number.isFinite(score) && score >= GROUP_MIN_USER_SCORE;
+  });
+}
 const GROUP_FALLBACK_MIN_FEEDBACK = -40;
 
 function newRejectionStats(rawPoolCount = 0) {
@@ -4369,10 +4810,14 @@ function newRejectionStats(rawPoolCount = 0) {
     unwantedVariant: 0,
     explicitBlockedArtist: 0,
     feedbackBlockedArtist: 0,
+    artistIdExcluded: 0,
+    strongNegativeArtistFeedback: 0,
     artistCooldown: 0,
     recentTrack: 0,
     recognizability: 0,
     lowGroupFit: 0,
+    lowIndividualFit: 0,
+    discoveryModeExcluded: 0,
     eligible: 0,
     artistLimitDuringSelection: 0,
     duplicateDuringSelection: 0,
@@ -4452,11 +4897,11 @@ function analyzeSelectionStop(remaining, state, requestedTotal) {
   return out;
 }
 
-function eligibleGroupCandidates(selected, blocklists, ctx) {
-  const rows = loadCandidatePool();
-  rebuildCanonicalCleanVariantSignatures(rows);
+function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidatePool()) {
+  rebuildCanonicalCleanVariantSignatures(rows, ctx.acquisitionVariantArtists || null);
   const stats = newRejectionStats(rows.length);
   const eligible = [];
+  const artistFeedback = ctx.retentionFeedback?.artistStats || feedbackArtistStats();
   const seenIds = new Set();
 
   for (const row of rows) {
@@ -4467,11 +4912,15 @@ function eligibleGroupCandidates(selected, blocklists, ctx) {
     }
     seenIds.add(track.id);
 
-    if (trackFeedbackValue(track) < 0) {
+    if (trackHasArtistExclusion(track)) {
+      stats.artistIdExcluded++;
+      continue;
+    }
+    if ((ctx.retentionSnapshot ? Number(ctx.retentionSnapshot.feedback[trackSignature(track)]?.value || 0) : trackFeedbackValue(track)) < 0) {
       stats.feedbackTrack++;
       continue;
     }
-    if (looksLikeUnwantedVariant(track)) {
+    if (looksLikeUnwantedVariant(track, ctx.acquisitionVariantArtists || null)) {
       stats.unwantedVariant++;
       continue;
     }
@@ -4485,6 +4934,10 @@ function eligibleGroupCandidates(selected, blocklists, ctx) {
     }
     if (artistNames.some(name => blocklists.feedbackBlockedNames.has(name))) {
       stats.feedbackBlockedArtist++;
+      continue;
+    }
+    if (hasStrongNegativeArtistFeedback(track, artistFeedback)) {
+      stats.strongNegativeArtistFeedback++;
       continue;
     }
     if (
@@ -4507,12 +4960,16 @@ function eligibleGroupCandidates(selected, blocklists, ctx) {
     }
 
     const staticInfo = groupCandidateStatic(track, ctx);
+    if (!satisfiesIndividualMinimum(staticInfo, ctx)) {
+      stats.lowIndividualFit++;
+      continue;
+    }
     const strongTasteDiscovery =
       Number(discoveryLevel.value || 0) > 0 &&
       staticInfo.maxScore >= 72 &&
       (staticInfo.likedByAny || staticInfo.seedByAny);
 
-    if (!recognizabilityPass(track) && !strongTasteDiscovery) {
+    if (!recognizabilityPass(track, ctx.retentionSnapshot) && !strongTasteDiscovery) {
       stats.recognizability++;
       continue;
     }
@@ -4610,9 +5067,8 @@ function sequencePlaylistForListening(tracks, minArtistGap = 5) {
   return ordered;
 }
 
-function selectGroupPlaylist(eligible, total, ctx, stats) {
-  const requestedDiscoveryQuota = discoveryQuotaForTotal(total);
-  const state = {
+function newGroupSelectionState(ctx) {
+  return {
     selected: [],
     selectedIds: new Set(),
     selectedSignatures: new Set(),
@@ -4623,8 +5079,80 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     polishCount: 0,
     details: new Map()
   };
+}
 
-  const remaining = [...eligible];
+function appendGroupSelection(state, item, ctx, dynamic, usedFallback) {
+  const track = item.track;
+  state.selected.push(track);
+  state.selectedIds.add(track.id);
+  const signature = trackSignature(track);
+  if (signature) state.selectedSignatures.add(signature);
+  for (const duplicateSignature of trackDuplicateSignatures(track)) {
+    state.selectedSignatures.add(duplicateSignature);
+  }
+  for (const key of trackArtistKeys(track)) {
+    state.artistCounts.set(key, (state.artistCounts.get(key) || 0) + 1);
+  }
+  for (const profile of ctx.selected || []) {
+    const score = item.byUser[profile.id]?.score || 0;
+    state.userSums.set(profile.id, (state.userSums.get(profile.id) || 0) + score);
+  }
+  for (const aspect of supportedAspectsForCandidate(item, ctx)) {
+    state.aspectCounts.set(aspect, (state.aspectCounts.get(aspect) || 0) + 1);
+  }
+  if (item.features.discovery) state.discoveryCount++;
+  if (item.features.isPolish) state.polishCount++;
+
+  state.details.set(track.id, {
+    byUser: Object.fromEntries(
+      (ctx.selected || []).map(profile => [
+        profile.id,
+        item.byUser[profile.id]?.score || 0
+      ])
+    ),
+    groupBase: item.groupBase,
+    leastMiseryPenalty: item.leastMiseryPenalty,
+    fairness: dynamic.fairness,
+    xquad: dynamic.xquad,
+    polishBoost: dynamic.polish,
+    isPolish: item.features.isPolish,
+    fallback: usedFallback,
+    mmr: dynamic.mmr,
+    discovery: item.features.discovery,
+    final: dynamic.final
+  });
+}
+
+function selectGroupPlaylist(eligible, total, ctx, stats) {
+  const requestedDiscoveryQuota = discoveryQuotaForTotal(total);
+  let state = newGroupSelectionState(ctx);
+
+  // Recheck at selection entry: cached/static candidates and direct callers
+  // must obey the same per-artist rule in every normal/fallback branch.
+  const artistFeedback = feedbackArtistStats();
+  const remaining = eligible.filter(item => {
+    if (trackHasArtistExclusion(item.track)) { stats.artistIdExcluded = (stats.artistIdExcluded || 0) + 1; return false; }
+    if (hasStrongNegativeArtistFeedback(item.track, artistFeedback)) {
+      stats.strongNegativeArtistFeedback = (stats.strongNegativeArtistFeedback || 0) + 1;
+      return false;
+    }
+    if (!satisfiesIndividualMinimum(item, ctx)) {
+      stats.lowIndividualFit = (stats.lowIndividualFit || 0) + 1;
+      return false;
+    }
+    if (Number(discoveryLevel.value) === 100 && !item.features.discovery) {
+      stats.discoveryModeExcluded = (stats.discoveryModeExcluded || 0) + 1;
+      return false;
+    }
+    return true;
+  });
+
+  const safeCandidates = remaining.filter(item =>
+    item.groupBase >= GROUP_HARD_MIN_BASE_SCORE ||
+    (item.groupBase >= GROUP_FALLBACK_MIN_BASE_SCORE &&
+      item.minScore >= GROUP_FALLBACK_MIN_USER_SCORE &&
+      item.features.feedback > GROUP_FALLBACK_MIN_FEEDBACK)
+  );
 
   while (state.selected.length < total && remaining.length) {
     let choices = [];
@@ -4716,8 +5244,8 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
           if (item.features.discovery && state.discoveryCount + 1 > targetDiscoveryMax) continue;
           if (item.groupBase < GROUP_FALLBACK_MIN_BASE_SCORE) continue;
           if (item.minScore < GROUP_FALLBACK_MIN_USER_SCORE) continue;
-          // v40: mocno negatywny feedback wykonawcy nie może ratować długości playlisty.
-          // Normalna ścieżka nadal może go wybrać, jeśli mimo kary ma groupBase >=44.
+          // Preserve the existing aggregate feedback guard in fallback.
+          // The per-artist exclusion already applies to every branch above.
           if (item.features.feedback <= GROUP_FALLBACK_MIN_FEEDBACK) continue;
 
           fallbackChoices.push({ index: i, item, dynamic: dynamicCandidateScore(item, state, ctx) });
@@ -4742,46 +5270,44 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     const track = picked.item.track;
     if (usedFallback) stats.fallbackSelections++;
 
-    state.selected.push(track);
-    state.selectedIds.add(track.id);
-    const signature = trackSignature(track);
-    if (signature) state.selectedSignatures.add(signature);
-    for (const duplicateSignature of trackDuplicateSignatures(track)) {
-      state.selectedSignatures.add(duplicateSignature);
-    }
-    for (const key of trackArtistKeys(track)) {
-      state.artistCounts.set(key, (state.artistCounts.get(key) || 0) + 1);
-    }
-    for (const profile of ctx.selected || []) {
-      const score = picked.item.byUser[profile.id]?.score || 0;
-      state.userSums.set(profile.id, (state.userSums.get(profile.id) || 0) + score);
-    }
-    for (const aspect of supportedAspectsForCandidate(picked.item, ctx)) {
-      state.aspectCounts.set(aspect, (state.aspectCounts.get(aspect) || 0) + 1);
-    }
-    if (picked.item.features.discovery) state.discoveryCount++;
-    if (picked.item.features.isPolish) state.polishCount++;
-
-    state.details.set(track.id, {
-      byUser: Object.fromEntries(
-        (ctx.selected || []).map(profile => [
-          profile.id,
-          picked.item.byUser[profile.id]?.score || 0
-        ])
-      ),
-      groupBase: picked.item.groupBase,
-      leastMiseryPenalty: picked.item.leastMiseryPenalty,
-      fairness: picked.dynamic.fairness,
-      xquad: picked.dynamic.xquad,
-      polishBoost: picked.dynamic.polish,
-      isPolish: picked.item.features.isPolish,
-      fallback: usedFallback,
-      mmr: picked.dynamic.mmr,
-      discovery: picked.item.features.discovery,
-      final: picked.dynamic.final
-    });
+    appendGroupSelection(state, picked.item, ctx, picked.dynamic, usedFallback);
 
     remaining.splice(picked.index, 1);
+  }
+
+  let discoveryRepair;
+  if (state.selected.length === total && state.discoveryCount <= discoveryQuotaForTotal(total).max) {
+    // A full correct set cannot grow: avoid building/scanning repair descriptors.
+    discoveryRepair = { beforeLength: total, beforeDiscovery: state.discoveryCount,
+      afterLength: total, afterDiscovery: state.discoveryCount, added: 0, removed: 0,
+      minimumShortfall: Math.max(0, discoveryQuotaForTotal(total).min - state.discoveryCount) };
+  } else {
+    const descriptors = safeCandidates.map((item, order) => ({
+      id: item.track.id, item, order, score: item.groupBase,
+      discovery: Boolean(item.features.discovery),
+      signatures: [...new Set([trackSignature(item.track), ...trackDuplicateSignatures(item.track)].filter(Boolean))],
+      artists: [...trackArtistKeys(item.track)]
+    }));
+    const byId = new Map(descriptors.map(row => [row.id, row]));
+    discoveryRepair = OfficeDiscoveryQuota.repair({
+      selected: state.selected.map(track => byId.get(track.id)),
+      candidates: descriptors, total, quota: discoveryQuotaForTotal
+    });
+    const changed = discoveryRepair.rows.length !== state.selected.length ||
+      discoveryRepair.rows.some((row, i) => row.id !== state.selected[i]?.id);
+    if (changed) {
+      const previousDetails = state.details;
+      state = newGroupSelectionState(ctx);
+      for (const row of discoveryRepair.rows) {
+        const usedFallback = previousDetails.get(row.id)?.fallback ?? (row.item.groupBase < GROUP_HARD_MIN_BASE_SCORE);
+        appendGroupSelection(state, row.item, ctx, dynamicCandidateScore(row.item, state, ctx), usedFallback);
+      }
+      stats.fallbackSelections = [...state.details.values()].filter(detail => detail.fallback).length;
+      const finalRemaining = safeCandidates.filter(item => !state.selectedIds.has(item.track.id));
+      stats.lowFinalScoreStop = state.selected.length < total ? finalRemaining.length : 0;
+      stats.selectionStopDiagnostics = stats.lowFinalScoreStop ? analyzeSelectionStop(finalRemaining, state, total) : null;
+    }
+    delete discoveryRepair.rows;
   }
 
   const satisfaction = {};
@@ -4803,36 +5329,162 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
     discoveryCount: state.discoveryCount,
     polishCount: state.polishCount,
     discoveryQuota: discoveryQuotaForTotal(state.selected.length),
+    discoveryRepair,
     requestedDiscoveryQuota,
     aspectCounts: state.aspectCounts,
     rejectionStats: stats
   };
 }
 
-async function primeCommonGroupQueries(token, selected, maxNewSearches = 3) {
-  const common = [...tasteCommonGenreQueries(selected), ...exactCommonGenreQueries(selected)];
-  const unique = [];
-  const seen = new Set();
+function generationBlocklists(selected) {
+  const history = buildHistoryBlocklists();
+  return {
+    blockedTracks: history.blockedTracks,
+    blockedTrackSignatures: history.blockedTrackSignatures,
+    blockedArtists: history.blockedArtists,
+    historyBlockedNames: new Set(history.blockedArtistNamesFromHistory),
+    explicitBlockedNames: selectedBlockedArtistNames(selected),
+    feedbackBlockedNames: feedbackBlockedArtistNames()
+  };
+}
 
-  for (const query of common) {
-    const key = canonicalQuery(query);
-    if (!key || seen.has(key) || wasQueryAttempted(query)) continue;
-    seen.add(key);
-    unique.push({
-      query,
-      pool: candidatePoolForQueries([query]).length
-    });
+function acquisitionQualifying(item) {
+  return item.groupBase >= GROUP_HARD_MIN_BASE_SCORE || (
+    item.groupBase >= GROUP_FALLBACK_MIN_BASE_SCORE && item.minScore >= GROUP_FALLBACK_MIN_USER_SCORE &&
+    item.features.feedback > GROUP_FALLBACK_MIN_FEEDBACK
+  );
+}
+
+function acquisitionContext(selected, rows = loadCandidatePool()) {
+  const ctx = buildGroupRecommendationContext(selected, rows);
+  const artists = loadLastFmArtistPool(), feedback = loadFeedback();
+  ctx.retentionSnapshot = { artists, exact: new Set(loadLastFmTrackPool().map(row => trackSignatureFromParts(row.track, [row.artist]))), feedback };
+  ctx.retentionFeedback = { data: feedback, artistStats: feedbackArtistStats(feedback), hardBlocked: feedbackBlockedArtistNames() };
+  // Match the original first-row lookup even for duplicate legacy imports.
+  ctx.acquisitionVariantArtists = new Map([...artists].reverse().map(row => [normalizeArtistName(row.artist), row]));
+  return ctx;
+}
+
+function acquisitionCoverage(selected, blocklists) {
+  const ctx = acquisitionContext(selected);
+  const { eligible } = eligibleGroupCandidates(selected, blocklists, ctx);
+  // Eligibility already enforces the individual minimum for every present profile.
+  const qualifying = eligible.filter(acquisitionQualifying);
+  const byArtist = new Map(), byQuery = new Map();
+  for (const item of qualifying) for (const artist of trackArtistKeys(item.track)) {
+    if (!byArtist.has(artist)) byArtist.set(artist, new Set());
+    byArtist.get(artist).add(trackSignature(item.track));
+    for (const query of ctx.poolByTrack.get(item.track.id)?.queries || []) {
+      const key = canonicalQuery(query);
+      if (!byQuery.has(key)) byQuery.set(key, new Map());
+      const counts = byQuery.get(key);
+      if (!counts.has(artist)) counts.set(artist, new Set());
+      counts.get(artist).add(trackSignature(item.track));
+    }
   }
+  const queryCapacity = new Map([...byQuery].map(([key, artists]) => [key,
+    [...artists.values()].reduce((sum, signatures) => sum + Math.min(2, signatures.size), 0)
+  ]));
+  return { qualifying, byArtist, queryCapacity, artists: byArtist.size };
+}
 
-  unique.sort((a, b) => a.pool - b.pool);
+function createCandidateAcquisition(selected, blocklists = generationBlocklists(selected)) {
+  const coverage = acquisitionCoverage(selected, blocklists);
+  return { selected, blocklists, searched: new Set(), cachedQueries: new Set(), before: coverage.artists, cachedPages: 0 };
+}
+
+function reuseQualifyingCache(cachedRows, acquisition) {
+  const existing = loadCandidatePool(), existingIds = new Set(existing.map(row => row.track.id));
+  const before = acquisitionCoverage(acquisition.selected, acquisition.blocklists);
+  const additions = [...cachedRows.values()].filter(row => !existingIds.has(row.track.id));
+  if (!additions.length) return;
+  const prospective = [...existing, ...additions];
+  const ctx = acquisitionContext(acquisition.selected, prospective);
+  const { eligible } = eligibleGroupCandidates(acquisition.selected, acquisition.blocklists, ctx, prospective);
+  const counts = new Map([...before.byArtist].map(([artist, signatures]) => [artist, new Set(signatures)]));
+  let slots = CANDIDATE_POOL_MAX_ITEMS;
+  const chosen = [];
+  for (const item of eligible.filter(item => !existingIds.has(item.track.id) && acquisitionQualifying(item)).sort((a, b) => b.groupBase - a.groupBase)) {
+    if (!slots) break;
+    const artists = [...trackArtistKeys(item.track)], signature = trackSignature(item.track);
+    if (!artists.length || artists.some(artist => (counts.get(artist)?.size || 0) >= 2 || counts.get(artist)?.has(signature))) continue;
+    chosen.push(cachedRows.get(item.track.id)); slots--;
+    for (const artist of artists) {
+      if (!counts.has(artist)) counts.set(artist, new Set());
+      counts.get(artist).add(signature);
+    }
+  }
+  if (!chosen.length) { rebuildCanonicalCleanVariantSignatures(existing); return; }
+  // D.2 owns retention across all saved profiles, including redundant qualified rows.
+  saveCandidatePool([...existing, ...chosen]);
+  rebuildCanonicalCleanVariantSignatures(loadCandidatePool());
+  renderHistorySummary();
+}
+
+async function primeDiverseQueries(token, rows, maxNewSearches, acquisition, onSearched = () => {}) {
+  const unique = [...new Map(rows.map(row => [canonicalQuery(row.query), row])).values()];
+  const feedback = feedbackArtistStats();
+  const allowed = unique.filter(row => {
+    const artist = normalizeArtistName(extractQuotedQueryValue(row.query, 'artist'));
+    return !artist || (!acquisition.blocklists.explicitBlockedNames.has(artist) &&
+      !acquisition.blocklists.feedbackBlockedNames.has(artist) && !acquisition.blocklists.historyBlockedNames.has(artist) &&
+      artistFeedbackScore(feedback.get(artist)) > ARTIST_FEEDBACK_EXCLUSION_SCORE);
+  });
+  // Read all already-paid pages before spending any new request. Reuse once per generation.
+  const cachedRows = new Map();
+  for (const row of allowed) {
+    const key = canonicalQuery(row.query);
+    if (acquisition.cachedQueries.has(key)) continue;
+    acquisition.cachedQueries.add(key);
+    const tracks = new Map(), acquiredTimes = new Map();
+    for (let offset = 0; offset <= 90; offset += 10) {
+      const page = readSearchCache(row.query, offset);
+      if (page === null) continue;
+      acquisition.cachedPages++;
+      let acquiredAt = Date.now();
+      try { acquiredAt = JSON.parse(localStorage.getItem(searchCacheKey(row.query, offset))).savedAt; } catch {}
+      for (const track of page) if (queryMatchesTrack(row.query, track) && acquiredAt >= (acquiredTimes.get(track.id) || 0)) { tracks.set(track.id, track); acquiredTimes.set(track.id, acquiredAt); }
+    }
+    if (tracks.size) {
+      queriesAttemptedThisGeneration.add(key);
+      for (const track of tracks.values()) {
+        const current = cachedRows.get(track.id) || { track: slimTrack(track), queries: [], savedAt: acquiredTimes.get(track.id), lastUsedAt: Date.now() };
+        if (acquiredTimes.get(track.id) > current.savedAt) { current.savedAt = acquiredTimes.get(track.id); current.track = slimTrack(track); }
+        current.queries = [...new Set([...current.queries, row.query])];
+        cachedRows.set(track.id, current);
+      }
+    }
+  }
+  if (cachedRows.size) reuseQualifyingCache(cachedRows, acquisition);
   const before = newSearchesThisGeneration;
-  for (const item of unique) {
-    if (newSearchesThisGeneration - before >= maxNewSearches) break;
-    if (newSearchesThisGeneration >= maxNewSearchesThisGeneration) break;
-    const offsets = searchOffsetsForQuery(item.query);
-    if (!offsets.length) continue;
-    await searchTracks(token, item.query, offsets[0]);
+  const pending = [...allowed];
+  while (pending.length && newSearchesThisGeneration - before < maxNewSearches && newSearchesThisGeneration < maxNewSearchesThisGeneration) {
+    const coverage = acquisitionCoverage(acquisition.selected, acquisition.blocklists);
+    const capacity = row => coverage.queryCapacity.get(canonicalQuery(row.query)) || 0;
+    const ranked = pending.map((row, order) => ({ row, order, capacity: capacity(row) })).sort((a, b) => a.capacity - b.capacity || a.order - b.order);
+    const chosen = ranked.find(({ row }) => {
+      const key = canonicalQuery(row.query), artist = normalizeArtistName(extractQuotedQueryValue(row.query, 'artist'));
+      return !acquisition.searched.has(key) && (!artist || (coverage.byArtist.get(artist)?.size || 0) < 2) &&
+        searchOffsetsForQuery(row.query).some(offset => !hasFreshSearchCache(row.query, offset));
+    });
+    if (!chosen) break;
+    pending.splice(pending.indexOf(chosen.row), 1);
+    const row = chosen.row;
+    const offset = searchOffsetsForQuery(row.query).find(offset => !hasFreshSearchCache(row.query, offset));
+    acquisition.searched.add(canonicalQuery(row.query));
+    await searchTracks(token, row.query, offset);
+    onSearched(row);
   }
+}
+
+async function primeCommonGroupQueries(token, selected, maxNewSearches = 3, acquisition = createCandidateAcquisition(selected)) {
+  const common = [...tasteCommonGenreQueries(selected), ...exactCommonGenreQueries(selected)];
+  const artists = [...new Set(selected.flatMap(profile => lastFmArtistsForTags(
+    [...(profile.genres || []), ...(profile.categories || []).flatMap(commonCategoryLastFmTags)], 18,
+    { includeRecent: profile.id === 'bartek' }
+  )))];
+  const queries = [...common, ...artists.map(artist => `artist:"${artist}"`)];
+  await primeDiverseQueries(token, queries.map(query => ({ query })), maxNewSearches, acquisition);
 }
 
 async function generateOfficePlaylist() {
@@ -4870,39 +5522,24 @@ async function generateOfficePlaylist() {
 
     progressBox.textContent = "Synchronizuję historię odtworzeń...";
     await syncSpotifyRecentHistory(token);
+    const acquisitionBlocklists = generationBlocklists(selected);
+    const acquisition = createCandidateAcquisition(mixProfiles, acquisitionBlocklists);
 
     progressBox.textContent =
       `Odświeżam artystów wzorcowych (budżet ${maxNewSearchesThisGeneration} nowych wyszukiwań)...`;
-    await primeManualSeedArtists(token, mixProfiles, 3);
+    await primeManualSeedArtists(token, mixProfiles, 3, acquisition);
 
     const genrePrimeBudget = genrePrimeBudgetForTarget(total);
     progressBox.textContent =
       `Rozszerzam słabo reprezentowane gatunki (do ${genrePrimeBudget} nowych wyszukiwań)...`;
-    await primeProfileGenres(token, mixProfiles, genrePrimeBudget);
+    await primeProfileGenres(token, mixProfiles, genrePrimeBudget, acquisition);
 
     const remainingSearchBudget = Math.max(0, maxNewSearchesThisGeneration - newSearchesThisGeneration);
-    if (remainingSearchBudget > 0) {
-      progressBox.textContent = "Szukam wspólnego mianownika gustów...";
-      await primeCommonGroupQueries(token, mixProfiles, Math.min(3, remainingSearchBudget));
-    }
-
-    const {
-      blockedTracks,
-      blockedTrackSignatures,
-      blockedArtists,
-      blockedArtistNamesFromHistory
-    } = buildHistoryBlocklists();
-
-    const blocklists = {
-      blockedTracks,
-      blockedTrackSignatures,
-      blockedArtists,
-      historyBlockedNames: new Set(blockedArtistNamesFromHistory),
-      explicitBlockedNames: selectedBlockedArtistNames(selected),
-      feedbackBlockedNames: feedbackBlockedArtistNames()
-    };
+    progressBox.textContent = "Szukam wspólnego mianownika i różnych kwalifikowalnych wykonawców...";
+    await primeCommonGroupQueries(token, mixProfiles, Math.min(3, remainingSearchBudget), acquisition);
 
     progressBox.textContent = "Buduję model grupowy: satysfakcja, fairness, xQuAD i MMR...";
+    const blocklists = generationBlocklists(selected);
     const ctx = buildGroupRecommendationContext(mixProfiles);
     const { eligible, stats } = eligibleGroupCandidates(mixProfiles, blocklists, ctx);
 
@@ -4911,6 +5548,7 @@ async function generateOfficePlaylist() {
     }
 
     const groupResult = selectGroupPlaylist(eligible, total, ctx, stats);
+    groupResult.acquisition = { before: acquisition.before, after: acquisitionCoverage(mixProfiles, blocklists).artists, cachedPages: acquisition.cachedPages, newSearches: newSearchesThisGeneration };
     const finalTracks = sequencePlaylistForListening(groupResult.tracks, 5);
     groupResult.tracks = finalTracks;
 
@@ -5075,13 +5713,16 @@ function buildRatedTrackList(tracks, diagnosticProvider) {
     const li = document.createElement("li");
     const row = document.createElement("div");
     row.className = "track-row";
+    row.dataset.artistExclusionRow = "";
     const label = document.createElement("span");
     const titleLine = document.createElement("span");
     titleLine.textContent = `${(track.artists || []).map(a => a.name).join(", ")} - ${track.name}`;
     const meta = document.createElement("span");
     meta.className = "track-meta";
     meta.textContent = diagnosticProvider ? (diagnosticProvider(track) || "") : (track.diagnostic || "");
-    label.append(titleLine, meta);
+    const exclusionNote = document.createElement("span");
+    exclusionNote.className = "track-meta";
+    label.append(titleLine, meta, exclusionNote);
 
     const votes = document.createElement("span");
     votes.className = "track-votes";
@@ -5100,8 +5741,7 @@ function buildRatedTrackList(tracks, diagnosticProvider) {
     const block = document.createElement("button");
     block.type = "button";
     block.textContent = "🚫";
-    const primaryArtistName = track?.artists?.[0]?.name || "wykonawca";
-    block.title = `Zablokuj/odblokuj głównego wykonawcę: ${primaryArtistName}`;
+    block.title = "Wybierz wykonawcę i powód blokady albo odwołaj blokadę";
     const yt = document.createElement("button");
     yt.type = "button";
     yt.textContent = "▶ YT";
@@ -5115,11 +5755,16 @@ function buildRatedTrackList(tracks, diagnosticProvider) {
       up.classList.toggle("active-up", value > 0);
       down.classList.toggle("active-down", value < 0);
       const primaryKey = normalizeArtistName(track?.artists?.[0]?.name || "");
-      block.className = `vote-btn${loadFeedbackBlockedArtists()[primaryKey] ? " active-block" : ""}`;
+      try {
+        const exclusions = (track.artists || []).filter(a => artistExclusionStatus(a.id).blocked);
+        block.className = `vote-btn${exclusions.length || loadFeedbackBlockedArtists()[primaryKey] ? " active-block" : ""}`;
+        exclusionNote.textContent = exclusions.map(a => `${a.name}: ${artistExclusionReasonText(artistExclusionStatus(a.id))}`).join(" · ");
+      } catch (err) { exclusionNote.textContent = err.message; }
     };
     up.addEventListener("click", () => { setTrackFeedback(track, 1); refreshButtons(); });
     down.addEventListener("click", () => { setTrackFeedback(track, -1); refreshButtons(); });
-    block.addEventListener("click", () => { togglePrimaryArtistBlock(track); refreshButtons(); });
+    row.refreshArtistExclusion = refreshButtons;
+    block.addEventListener("click", () => openArtistExclusionDialog(track));
     refreshButtons();
     votes.append(up, down, block, yt);
     row.append(label, votes);
@@ -5177,6 +5822,8 @@ function renderPlaylistResult(
   groupResult = null
 ) {
   playlistResult.textContent = "";
+  const discoveryTarget = groupResult?.discoveryQuota?.target ?? Number(discoveryLevel.value || 0) / 100;
+  const discoveryPercent = Math.round(discoveryTarget * 100);
 
   const summary = document.createElement("p");
   summary.textContent = tracks.length < requestedTotal
@@ -5186,12 +5833,13 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.18.C: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. W tej końcowej fazie górna quota discovery jest liczona względem docelowej długości playlisty, więc krótki wynik nie blokuje własnego uzupełnienia. v40 dodatkowo nie pozwala, aby końcowy fallback dobierał wykonawcę z mocną karą feedbacku (<= -40); normalna ścieżka nadal może go wybrać, jeśli mimo kary ma wystarczająco dobry wynik. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.18.C koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
-    `Odkrycia: cel ${discoveryLevel.value}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, a dopiero końcowy fallback może wykorzystać górny limit odpowiadający docelowej długości playlisty. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
+    `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
+    (groupResult?.acquisition ? `Pozyskiwanie: kwalifikowalni wykonawcy ${groupResult.acquisition.before} → ${groupResult.acquisition.after}; ponownie użyte strony cache ${groupResult.acquisition.cachedPages}; nowe wyszukiwania ${groupResult.acquisition.newSearches}. ` : "") +
     `Wyszukiwania Spotify są buforowane przez 24 h, lokalna pula żyje 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS}), a budżet tego generowania wynosił maks. ${maxNewSearchesThisGeneration} nowych wyszukiwań. ` +
     `Last.fm może w tym przebiegu wykonać do ${lastFmTagBudgetForTarget(requestedTotal)} wywołań tagowych (top artists + top tracks), rotując tagi między kolejnymi generowaniami. ` +
     `v42 przed generowaniem odświeża historię Last.fm najwyżej raz na 10 min i bazę tagową najwyżej raz na 60 min; po generowaniu synchronizuje z D1 również skompaktowaną pulę kandydatów Spotify.`;
@@ -5228,8 +5876,22 @@ function renderPlaylistResult(
     satisfaction.textContent =
       `Dopasowanie grupowe: ${satParts.join(" · ")}. Odkrycia w wyniku: ${groupResult.discoveryCount || 0}/${tracks.length} (${discoveryPct}%). ` +
       `Polska muzyka rozpoznana przez Last.fm: ${groupResult.polishCount || 0}/${tracks.length}. ` +
-      `Quota discovery dla celu ${discoveryLevel.value}%: ${groupResult.discoveryQuota?.min ?? 0}–${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}; górny limit dla docelowych ${requestedTotal}: ${groupResult.requestedDiscoveryQuota?.max ?? requestedTotal}.`;
+      `Quota discovery dla celu ${discoveryPercent}%: dolny cel ${groupResult.discoveryQuota?.min ?? 0}, twarde maksimum ${groupResult.discoveryQuota?.max ?? tracks.length} utworów przy faktycznym wyniku ${tracks.length}; pomocniczy limit selekcji wstępnej dla docelowych ${requestedTotal}: ${groupResult.requestedDiscoveryQuota?.max ?? requestedTotal}.`;
     playlistResult.append(satisfaction);
+    if (groupResult.discoveryRepair) {
+      const repair = groupResult.discoveryRepair;
+      const correction = document.createElement("p");
+      correction.className = "small";
+      correction.textContent = `Korekta discovery: ${repair.beforeDiscovery}/${repair.beforeLength} → ${repair.afterDiscovery}/${repair.afterLength}; ` +
+        `nowych utworów ${repair.added}, pominiętych z doboru wstępnego ${repair.removed}; ` +
+        (repair.minimumShortfall
+          ? `Discovery poniżej celu: brak bezpiecznych odkryć do dodania w zamówionym limicie bez usuwania znanych utworów; niedobór ${repair.minimumShortfall}. `
+          : `Dolny cel discovery spełniony. `) +
+        `Discovery powyżej dozwolonego maksimum: ${Math.max(0, repair.afterDiscovery - groupResult.discoveryQuota.max)} po korekcie; ` +
+        `nadmiar w doborze wstępnym: ${Math.max(0, repair.beforeDiscovery - discoveryQuotaForTotal(repair.beforeLength, discoveryTarget).max)}.`;
+      playlistResult.append(correction);
+    }
+
 
     const r = groupResult.rejectionStats || {};
     const rejection = document.createElement("p");
@@ -5238,10 +5900,13 @@ function renderPlaylistResult(
       `Diagnostyka filtrów: pula ${r.rawPool || 0} → kwalifikowalne ${r.eligible || 0} → wybrane ${tracks.length}. ` +
       `Odrzucono: 👎 utwór ${r.feedbackTrack || 0}, wariant/live/remix ${r.unwantedVariant || 0}, ` +
       `jawnie blokowany wykonawca ${r.explicitBlockedArtist || 0}, 🚫 wykonawca z feedbacku ${r.feedbackBlockedArtist || 0}, ` +
+      `blokada konkretnego Spotify wykonawcy ${r.artistIdExcluded || 0}, kara wykonawcy <= -40 ${r.strongNegativeArtistFeedback || 0}, ` +
       `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, ` +
+      `wynik obecnej osoby <35 lub brak poprawnej oceny ${r.lowIndividualFit || 0}, ` +
+      `znany utwór przy trybie 100% discovery ${r.discoveryModeExcluded || 0}, ` +
       `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}, ` +
       `dobrane przez próg awaryjny ${r.fallbackSelections || 0}` +
-      (r.lowFinalScoreStop ? `, zatrzymanie po wyczerpaniu bezpiecznego progu awaryjnego: ${r.lowFinalScoreStop} kandydatów pozostało` : "") + `.`;
+      (r.lowFinalScoreStop ? `, kandydaci poza końcowym zestawem przy skróconym wyniku: ${r.lowFinalScoreStop}` : "") + `.`;
     playlistResult.append(rejection);
 
     if (r.selectionStopDiagnostics) {
@@ -5249,7 +5914,7 @@ function renderPlaylistResult(
       const stopDiag = document.createElement("p");
       stopDiag.className = "small";
       stopDiag.textContent =
-        `Diagnostyka zatrzymania v40: pozostało ${d.remaining || 0}; ` +
+        `Diagnostyka końcowego zatrzymania: pozostało ${d.remaining || 0}; ` +
         `blokady: duplikat ${d.duplicateBlocked || 0}, limit 2 utworów wykonawcy ${d.artistLimitBlocked || 0}, ` +
         `quota discovery przy długości bieżącej ${d.discoveryQuotaBlockedCurrent || 0}, quota discovery przy celu ${requestedTotal} (max ${d.targetQuotaMax ?? 0}) ${d.discoveryQuotaBlockedTarget || 0}; ` +
         `wybieralnych przy quota docelowej ${d.selectableAtTargetQuota || 0}. Rozkład groupBase: >=44: ${d.base44Plus || 0}, 40-43: ${d.base40to43 || 0}, 35-39: ${d.base35to39 || 0}, <35: ${d.baseBelow35 || 0}. ` +
@@ -5379,6 +6044,14 @@ migrateStorageV34();
 purgeExpiredCaches();
 loadRmfSettings();
 renderFeedbackSummary();
+document.getElementById('catalogEvidenceButton').addEventListener('click', renderArtistCatalogEvidence);
+document.getElementById('catalogEvidenceFilter').addEventListener('input', renderArtistCatalogEvidence);
+document.getElementById('artistExclusionArtist').addEventListener('change', refreshArtistExclusionDialog);
+document.getElementById('artistExclusionDislike').addEventListener('click', () => submitArtistExclusion('dislike'));
+document.getElementById('artistExclusionWrong').addEventListener('click', () => submitArtistExclusion('wrong_artist'));
+document.getElementById('artistExclusionRevoke').addEventListener('click', () => submitArtistExclusion(null));
+document.getElementById('artistExclusionCancel').addEventListener('click', () => document.getElementById('artistExclusionDialog').close());
+document.getElementById('artistExclusionDialog').addEventListener('close', () => { artistExclusionDialogTrack = null; });
 renderRmfDiagnostics();
 updateRmfStatus();
 restoreMostRecentPlaylist();

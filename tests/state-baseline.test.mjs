@@ -1,9 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { loadStateApi } from './helpers/state-api.mjs';
 
-const source = readFileSync(new URL('../functions/api/state.js', import.meta.url), 'utf8');
-const api = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const api = await loadStateApi();
 
 test('API: brak tokenu odrzuca GET i PUT przed dostępem do DB', async () => {
   for (const [method, handler] of [['GET', api.onRequestGet], ['PUT', api.onRequestPut]]) {

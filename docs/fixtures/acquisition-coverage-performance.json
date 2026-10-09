@@ -1,0 +1,37 @@
+{
+  "note": "Full pools 2000/1800/3000; 100 qualified artists; coverage assessment only, no API or final playlist selection; snapshot vs original default reads, alternating samples plus warmup",
+  "results": [
+    {
+      "people": 2,
+      "samples": 10,
+      "p95BeforeMs": 1002.7000000029802,
+      "p95AfterMs": 163.69999999925494,
+      "counts": {
+        "before": {
+          "artists": 100,
+          "qualifying": 100
+        },
+        "after": {
+          "artists": 100,
+          "qualifying": 100
+        }
+      }
+    },
+    {
+      "people": 4,
+      "samples": 10,
+      "p95BeforeMs": 982.3000000007451,
+      "p95AfterMs": 153,
+      "counts": {
+        "before": {
+          "artists": 100,
+          "qualifying": 100
+        },
+        "after": {
+          "artists": 100,
+          "qualifying": 100
+        }
+      }
+    }
+  ]
+}
