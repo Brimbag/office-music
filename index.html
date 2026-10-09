@@ -3039,11 +3039,14 @@ async function syncLastFmSources(
     maxTagCalls = LASTFM_MAX_TAG_CALLS_PER_SYNC,
     includeTags = true,
     includeRecent = true,
-    forceApi = false
+    forceApi = false,
+    preserveTagBudget = false
   } = {}
 ) {
-  lastFmCallsThisSync = 0;
-  lastFmTagCallBudgetThisSync = Math.max(2, Number(maxTagCalls || LASTFM_MAX_TAG_CALLS_PER_SYNC));
+  if (!preserveTagBudget) {
+    lastFmCallsThisSync = 0;
+    lastFmTagCallBudgetThisSync = Math.max(2, Number(maxTagCalls || LASTFM_MAX_TAG_CALLS_PER_SYNC));
+  }
   let previousAttempt;
   try { previousAttempt = JSON.parse(localStorage.getItem(LASTFM_SYNC_ATTEMPT_KEY) || "null"); } catch {}
   const attempt = { ...previousAttempt, at: Date.now(), ...(includeTags ? { tags: "pending", tagsAt: Date.now() } : {}), ...(includeRecent ? { recent: "pending", recentAt: Date.now() } : {}) };
@@ -3497,7 +3500,7 @@ async function checkLastFmSync(token, force = false) {
     const due = force || observation?.user !== user.toLowerCase() || Date.now() - observation.observedAt >= LASTFM_AUTO_RECENT_SYNC_TTL_MS;
     const backoff = !force && attempt?.recentUser === user.toLowerCase() && attempt.recent === 'error' && Date.now() - attempt.recentAt < LASTFM_RETRY_BACKOFF_MS;
     await Promise.allSettled([
-      due && !backoff ? syncLastFmSources([], {includeTags:false, includeRecent:true, forceApi:force}) : Promise.resolve(),
+      due && !backoff ? syncLastFmSources([], {includeTags:false, includeRecent:true, forceApi:force, preserveTagBudget:true}) : Promise.resolve(),
       syncSpotifyRecentHistory(token, force)
     ]);
     renderLastFmSync();

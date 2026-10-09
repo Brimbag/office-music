@@ -38,3 +38,9 @@ test('LF3 account switch during Spotify request discards the stale result',async
  assert.equal(r.history,0);assert.equal(r.observation,null);assert.deepEqual(s.errors,[]);
  }finally{await s.close();}
 });
+test('LF3 background check preserves active generation tag budget and counters',async()=>{
+ const s=await h.page();try{
+ const r=await s.page.evaluate(async()=>{lastFmSpotifyAccount='sp';lastFmUserInput.value='lf';localStorage.setItem(LASTFM_USER_KEY,'lf');lastFmCallsThisSync=7;lastFmTagCallBudgetThisSync=8;const oldSp=spotifyGenerationRequest,oldLf=lastFmRequest;spotifyGenerationRequest=async()=>({ok:true,json:async()=>({items:[]})});lastFmRequest=async()=>({recenttracks:{track:[],'@attr':{totalPages:'0'}}});try{await checkLastFmSync('fake');return [lastFmCallsThisSync,lastFmTagCallBudgetThisSync];}finally{spotifyGenerationRequest=oldSp;lastFmRequest=oldLf;}});
+ assert.deepEqual(r,[7,8]);assert.deepEqual(s.errors,[]);
+ }finally{await s.close();}
+});
