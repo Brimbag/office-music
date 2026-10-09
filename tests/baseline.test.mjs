@@ -23,6 +23,7 @@ for (const path of ['/', '/taste.html']) {
 test('ankieta zachowuje ocenę po odświeżeniu i zmianie osoby', () => withPage(async page => {
   await page.locator('[data-person="Bartek"]').click();
   await page.locator('.choices[data-id="rock"] .choice[data-val="like"]').click();
+  await page.waitForFunction(()=>OmmLocalState.pendingWrites===0);
   await page.reload();
   await page.locator('[data-person="Bartek"]').click();
   const value = await page.evaluate(() => JSON.parse(localStorage.getItem('office_taste_profile_v1')).people.Bartek.genres.rock);

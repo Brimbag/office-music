@@ -73,6 +73,7 @@ test('ankieta pozwala niezależnie ocenić rodzinę i dziecko po migracji', asyn
     await session.page.locator('[data-person="Bartek"]').click();
     await session.page.locator('[data-toggle="folk"]').click();
     await session.page.locator('.choices[data-id="folk-general"] .choice[data-val="ok"]').click();
+    await session.page.waitForFunction(()=>OmmLocalState.pendingWrites===0);
     await session.page.reload();
     const ratings = await session.page.evaluate(() => JSON.parse(localStorage.getItem('office_taste_profile_v1')).people.Bartek.genres);
     assert.equal(ratings.folk, 'like'); assert.equal(ratings['folk-general'], 'ok');

@@ -53,3 +53,7 @@ Każdy PR opisuje wpływ na długość/jakość, testy i rollback. UX i niezawod
 ## Aktualizacja po U2 / L1
 
 U2 wdrożono jako v43.26.U2 (#24). L1, v43.27.L1: trwała kopia sprzed importu, odzyskiwanie przed startupem, jawne błędy zapisu i cofanie niezapisanej oceny ankiety. Szczegóły i rollback: [LOCAL_STATE_L1.md](LOCAL_STATE_L1.md). Kolejny niezależny zakres: L2 — odświeżanie i konflikty między kartami; bez zmian algorytmu i kontraktu D1. Dalsza kolejność: U3 → LF1 → LF2 → LOG1 → LOG2 → M → V/S1/S2 → COVER1/COVER2.
+
+## Aktualizacja L2
+
+L1 wdrożono jako v43.27.L1 (#25). L2, v43.28.L2: synchronizacja widoków kart i merge niezależnych ocen z jawnym konfliktem; [opis i rollback](LOCAL_STATE_L2.md). Kolejny niezależny zakres: U3 — artyści wzorcowi i blokowani w ankiecie, bez zmiany preferencji, kluczy i selekcji. Dalej LF1 → LF2 → LOG1/LOG2 → wspólny monitor i jego osobni konsumenci → okładki.

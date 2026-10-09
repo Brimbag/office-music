@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.27.L1</title>
+  <title>Office Music Mixer v43.28.L2</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -412,7 +412,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.27.L1</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.28.L2</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -898,6 +898,7 @@ document.addEventListener("visibilitychange", () => {
 syncLastFmButton.addEventListener("click", async () => {
   try {
     syncLastFmButton.disabled = true;
+    await Promise.all([...localPreferenceFields.values()].map(field => field.queue));
     await syncLastFmSources(selectedProfiles(), { forceStatus: true, includeTags: true, includeRecent: true, forceApi: true });
   } catch (err) {
     console.error(err);
@@ -1154,7 +1155,7 @@ function applyCloudStateWithMerge(remoteState) {
 }
 
 function refreshUiAfterCloudMerge() {
-  renderProfiles();
+  if (localPreferenceFields.size) { refreshLocalPreferenceFields(); updatePresenceSummary(); } else renderProfiles();
   loadRmfSettings();
   renderFeedbackSummary();
   renderHistorySummary();
@@ -1324,7 +1325,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.27.L1",
+      source: "Office Music Mixer v43.28.L2",
       storage: exportedStorageState()
     };
 
@@ -2385,7 +2386,28 @@ async function showLoggedIn(token) {
   startRmfWatcher();
 }
 
+const localPreferenceFields = new Map();
+function bindLocalPreference(input, key, fallback, eventName = "change") {
+  const field = {input, key, fallback, base:localStorage.getItem(key), dirty:false, queue:Promise.resolve()};
+  localPreferenceFields.set(key,field);
+  input.addEventListener("input", () => { field.dirty=true; });
+  input.addEventListener(eventName, () => {
+    const value=input.value.trim();
+    field.queue=field.queue.then(async () => {
+      try { field.base=await OmmLocalState.edit(key,field.base,value); if(input.value.trim()===value)field.dirty=false; scheduleAutomaticCloudSync(); }
+      catch { field.base=localStorage.getItem(key); input.value=field.base ?? fallback; field.dirty=false; }
+    });
+  });
+}
+function refreshLocalPreferenceFields() {
+  for (const field of localPreferenceFields.values()) {
+    const raw=localStorage.getItem(field.key);
+    if (!field.dirty && raw!==field.base) { field.base=raw; field.input.value=raw ?? field.fallback; }
+  }
+}
+
 function renderProfiles() {
+  localPreferenceFields.clear();
   peopleDiv.textContent = "";
   document.getElementById("manualPreferences").textContent = "";
 
@@ -2431,9 +2453,7 @@ function renderProfiles() {
     genreInput.dataset.genreProfileId = id;
     genreInput.placeholder = "np. rock, pop, throat singing...";
     genreInput.value = localStorage.getItem(`office_genres_${id}`) ?? profile.genres.join(", ");
-    genreInput.addEventListener("input", () => {
-      try { OmmLocalState.write(`office_genres_${id}`, genreInput.value.trim()); } catch { genreInput.value = localStorage.getItem(`office_genres_${id}`) ?? profile.genres.join(", "); }
-    });
+    bindLocalPreference(genreInput, `office_genres_${id}`, profile.genres.join(", "), "input");
 
     const seedLabel = document.createElement("label");
     seedLabel.className = "small";
@@ -2447,9 +2467,7 @@ function renderProfiles() {
         ? "np. Marek Grechuta, Grzegorz Turnau..."
         : "np. 2–5 wykonawców...";
     seedInput.value = localStorage.getItem(`office_seed_${id}`) || "";
-    seedInput.addEventListener("change", () => {
-      try { OmmLocalState.write(`office_seed_${id}`, seedInput.value.trim()); } catch { seedInput.value = localStorage.getItem(`office_seed_${id}`) || ""; }
-    });
+    bindLocalPreference(seedInput, `office_seed_${id}`, "");
 
     const blockedLabel = document.createElement("label");
     blockedLabel.className = "small";
@@ -2461,9 +2479,7 @@ function renderProfiles() {
     blockedInput.placeholder = "np. wykonawca, którego ta osoba nie chce słyszeć";
     const defaultBlocked = id === "edyta" ? "Slipknot" : "";
     blockedInput.value = localStorage.getItem(`office_blocked_${id}`) ?? defaultBlocked;
-    blockedInput.addEventListener("change", () => {
-      try { OmmLocalState.write(`office_blocked_${id}`, blockedInput.value.trim()); } catch { blockedInput.value = localStorage.getItem(`office_blocked_${id}`) ?? defaultBlocked; }
-    });
+    bindLocalPreference(blockedInput, `office_blocked_${id}`, defaultBlocked);
 
     const preferences = document.createElement("details");
     const preferenceTitle = document.createElement("summary");
@@ -2482,6 +2498,10 @@ function renderProfiles() {
 }
 
 function updatePresenceSummary() {
+  for (const [id, profile] of Object.entries(profiles)) {
+    const meta=peopleDiv.querySelector(`[data-presence-id="${id}"] .presence-meta`);
+    if (meta) { const taste=tasteStateForPerson(profile.name); meta.textContent=`${id === "bartek" ? "główny profil · " : ""}❤️${taste.likedGenres.length} 🙂${taste.okGenres.length} 🚫${taste.blockedGenres.length}`; }
+  }
   const names = [...peopleDiv.querySelectorAll("input[data-profile-id]:checked")].map(input => profiles[input.dataset.profileId].name);
   document.getElementById("mixNames").textContent = names.join(" + ");
   document.getElementById("presenceSummary").textContent = `Obecni (${names.length}): ${names.join(", ")}.`;
@@ -2568,6 +2588,8 @@ function splitCommaList(value) {
 }
 
 function selectedProfiles() {
+  refreshLocalPreferenceFields();
+  if (OmmLocalState.pendingWrites || [...localPreferenceFields.values()].some(field => field.dirty)) throw new Error("Zakończ zapis preferencji przed generowaniem lub synchronizacją.");
   const ids = Array.from(
     document.querySelectorAll('input[data-profile-id]:checked')
   ).map(el => el.dataset.profileId);
@@ -2587,9 +2609,10 @@ function selectedProfiles() {
       blockedInput?.value ?? localStorage.getItem(`office_blocked_${id}`) ?? (id === "edyta" ? "Slipknot" : "")
     );
 
-    OmmLocalState.write(`office_genres_${id}`, manualGenres.join(", "));
-    OmmLocalState.write(`office_seed_${id}`, artists.join(", "));
-    OmmLocalState.write(`office_blocked_${id}`, blockedArtists.join(", "));
+    for (const [key,value] of [[`office_genres_${id}`,manualGenres.join(", ")],[`office_seed_${id}`,artists.join(", ")],[`office_blocked_${id}`,blockedArtists.join(", ")]]) {
+      if (localStorage.getItem(key)!==value) OmmLocalState.write(key,value);
+      const field=localPreferenceFields.get(key); if(field)field.base=localStorage.getItem(key);
+    }
 
     const taste = tasteStateForPerson(profiles[id].name);
     const blockedTaste = new Set(taste.blockedGenres.map(normalizeGenreName));
@@ -5805,6 +5828,7 @@ async function generateOfficePlaylist() {
   let createdPlaylist = null, finalLength = 0;
   try {
     generateButton.disabled = true;
+    await Promise.all([...localPreferenceFields.values()].map(field => field.queue));
     newSearchesThisGeneration = 0;
     queriesAttemptedThisGeneration = new Set();
     playlistBox.style.display = "none";
@@ -6190,9 +6214,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.27.L1: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.28.L2: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.27.L1 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.28.L2 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -6423,6 +6447,13 @@ window.ommStorageReady = false;
     return;
   }
 
+OmmLocalState.subscribe(() => {
+  refreshLocalPreferenceFields();
+  updatePresenceSummary();
+  renderFeedbackSummary();
+  renderHistorySummary();
+  scheduleAutomaticCloudSync();
+});
 migrateHistoryStorage();
 migrateStorageV34();
 purgeExpiredCaches();
