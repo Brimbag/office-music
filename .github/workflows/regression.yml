@@ -2,6 +2,7 @@ name: Regression
 on: [push, pull_request]
 permissions:
   contents: read
+  actions: read
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -13,6 +14,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright-core install --with-deps chromium
+      - name: Read original post-merge diagnostics
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 37992427059
+          name: regression-diagnostics
+          path: /tmp/omm-original-diagnostics
+      - name: Expose original failure as a warning
+        run: node tests/helpers/ci-failures.mjs /tmp/omm-original-diagnostics/omm-regression.log warning
       - name: Regression tests
         shell: bash
         run: |
