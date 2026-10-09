@@ -17,6 +17,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          trap 'node tests/helpers/ci-failures.mjs /tmp/omm-regression.log' EXIT
           npm test 2>&1 | tee /tmp/omm-regression.log
       - name: Preserve regression diagnostics
         if: failure()
