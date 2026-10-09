@@ -57,3 +57,5 @@ U2 wdrożono jako v43.26.U2 (#24). L1, v43.27.L1: trwała kopia sprzed importu, 
 ## Aktualizacja L2
 
 L1 wdrożono jako v43.27.L1 (#25). L2, v43.28.L2: synchronizacja widoków kart i merge niezależnych ocen z jawnym konfliktem; [opis i rollback](LOCAL_STATE_L2.md). Kolejny niezależny zakres: U3 — artyści wzorcowi i blokowani w ankiecie, bez zmiany preferencji, kluczy i selekcji. Dalej LF1 → LF2 → LOG1/LOG2 → wspólny monitor i jego osobni konsumenci → okładki.
+
+L2 wdrożono jako v43.28.L2 (#26). L2.1, v43.29.L2.1, koryguje wyścig kończenia testu importu oraz adnotacje CI, bez zmiany aplikacji. Kolejny zakres pozostaje U3.
