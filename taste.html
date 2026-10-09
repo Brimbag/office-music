@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.26.U2 – profil muzyczny</title>
+  <title>Office Music Mixer v43.27.L1 – profil muzyczny</title>
   <meta name="color-scheme" content="light dark">
   <style>
     :root{
@@ -85,7 +85,7 @@
   <main class="wrap">
     <header class="top">
       <div>
-        <h1>Profil muzyczny <span class="version">v43.26.U2</span></h1>
+        <h1>Profil muzyczny <span class="version">v43.27.L1</span></h1>
         <p>Przeklikaj gatunki i podgatunki. „Lubię” rozwija pulę odkryć, „Dam radę” oznacza dobrą muzykę do wspólnej playlisty, a „Nie lubię” odcina daną gałąź.</p>
       </div>
       <a class="back" href="index.html">← Office Music Mixer</a>
@@ -135,9 +135,12 @@
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+<script src="local-state.js"></script>
 <script src="taste-state.js"></script>
 <script>
-(() => {
+(async () => {
+  window.ommStorageReady = false;
+  if (!await OmmLocalState.recover()) { window.ommStorageReady = true; return; }
   const STORAGE_KEY = 'office_taste_profile_v1';
   const PEOPLE = ['Bartek','Edyta','Asia','Monika'];
 
@@ -340,11 +343,16 @@
       return upgraded.db;
     }catch{return blankDb();}
   }
+  let persistedDb = JSON.stringify(db);
   function save(){
+    clearTimeout(save._t);
     db.updatedAt = new Date().toISOString();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    try { OmmLocalState.write(STORAGE_KEY, JSON.stringify(db)); }
+    catch { db=JSON.parse(persistedDb); els.save.textContent='Nie zapisano zmiany'; toast('Nie zapisano oceny. Poprzednie oceny pozostają zachowane.'); return false; }
+    persistedDb = JSON.stringify(db);
     els.save.textContent = 'Zapisano lokalnie';
     clearTimeout(save._t); save._t=setTimeout(()=>els.save.textContent='Zapisywanie lokalnie',1100);
+    return true;
   }
   function current(){ return selectedPerson ? db.people[selectedPerson].genres : {}; }
   function ratingSummary(person){
@@ -454,10 +462,11 @@
   els.collapseAll.addEventListener('click',()=>{expanded.clear();render();});
   els.clearPerson.addEventListener('click',()=>{
     const p=selectedPerson;
-    if(confirm(`Wyczyścić wszystkie oceny profilu ${p}?`)){db.people[p].genres={};save();expanded.clear();render();toast(`Wyczyszczono profil ${p}.`)}
+    if(confirm(`Wyczyścić wszystkie oceny profilu ${p}?`)){db.people[p].genres={};if(!save()){render();return;}expanded.clear();render();toast(`Wyczyszczono profil ${p}.`)}
   });
 
   renderPersonPicker();
+  window.ommStorageReady = true;
 })();
 </script>
 </body>

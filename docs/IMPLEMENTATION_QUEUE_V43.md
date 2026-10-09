@@ -49,3 +49,7 @@ Zgodnie z aktualną decyzją użytkownika pozostawiamy mechanizm generowania bez
 ## Wspólne warunki
 
 Każdy PR opisuje wpływ na długość/jakość, testy i rollback. UX i niezawodność nie zmieniają rekomendacji. Dla rozszerzeń danych preferujemy addytywność, zgodność starego klienta i brak destrukcyjnych migracji. Rollback kodu nie cofa automatycznie decyzji użytkownika ani nowych danych. Każda migracja ma własną procedurę; wyłączenie konsumenta monitora nie powinno uruchamiać innych funkcji. Po każdym wdrożeniu weryfikacja konkretnego SHA i widocznej wersji, potem obserwacja live przed kolejnym PR.
+
+## Aktualizacja po U2 / L1
+
+U2 wdrożono jako v43.26.U2 (#24). L1, v43.27.L1: trwała kopia sprzed importu, odzyskiwanie przed startupem, jawne błędy zapisu i cofanie niezapisanej oceny ankiety. Szczegóły i rollback: [LOCAL_STATE_L1.md](LOCAL_STATE_L1.md). Kolejny niezależny zakres: L2 — odświeżanie i konflikty między kartami; bez zmian algorytmu i kontraktu D1. Dalsza kolejność: U3 → LF1 → LF2 → LOG1 → LOG2 → M → V/S1/S2 → COVER1/COVER2.
