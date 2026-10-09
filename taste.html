@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.27.L1 – profil muzyczny</title>
+  <title>Office Music Mixer v43.28.L2 – profil muzyczny</title>
   <meta name="color-scheme" content="light dark">
   <style>
     :root{
@@ -85,7 +85,7 @@
   <main class="wrap">
     <header class="top">
       <div>
-        <h1>Profil muzyczny <span class="version">v43.27.L1</span></h1>
+        <h1>Profil muzyczny <span class="version">v43.28.L2</span></h1>
         <p>Przeklikaj gatunki i podgatunki. „Lubię” rozwija pulę odkryć, „Dam radę” oznacza dobrą muzykę do wspólnej playlisty, a „Nie lubię” odcina daną gałąź.</p>
       </div>
       <a class="back" href="index.html">← Office Music Mixer</a>
@@ -344,11 +344,18 @@
     }catch{return blankDb();}
   }
   let persistedDb = JSON.stringify(db);
-  function save(){
+  let persistedRaw = localStorage.getItem(STORAGE_KEY);
+  let saving = false;
+  async function save(strictPerson = null){
+    saving = true;
+    els.save.textContent='Zapisywanie…';
+    const controls=[...document.querySelectorAll('button')].map(button=>[button,button.disabled]);
+    controls.forEach(([button])=>{button.disabled=true;});
     clearTimeout(save._t);
     db.updatedAt = new Date().toISOString();
-    try { OmmLocalState.write(STORAGE_KEY, JSON.stringify(db)); }
-    catch { db=JSON.parse(persistedDb); els.save.textContent='Nie zapisano zmiany'; toast('Nie zapisano oceny. Poprzednie oceny pozostają zachowane.'); return false; }
+    try { persistedRaw = await OmmLocalState.edit(STORAGE_KEY, persistedRaw, JSON.stringify(db), {json:true, initial:persistedDb, strictPerson}); db=JSON.parse(persistedRaw); }
+    catch (error) { db=load(); persistedRaw=localStorage.getItem(STORAGE_KEY); persistedDb=JSON.stringify(db); els.save.textContent='Nie zapisano zmiany'; toast(error.name==='LocalStateConflict' ? error.message : 'Nie zapisano oceny. Poprzednie oceny pozostają zachowane.'); return false; }
+    finally { saving=false; controls.forEach(([button,disabled])=>{button.disabled=disabled;}); }
     persistedDb = JSON.stringify(db);
     els.save.textContent = 'Zapisano lokalnie';
     clearTimeout(save._t); save._t=setTimeout(()=>els.save.textContent='Zapisywanie lokalnie',1100);
@@ -436,11 +443,12 @@
       expanded.has(id)?expanded.delete(id):expanded.add(id); render();
     }));
     els.genres.querySelectorAll('.choices').forEach(group=>{
-      group.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{
+      group.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',async()=>{
+        if (saving) return;
         const id=group.dataset.id, val=b.dataset.val;
         if(current()[id]===val) delete current()[id]; else current()[id]=val;
         if(current()[id]==='no') expanded.delete(id);
-        save(); render();
+        await save(); render();
       }));
     });
     els.genres.querySelectorAll('[data-yt]').forEach(b=>b.addEventListener('click',()=>{
@@ -460,11 +468,20 @@
   els.search.addEventListener('input',render);
   els.expandAll.addEventListener('click',()=>{DATA.forEach(f=>{if(current()[f.id]!=='no')expanded.add(f.id)});render();});
   els.collapseAll.addEventListener('click',()=>{expanded.clear();render();});
-  els.clearPerson.addEventListener('click',()=>{
+  els.clearPerson.addEventListener('click',async()=>{
+    if (saving) return;
     const p=selectedPerson;
-    if(confirm(`Wyczyścić wszystkie oceny profilu ${p}?`)){db.people[p].genres={};if(!save()){render();return;}expanded.clear();render();toast(`Wyczyszczono profil ${p}.`)}
+    if(confirm(`Wyczyścić wszystkie oceny profilu ${p}?`)){db.people[p].genres={};if(!await save(p)){render();return;}expanded.clear();render();toast(`Wyczyszczono profil ${p}.`)}
   });
 
+  OmmLocalState.subscribe(() => {
+    if (saving) return;
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if (raw===persistedRaw) return;
+    db=load(); persistedRaw=localStorage.getItem(STORAGE_KEY); persistedDb=JSON.stringify(db);
+    if (selectedPerson) render(); else renderPersonPicker();
+    toast('Oceny zaktualizowano z innej karty.');
+  });
   renderPersonPicker();
   window.ommStorageReady = true;
 })();

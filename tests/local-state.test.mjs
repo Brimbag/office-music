@@ -76,9 +76,11 @@ test('L1: odzyskanie pustego stanu sprzed pierwszego importu',()=>run(async page
 test('L1: ankieta po quota przywraca ocenę w pamięci i nie pokazuje sukcesu',async()=>{
  const tab=await harness.page('/taste.html');try{
  const {page}=tab;await page.locator('[data-person="Bartek"]').click();await page.locator('.choices[data-id="rock"] .choice[data-val="like"]').click();
+ await page.waitForFunction(()=>OmmLocalState.pendingWrites===0 && JSON.parse(localStorage.getItem('office_taste_profile_v1')||'null')?.people.Bartek.genres.rock==='like');
  const before=await page.evaluate(()=>localStorage.getItem('office_taste_profile_v1'));
  await page.evaluate(()=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k==='office_taste_profile_v1')throw new DOMException('full','QuotaExceededError');return original.call(this,k,v);};});
  await page.locator('.choices[data-id="rock"] .choice[data-val="no"]').click();
+ await page.waitForFunction(()=>OmmLocalState.pendingWrites===0 && document.querySelector('#localStateNotice')?.textContent.includes('Nie zapisano'));
  assert.equal(await page.evaluate(()=>localStorage.getItem('office_taste_profile_v1')),before);
  assert.equal(await page.locator('.choices[data-id="rock"] .choice[data-val="like"]').getAttribute('data-active'),'like');
  assert.match(await page.locator('#localStateNotice').textContent(),/Nie zapisano/);
