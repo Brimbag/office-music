@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.30.LF1</title>
+  <title>Office Music Mixer v43.31.LF3</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -412,7 +412,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.30.LF1</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.31.LF3</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -420,6 +420,8 @@
         <span id="profileBox" style="display:none;">Spotify: <span id="profile"></span></span>
         <span id="cloudStatus">Chmura: czeka na Spotify</span>
         <span id="lastFmStatus">Last.fm: stan lokalny</span>
+        <span id="lastFmSyncStatus" class="small" role="status"></span>
+        <a id="lastFmSyncRepair" href="https://www.last.fm/settings/applications" target="_blank" rel="noopener noreferrer" hidden>Sprawdź połączenie Last.fm</a>
       </div>
     </div>
     <div class="connection-actions">
@@ -552,7 +554,8 @@
           <input id="lastFmUser" type="text" placeholder="nazwa użytkownika Last.fm">
         </label>
         <div class="lastfm-actions">
-
+        <button id="lastFmSyncRetry" type="button">Sprawdź synchronizację</button>
+        <button id="lastFmSyncDismiss" type="button" hidden>Zamknij ostrzeżenie</button>
         </div>
       </div>
       <details>
@@ -612,6 +615,7 @@
   <div id="artistExclusionCandidates" class="small"></div>
   <p id="artistExclusionError" class="error" role="alert"></p>
 </dialog>
+<script src="lastfm-sync.js"></script>
 <script src="local-state.js"></script>
 <script src="taste-state.js"></script>
 <script src="artist-exclusions.js"></script>
@@ -937,6 +941,12 @@ const LASTFM_ARTIST_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 const LASTFM_TRACK_POOL_MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 const LASTFM_MAX_TAG_CALLS_PER_SYNC = 24;
 const LASTFM_TAG_ROTATION_KEY = "office_lastfm_tag_rotation_v1";
+let lastFmSpotifyAccount = "";
+let spotifyHistoryPending = null;
+let syncMonitorPending = null;
+const SPOTIFY_HISTORY_OBSERVATION_KEY = "office_spotify_history_observation_v1";
+const LASTFM_SYNC_NOTICE_KEY = "office_lastfm_sync_notice_v1";
+const lastFmRequestsPending = new Map();
 const LASTFM_SYNC_ATTEMPT_KEY = "office_lastfm_sync_attempt_v1";
 const LASTFM_RETRY_BACKOFF_MS = 2 * 60 * 1000;
 const LASTFM_AUTO_TAG_SYNC_KEY = "office_lastfm_auto_tag_sync_v1";
@@ -1327,7 +1337,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.30.LF1",
+      source: "Office Music Mixer v43.31.LF3",
       storage: exportedStorageState()
     };
 
@@ -2358,7 +2368,9 @@ async function getProfile(token) {
     throw new Error("Nie udało się odczytać profilu Spotify.");
   }
 
-  return response.json();
+  const profile = await response.json();
+  lastFmSpotifyAccount = String(profile.id || profile.account_id || "");
+  return profile;
 }
 
 async function showLoggedIn(token) {
@@ -2385,6 +2397,7 @@ async function showLoggedIn(token) {
   renderLastFmStatus();
   renderHistorySummary();
   await autoSyncCloudState(token);
+  void checkLastFmSync(token).catch(() => {});
   startRmfWatcher();
 }
 
@@ -2733,6 +2746,14 @@ function writeLastFmCache(method, params, data) {
 }
 
 async function lastFmRequest(method, params = {}, ttlMs = LASTFM_CACHE_TTL_MS) {
+  const key = lastFmCacheKey(method, params);
+  if (lastFmRequestsPending.has(key)) return lastFmRequestsPending.get(key);
+  const pending = lastFmRequestOnce(method, params, ttlMs);
+  lastFmRequestsPending.set(key, pending);
+  try { return await pending; } finally { lastFmRequestsPending.delete(key); }
+}
+
+async function lastFmRequestOnce(method, params = {}, ttlMs = LASTFM_CACHE_TTL_MS) {
   const cached = readLastFmCache(method, params, ttlMs);
   if (cached) {
     try { Object.defineProperty(cached, "ommAcquiredAt", { value: JSON.parse(localStorage.getItem(lastFmCacheKey(method, params))).savedAt }); } catch {}
@@ -3008,6 +3029,7 @@ function renderLastFmStatus(extra = "") {
   }
   if (extra) parts.push(extra);
   lastFmStatus.textContent = parts.join(" · ");
+  renderLastFmSync();
 }
 
 async function syncLastFmSources(
@@ -3017,11 +3039,14 @@ async function syncLastFmSources(
     maxTagCalls = LASTFM_MAX_TAG_CALLS_PER_SYNC,
     includeTags = true,
     includeRecent = true,
-    forceApi = false
+    forceApi = false,
+    preserveTagBudget = false
   } = {}
 ) {
-  lastFmCallsThisSync = 0;
-  lastFmTagCallBudgetThisSync = Math.max(2, Number(maxTagCalls || LASTFM_MAX_TAG_CALLS_PER_SYNC));
+  if (!preserveTagBudget) {
+    lastFmCallsThisSync = 0;
+    lastFmTagCallBudgetThisSync = Math.max(2, Number(maxTagCalls || LASTFM_MAX_TAG_CALLS_PER_SYNC));
+  }
   let previousAttempt;
   try { previousAttempt = JSON.parse(localStorage.getItem(LASTFM_SYNC_ATTEMPT_KEY) || "null"); } catch {}
   const attempt = { ...previousAttempt, at: Date.now(), ...(includeTags ? { tags: "pending", tagsAt: Date.now() } : {}), ...(includeRecent ? { recent: "pending", recentAt: Date.now() } : {}) };
@@ -3149,7 +3174,8 @@ async function syncLastFmSources(
             artistNames: [name],
             trackSignature: trackSignatureFromParts(title, [name]),
             playedAt: new Date(uts * 1000).toISOString(),
-            source: "lastfm"
+            source: "lastfm",
+            sourceAccount: user.toLowerCase()
           });
           recentPoolItems.push({ name: title, artist: { name, mbid: track?.artist?.mbid || "" }, ...compactLastFmCatalogMetadata(track) });
         }
@@ -3166,7 +3192,7 @@ async function syncLastFmSources(
       // Do not publish an observation if the account changed while awaiting the API.
       const complete = validPagination && page > totalPages;
       if (!applyLastFmRecentObservation(names, plays, { user: user.toLowerCase(), from: fromSeconds, to: Math.floor(observedAt / 1000), observedAt, complete })) throw new Error("nie udało się zapisać obserwacji historii");
-      safeSetSmallStorageItem(LASTFM_RECENT_OBSERVATION_KEY, JSON.stringify({ user: user.toLowerCase(), observedAt, complete, count: recentScrobbleCount }), "obserwacji historii Last.fm");
+      safeSetSmallStorageItem(LASTFM_RECENT_OBSERVATION_KEY, JSON.stringify({ user: user.toLowerCase(), observedAt, complete, count: recentScrobbleCount, oldest: historyEntries.length ? Math.min(...historyEntries.map(r => Date.parse(r.playedAt))) : null }), "obserwacji historii Last.fm");
 
       localStorage.setItem(LASTFM_RECENT_COUNT_KEY, String(recentScrobbleCount));
       safeSetSmallStorageItem(LASTFM_AUTO_RECENT_SYNC_KEY, String(Date.now()), "czasu synchronizacji historii Last.fm");
@@ -3181,7 +3207,7 @@ async function syncLastFmSources(
     recentOk = true;
   }
 
-  if (includeRecent) attempt.recent = user ? (recentOk ? "ok" : "error") : "not_configured";
+  if (includeRecent) { attempt.recent = user ? (recentOk ? "ok" : "error") : "not_configured"; attempt.recentUser = user.toLowerCase(); }
   safeSetSmallStorageItem(LASTFM_SYNC_ATTEMPT_KEY, JSON.stringify(attempt), "wyniku próby Last.fm");
   const bits = [];
   if (includeTags) bits.push(`tagi ${syncTags.length}, w tym ${polishTags.length} PL · wynik ${attempt.tags}`);
@@ -3228,7 +3254,9 @@ function compactPlayedHistoryItem(item) {
     artistNames: Array.isArray(item.artistNames) ? item.artistNames.filter(Boolean) : [],
     trackSignature: item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames),
     playedAt: item.playedAt || "",
-    source: item.source || ""
+    source: item.source || "",
+    sourceAccount: String(item.sourceAccount || ""),
+    durationMs: Number(item.durationMs) || 0
   };
 }
 
@@ -3376,42 +3404,109 @@ function mergeHistoryEntries(entries) {
   saveHistory([...map.values()]);
 }
 
-async function syncSpotifyRecentHistory(token) {
+async function syncSpotifyRecentHistory(token, force = false) {
+  if (spotifyHistoryPending) return spotifyHistoryPending;
+  const account = lastFmSpotifyAccount;
+  const pending = syncSpotifyRecentHistoryOnce(token, force, account);
+  spotifyHistoryPending = pending;
+  try { return await pending; } finally { spotifyHistoryPending = null; }
+}
+
+async function syncSpotifyRecentHistoryOnce(token, force, account) {
   const lastSync = Number(localStorage.getItem(RECENT_HISTORY_SYNC_KEY) || 0);
-  if (Date.now() - lastSync < RECENT_HISTORY_SYNC_TTL_MS) {
+  const observation = syncMonitorRead(SPOTIFY_HISTORY_OBSERVATION_KEY);
+  if (!force && observation?.account === account && observation.error && Date.now() - observation.observedAt < LASTFM_RETRY_BACKOFF_MS) return 0;
+  if (!force && (!observation || observation.account === account) && Date.now() - lastSync < RECENT_HISTORY_SYNC_TTL_MS) {
     return 0;
   }
 
-  const response = await spotifyGenerationRequest(token,
-    "https://api.spotify.com/v1/me/player/recently-played?limit=50",
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  try {
+    const response = await spotifyGenerationRequest(token,
+      "https://api.spotify.com/v1/me/player/recently-played?limit=50",
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
 
-  if (!response.ok) {
-    console.warn(`Nie udało się pobrać historii Spotify: ${response.status}`);
+    if (!response.ok) {
+      throw new Error("historia Spotify niedostępna");
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data.items)) throw new Error("nieprawidłowa historia Spotify");
+    const entries = data.items
+      .filter(item => item?.track?.id && item?.track?.type !== "episode" && Number.isFinite(Date.parse(item?.played_at)))
+      .map(item => ({
+        trackId: item.track.id,
+        trackName: item.track.name || "",
+        artistIds: (item.track.artists || []).map(artist => artist.id).filter(Boolean),
+        artistNames: (item.track.artists || []).map(artist => artist.name).filter(Boolean),
+        trackSignature: trackSignature(item.track),
+        playedAt: item.played_at,
+        source: "spotify",
+        sourceAccount: account,
+        durationMs: item.track.duration_ms || 0
+      }));
+
+    if (lastFmSpotifyAccount !== account) return 0;
+    if (entries.length) mergeHistoryEntries(entries);
+    safeSetSmallStorageItem(SPOTIFY_HISTORY_OBSERVATION_KEY, JSON.stringify({ account, observedAt: Date.now(), oldest: entries.length ? Math.min(...entries.map(r => Date.parse(r.playedAt))) : null }), "obserwacji Spotify");
+    safeSetSmallStorageItem(
+      RECENT_HISTORY_SYNC_KEY,
+      String(Date.now()),
+      "znacznika synchronizacji historii Spotify"
+    );
+    return entries.length;
+  } catch {
+    if (lastFmSpotifyAccount === account) safeSetSmallStorageItem(SPOTIFY_HISTORY_OBSERVATION_KEY, JSON.stringify({account, observedAt: Date.now(), error: true}), "wyniku historii Spotify");
     return 0;
-  }
+  } finally { renderLastFmSync(); }
+}
 
-  const data = await response.json();
-  const entries = (data.items || [])
-    .filter(item => item?.track?.id && item?.played_at)
-    .map(item => ({
-      trackId: item.track.id,
-      trackName: item.track.name || "",
-      artistIds: (item.track.artists || []).map(artist => artist.id).filter(Boolean),
-      artistNames: (item.track.artists || []).map(artist => artist.name).filter(Boolean),
-      trackSignature: trackSignature(item.track),
-      playedAt: item.played_at,
-      source: "spotify"
-    }));
 
-  if (entries.length) mergeHistoryEntries(entries);
-  safeSetSmallStorageItem(
-    RECENT_HISTORY_SYNC_KEY,
-    String(Date.now()),
-    "znacznika synchronizacji historii Spotify"
-  );
-  return entries.length;
+function syncMonitorRead(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
+}
+
+function renderLastFmSync() {
+  const node = document.getElementById('lastFmSyncStatus');
+  if (!node) return;
+  const user = String(localStorage.getItem(LASTFM_USER_KEY) || "").trim().toLowerCase();
+  const account = lastFmSpotifyAccount;
+  const history = loadHistory();
+  let lastfmObservation = syncMonitorRead(LASTFM_RECENT_OBSERVATION_KEY);
+  const attempt = syncMonitorRead(LASTFM_SYNC_ATTEMPT_KEY);
+  if (attempt?.recentUser === user && attempt.recent === 'error' && attempt.recentAt >= (lastfmObservation?.observedAt || 0)) lastfmObservation = {user, observedAt: attempt.recentAt, error:true};
+  const result = OmmLastFmSync.assess({user, account,
+    spotify: history.filter(r => r.source === 'spotify'), lastfm: history.filter(r => r.source === 'lastfm'),
+    spotifyObservation: syncMonitorRead(SPOTIFY_HISTORY_OBSERVATION_KEY), lastfmObservation});
+  const previous = syncMonitorRead(LASTFM_SYNC_NOTICE_KEY);
+  const notice = OmmLastFmSync.notice(previous, result);
+  if (JSON.stringify(previous) !== JSON.stringify(notice)) safeSetSmallStorageItem(LASTFM_SYNC_NOTICE_KEY, JSON.stringify(notice), "ostrzeżenia synchronizacji");
+  const warning = result.status === 'suspected_issue' && !notice?.dismissed;
+  const labels = {healthy:'Ostatnie odtworzenia Spotify są widoczne w Last.fm.', insufficient_data:'Nie można obecnie potwierdzić synchronizacji Spotify z Last.fm.', suspected_issue:warning ? `Możliwa przerwa w scrobblowaniu: ${result.missing} kolejnych odtworzeń Spotify bez dopasowania w Last.fm.` : 'Możliwa przerwa w scrobblowaniu — ostrzeżenie zamknięte.', api_error:'Nie udało się sprawdzić synchronizacji. Spróbujemy ponownie później.', not_configured:'Podaj powiązane konto Last.fm, aby sprawdzić synchronizację.'};
+  node.textContent = `Spotify → Last.fm${user ? ' (' + user + ')' : ''}: ${labels[result.status]}` + (warning && result.lastScrobble ? ` Ostatni dostępny scrobble: ${new Date(result.lastScrobble).toLocaleString('pl-PL')}.` : '');
+  node.dataset.syncState = result.status;
+  document.getElementById('lastFmSyncRepair').hidden = !warning;
+  document.getElementById('lastFmSyncDismiss').hidden = !warning;
+}
+
+async function checkLastFmSync(token, force = false) {
+  if (syncMonitorPending) return syncMonitorPending;
+  // One paired account only; no assignment to presence profiles.
+  const task = async () => {
+    const user = String(lastFmUserInput?.value || localStorage.getItem(LASTFM_USER_KEY) || '').trim();
+    if (!user || !lastFmSpotifyAccount) { renderLastFmSync(); return; }
+    const observation = syncMonitorRead(LASTFM_RECENT_OBSERVATION_KEY);
+    const attempt = syncMonitorRead(LASTFM_SYNC_ATTEMPT_KEY);
+    const due = force || observation?.user !== user.toLowerCase() || Date.now() - observation.observedAt >= LASTFM_AUTO_RECENT_SYNC_TTL_MS;
+    const backoff = !force && attempt?.recentUser === user.toLowerCase() && attempt.recent === 'error' && Date.now() - attempt.recentAt < LASTFM_RETRY_BACKOFF_MS;
+    await Promise.allSettled([
+      due && !backoff ? syncLastFmSources([], {includeTags:false, includeRecent:true, forceApi:force, preserveTagBudget:true}) : Promise.resolve(),
+      syncSpotifyRecentHistory(token, force)
+    ]);
+    renderLastFmSync();
+  };
+  syncMonitorPending = task();
+  try { await syncMonitorPending; } finally { syncMonitorPending = null; }
 }
 
 function buildHistoryBlocklists() {
@@ -5881,6 +5976,7 @@ async function generateOfficePlaylist() {
 
     generationStage(3);
     await syncSpotifyRecentHistory(token);
+    renderLastFmSync();
     generationStage(4);
     if (!document.hidden && globalThis.scheduler?.yield) await scheduler.yield();
     const acquisitionBlocklists = generationBlocklists(selected);
@@ -6234,9 +6330,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.30.LF1: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.31.LF3: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.30.LF1 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.31.LF3 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -6487,6 +6583,18 @@ document.getElementById('artistExclusionWrong').addEventListener('click', () => 
 document.getElementById('artistExclusionRevoke').addEventListener('click', () => submitArtistExclusion(null));
 document.getElementById('artistExclusionCancel').addEventListener('click', () => document.getElementById('artistExclusionDialog').close());
 document.getElementById('artistExclusionDialog').addEventListener('close', () => { artistExclusionDialogTrack = null; });
+document.getElementById('lastFmSyncRetry').addEventListener('click', async () => {
+  const button = document.getElementById('lastFmSyncRetry'); button.disabled = true;
+  try { const token = await getValidAccessToken(); if (token) await checkLastFmSync(token, true); else renderLastFmSync(); }
+  catch { document.getElementById('lastFmSyncStatus').textContent = "Nie udało się sprawdzić synchronizacji. Spróbuj ponownie później."; }
+  finally { button.disabled = false; }
+});
+document.getElementById('lastFmSyncDismiss').addEventListener('click', () => {
+  const notice = syncMonitorRead(LASTFM_SYNC_NOTICE_KEY);
+  if (notice) safeSetSmallStorageItem(LASTFM_SYNC_NOTICE_KEY, JSON.stringify({...notice, dismissed:true}), "zamknięcia ostrzeżenia");
+  renderLastFmSync();
+});
+renderLastFmSync();
 renderRmfDiagnostics();
 updateRmfStatus();
 restoreMostRecentPlaylist();

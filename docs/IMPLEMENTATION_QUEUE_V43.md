@@ -59,3 +59,9 @@ U2 wdrożono jako v43.26.U2 (#24). L1, v43.27.L1: trwała kopia sprzed importu, 
 L1 wdrożono jako v43.27.L1 (#25). L2, v43.28.L2: synchronizacja widoków kart i merge niezależnych ocen z jawnym konfliktem; [opis i rollback](LOCAL_STATE_L2.md). Kolejny niezależny zakres: U3 — artyści wzorcowi i blokowani w ankiecie, bez zmiany preferencji, kluczy i selekcji. Dalej LF1 → LF2 → LOG1/LOG2 → wspólny monitor i jego osobni konsumenci → okładki.
 
 L2 wdrożono jako v43.28.L2 (#26). L2.1, v43.29.L2.1, koryguje wyścig kończenia testu importu oraz adnotacje CI, bez zmiany aplikacji. Kolejny zakres pozostaje U3.
+
+## LF1 / LF3 — jedna para kont (2026-10-09)
+
+LF1 (#28, v43.30.LF1) rozdziela próby/sukcesy Last.fm oraz częściowe wyniki i backoff. Kolejny osobny LF3 (v43.31.LF3) monitoruje parę zalogowane Spotify → skonfigurowane Last.fm, bez przypisania do obecności profili i bez migracji D1. Dokument: LASTFM_SYNC_MONITORING_LF3.md. Nazwa P5 pozostaje zarezerwowana dla optymalizacji cache.
+
+Po LF3: U3 (artyści w ankiecie) → LF2 (kompaktowa baza Last.fm w chmurze) → LOG1 → LOG2 → M → V / S1 / S2 → COVER1 → COVER2. Zakresy algorytmiczne pozostają osobnymi, późniejszymi decyzjami.
