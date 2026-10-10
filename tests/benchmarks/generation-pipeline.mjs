@@ -149,6 +149,10 @@ try {
               }
               return Response.json({ tracks: { items: tracks.filter(track => queryMatchesTrack(query, track)).slice(offset, offset + 10) } });
             }
+            if (url.pathname === '/api/lastfm') {
+              if (method === 'PUT') return Response.json({ ok: true, saved: 1 });
+              return Response.json({ ok: true, cache: null, base: null });
+            }
             if (url.pathname === '/api/state') {
               if (method === 'PUT') { remoteState = JSON.parse(options.body).state; return Response.json({ ok: true, saved: Object.keys(remoteState).length }); }
               return Response.json({ ok: true, state: remoteState });
