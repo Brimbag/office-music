@@ -71,3 +71,9 @@ Po LF3: U3 (artyści w ankiecie) → LF2 (kompaktowa baza Last.fm w chmurze) →
 v43.32.U3 przenosi edycję wzorców i blokowanych wykonawców do ankiety, zachowując klucze, domyślne/puste wartości, konflikty i synchronizację L2. Dodatkowe gatunki pozostają dotychczasowe. Dokument: ARTISTS_SURVEY_U3.md.
 
 Następny zakres: LF2, kompaktowa baza Last.fm w chmurze. Najpierw ustalić kontrakt, limit rozmiaru, TTL, merge i zgodność starszych klientów, z wykorzystaniem rozdzielenia prób/sukcesów LF1 i obserwacji kont LF3. Raw cache i historia odsłuchów pozostają lokalne. Dalsza kolejność: LOG1 → LOG2 → M → V / S1 / S2 → COVER1 → COVER2; strojenie selekcji i T1 osobno.
+
+## LF2 — v43.33.LF2
+
+Kompaktowy katalog kandydatów Last.fm do 128 KiB przez osobne `/api/lastfm`, w istniejącej tabeli i z atomowym CAS. TTL oryginalnych danych, oznaczenie konta Last.fm, zgodność starszych klientów; raw cache, historia i świeże obserwacje pozostają lokalne. Brak migracji SQL, zmiany limitów i strojenia selekcji. Szczegóły: LASTFM_CLOUD_LF2.md.
+
+Następny niezależny zakres: **LOG1 — backend dziennika generowań**. Najpierw kontrakt bez danych uwierzytelniających i surowej historii, izolacja przez account_id, retencja do 100 wpisów/konto, obsługa błędów bez przerywania playlisty, testy i rollback. Jeśli wymaga nowej tabeli, przygotowanie SQL i kodu jest oddzielne od zatwierdzanego wykonania migracji produkcyjnej. Potem LOG2 → M → V / S1 / S2 → COVER1 → COVER2. Zmiany algorytmu i T1 nadal osobno.

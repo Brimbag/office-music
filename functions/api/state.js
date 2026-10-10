@@ -26,7 +26,7 @@ function validAccountId(value) {
     !/[\s\p{Control}]/u.test(value);
 }
 
-async function getSpotifyAccountId(request) {
+export async function getSpotifyAccountId(request) {
   const match = (request.headers.get("Authorization") || "").match(/^Bearer\s+(\S+)$/i);
   if (!match) return { ok: false, status: 401, error: "Missing Spotify access token" };
 
