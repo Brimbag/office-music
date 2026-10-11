@@ -19,3 +19,8 @@ test('LOG1 reports actual Last.fm write/read/skip/error separately from preferen
  const lf=log.cloudResult({catalog:{artists:1,tracks:2,bytes:100,written:true}}).lastfm;assert.equal(lf.written,true);assert.equal(lf.status,'success');
  assert.equal(log.cloudResult({catalog:{skipped:true,artists:1,tracks:2,bytes:100,written:false}}).lastfm.status,'skipped');
 });
+
+test('LOG1 release candidate version preserves legacy cloud log compatibility',()=>{
+ for(const version of ['v43.41.S2','v43.25.U1','v1.0.0-rc.1']){const e=entry();e.version=version;assert.equal(log.valid(e),true);}
+ for(const version of ['v1.0.0-rc.1 token','v1.0.0-rc.','v1.0.0-rc.1234','secret']){const e=entry();e.version=version;assert.equal(log.valid(e),false);}
+});

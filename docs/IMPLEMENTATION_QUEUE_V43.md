@@ -32,8 +32,7 @@ Kandydat `v43.25.U1`: kafelki obecności z klawiaturą, zwijane preferencje ręc
 | 10 | **V — głośność RMF** | Po M. Off default, względne +10% (0–20%), cap podbicia 70%, baseline, ręczna zmiana, restore tylko na właściwym urządzeniu i supports_volume. Przy poziomie >70% nie obniżać głośności jako „podbicie”. Ograniczenia po zamknięciu karty wymagają akceptacji; browser nie gwarantuje restore. |
 | 11 | **S1 — dziennik prawdopodobnych pominięć** | Po M, niezależnie od V. Track ID, deduplikacja zdarzeń, ownership, bez zmiany punktacji. Nie wyciągać kary z niejednoznacznego przejścia/gap/device change ani podcastów i odtwarzania poza OMM. |
 | 12 | **S2 — automatyczna kara za pominięcie** | Po S1 i osobnej zgodzie na zmianę rekomendacji. Propozycja <20% −100, 20–70% −50, >=70% bez kary, kumulacja do −250. Granica dokładnie 70%, wygasanie i reset wymagają decyzji. Ręczne oceny mają pierwszeństwo, 👍 resetuje auto, bez twardych kar wykonawcy. Testy synchronizacji i restartu. |
-| 13 | **COVER1 — metadane i render okładki (17)** | Niska pilność. Zachować obrazy albumów, CORS, kolaż bez powtórzeń, limit JPEG, Warszawa. Lokalny render przed uploadem. |
-| 14 | **COVER2 — scope i upload (18)** | Po COVER1, aktualny kontrakt Spotify i reautoryzacja. Błąd okładki nie przerywa utworzonej playlisty; bez powtórnego tworzenia playlisty. |
+| 13 | **COVER — automatyczna okładka (17–18), v1.0.0-rc.1** | Zastępuje COVER1/COVER2 jednym prostym PR: 2 × 2, końcowe dopasowanie, inicjały i OMM w osobnej stopce, automatyczny upload best effort. Bez dodatkowego UI. |
 
 ## Odłożone zmiany mechanizmu i audyty warunkowe
 
@@ -117,3 +116,8 @@ Pozytywny smoke V2 potwierdzony przez użytkownika: przywrócony poziom i zatrzy
 ## S2 — v43.41.S2, 2026-10-11
 
 Użytkownik potwierdził produkcyjny smoke S1: 4 wpisy (3 early, 1 middle), bez ocen; zatwierdził S2 i warunkowe scalenie/wdrożenie. Dawne/testowe wpisy nie są backfillowane. Nowy opt-in, osobny dokładny Track ID feedback z decay 30/90 dni i cap −250, trwały reset 👍, per-account atomowy local edit i osobny CAS endpoint w istniejącym app_state. Bez migracji D1/LOG, RMF lub zmian progów/discovery. Szczegóły, testy, wpływ i rollback: [AUTO_TRACK_FEEDBACK_S2.md](AUTO_TRACK_FEEDBACK_S2.md). Następny krok po smoke: COVER1 → COVER2, bez automatycznego rozpoczęcia tych prac.
+
+
+### COVER — uproszczony zakres zatwierdzony 2026-10-11
+
+Użytkownik zastąpił wcześniejsze COVER1/COVER2 jednym automatycznym mechanizmem i zatwierdził stopkę pod grafikami (bez nakładania tekstu/logo na albumy), nazwę v1.0.0-rc.1 oraz scalenie/wdrożenie po pełnych testach i CI. Historyczne wpisy COVER1/COVER2 powyżej są zastąpione tą decyzją. Dokument: [AUTOMATIC_PLAYLIST_COVER.md](AUTOMATIC_PLAYLIST_COVER.md). Bez zmian rekomendacji, ustawień użytkownika i migracji D1.

@@ -155,7 +155,8 @@ test('pełna ścieżka generowania: źródła, selekcja, kolejność, zapis i di
     addLastFmTracks(['A', 'B', 'C'].flatMap(artist => [0, 1].map(n => ({ name: `Song ${n}`, artist: { name: artist } }))), { tags: ['rock'] });
     saveCandidatePool([0, 1].map(n => ({ track: make('A', n), queries: ['genre:"rock"'], savedAt: Date.now() })));
     const originals = [getValidAccessToken, cleanupOldOfficePlaylists, selectedProfiles, refreshLastFmBeforeGeneration, syncSpotifyRecentHistory, searchTracks, createPlaylist, addItemsToPlaylist, uploadCloudStateIfChanged];
-    let written = [];
+    let written = [], covers = []; const originalCover = OfficePlaylistCover.apply;
+    OfficePlaylistCover.apply = args => { covers.push({ ids: args.tracks.map(t => t.id), scores: args.tracks.map(t => args.details.get(t.id)?.final) }); return new Promise(() => {}); };
     getValidAccessToken = async () => 'test'; cleanupOldOfficePlaylists = async () => ({ found: 0, removed: 0, remaining: 0 });
     selectedProfiles = () => selected; refreshLastFmBeforeGeneration = async () => {}; syncSpotifyRecentHistory = async () => {};
     searchTracks = async (_token, query) => {
@@ -170,11 +171,14 @@ test('pełna ścieżka generowania: źródła, selekcja, kolejność, zapis i di
     uploadCloudStateIfChanged = async () => ({ saved: 0 });
     try {
       await generateOfficePlaylist();
-      return { written, snapshot: loadRecentPlaylists()[0]?.tracks.map(t => t.id), text: playlistResult.textContent, disabled: generateButton.disabled };
-    } finally { [getValidAccessToken, cleanupOldOfficePlaylists, selectedProfiles, refreshLastFmBeforeGeneration, syncSpotifyRecentHistory, searchTracks, createPlaylist, addItemsToPlaylist, uploadCloudStateIfChanged] = originals; }
+      const generatedText = playlistResult.textContent;
+      restoreMostRecentPlaylist();
+      return { covers, written, snapshot: loadRecentPlaylists()[0]?.tracks.map(t => t.id), text: generatedText, disabled: generateButton.disabled };
+    } finally { OfficePlaylistCover.apply = originalCover; [getValidAccessToken, cleanupOldOfficePlaylists, selectedProfiles, refreshLastFmBeforeGeneration, syncSpotifyRecentHistory, searchTracks, createPlaylist, addItemsToPlaylist, uploadCloudStateIfChanged] = originals; }
   }, { ids });
+  assert.equal(result.covers.length, 1); assert.deepEqual(result.covers[0].ids, result.snapshot); assert.ok(result.covers[0].scores.every(Number.isFinite));
   assert.equal(result.written.length, 4); assert.ok(result.written.every(uri => !uri.includes(':B')));
-  assert.equal(result.snapshot.length, 4); assert.match(result.text, /Pozyskiwanie: kwalifikowalni wykonawcy/); assert.match(result.text, /v43.41.S2/); assert.equal(result.disabled, false);
+  assert.equal(result.snapshot.length, 4); assert.match(result.text, /Pozyskiwanie: kwalifikowalni wykonawcy/); assert.match(result.text, /v1.0.0-rc.1/); assert.equal(result.disabled, false);
 });
 
 test('istniejące blokady historii, duplikaty i wersje nie są liczone jako kwalifikowalna różnorodność', async () => {
