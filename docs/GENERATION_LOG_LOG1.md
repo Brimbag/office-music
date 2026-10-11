@@ -32,7 +32,13 @@ POST ma timeout 5 s na żądanie. Jednoznaczny 401 (przed SQL) dopuszcza istniej
 
 Status zapisu pojawia się osobno poniżej raportu; czas POST jest dostępny w `lastGenerationReport.journal.ms`, poza zakończonym bilansem generowania. Kontrolki odblokowujemy po tej opcjonalnej próbie. Sukces dziennika oznacza potwierdzone przyjęcie wpisu, nie potwierdzenie pełnej synchronizacji LF2. Błąd dziennika nie zmienia playlisty w błąd.
 
-## Aktywacja produkcji — osobna zgoda
+## Produkcyjny smoke test — pozytywny, 2026-10-11
+
+Użytkownik potwierdził wykonanie migracji w `office-music-db`: w `generation_logs` istnieje 1 wpis. W zalogowanym OMM odświeżenie historii zwróciło „Historia chmurowa: 1 ostatnich wpisów tego konta (maks. 100)”. Potwierdza to produkcyjny zapis i odczyt LOG1/LOG2 na tym koncie. To wynik przekazany przez użytkownika, nie test wykonany przez agenta. Wcześniejszy komunikat „Połącz Spotify” przed odświeżeniem nie stanowi dowodu błędu sesji.
+
+Migracja jest zakończona — **nie wykonywać jej ponownie**. Odnotowanie wyniku nie wymaga zmian kodu LOG1/LOG2, danych D1 ani konfiguracji produkcyjnej. Nie wnioskujemy z jednego wpisu o produkcyjnym teście izolacji kont lub pełnej synchronizacji LF2.
+
+## Aktywacja produkcji — historyczny plan wymagający osobnej zgody
 
 Przygotowany i przetestowany plik: `migrations/0001_generation_logs.sql`. Dwa polecenia CREATE IF NOT EXISTS dodają nową tabelę i jej indeks; nie zmieniają `app_state`, preferencji, katalogów ani konfiguracji bindingu DB.
 

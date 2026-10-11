@@ -18,18 +18,13 @@ Backend nadal rozstrzyga właściciela przez Spotify `account_id`; klient nie pr
 
 Cała odpowiedź jest walidowana przed zastąpieniem danych. Render używa textContent i stałych etykiet; brak HTML z payloadu, tokenów, komunikatów wyjątków i surowej historii. 401 pozwala na jedno odświeżenie istniejącym PKCE i ponowienie samego GET; następny 401 kończy odczyt. 429/503 z Retry-After blokuje kolejne odczyty w danej karcie do końca przerwy, bez timera. Timeout 5 sekund na żądanie; równoległe kliknięcia nie tworzą dodatkowych zapytań. Błędy nie usuwają pobranych danych ani kopii lokalnej. LOG2 nie zapisuje localStorage, D1, preferencji ani playlist Spotify.
 
-## D1 — zatwierdzona migracja, brak dostępu wykonawczego
+## Produkcyjny smoke test — pozytywny, 2026-10-11
 
-Użytkownik zatwierdził aktywację migracji LOG1 w tej sesji. Dostępne środowisko nie ma zmiennych/konfiguracji uwierzytelniających Cloudflare ani narzędzia administracyjnego D1. GitHub proxy pozwala scalać/wdrażać kod, ale nie daje administracyjnego dostępu do bazy; odczyt konfiguracji Actions jest również niedostępny. **Nie wykonano produkcyjnego SQL ani uwierzytelnionego smoke testu dziennika.** Nie jest potrzebna kolejna zgoda na ten sam plik, tylko dostęp wykonawczy.
+Potwierdzenie użytkownika dla LOG1/LOG2: migracja została wykonana w produkcyjnej bazie `office-music-db`. Tabela `generation_logs` zawierała 1 wpis. Po kliknięciu **Odśwież historię** w zalogowanym OMM widok wyświetlił: „Historia chmurowa: 1 ostatnich wpisów tego konta (maks. 100)”. Zapis wpisu i odczyt chmurowy są potwierdzone przez użytkownika; agent nie wykonywał migracji ani bezpośredniego testu na jego sesji.
 
-Administrator może wykonać aktywację w Cloudflare D1 Console:
+Wcześniejszy komunikat „Połącz Spotify” był widoczny przed odświeżeniem. Na podstawie tego testu nie ma podstaw do zgłaszania błędu sesji ani zmiany LOG1/LOG2.
 
-1. Sprawdzić bazę wskazywaną przez binding `DB` produkcyjnego projektu Pages `office-music`. Nie wybierać bazy tylko po podobnej nazwie.
-2. Odczytać `SELECT name FROM sqlite_master WHERE type='table' AND name='generation_logs';`. Jeśli już istnieje, porównać `PRAGMA table_info(generation_logs);` oraz indeksy z przygotowanym schematem; przy rozbieżności zatrzymać się zamiast zmieniać istniejące dane.
-3. Wykonać dokładnie `migrations/0001_generation_logs.sql` (CREATE tabeli i indeksu IF NOT EXISTS). Nie zmieniać app_state i nie usuwać danych.
-4. Na zalogowanym koncie wygenerować playlistę, sprawdzić potwierdzenie zapisu i **Odśwież historię**. Sprawdzić zgodność wersji, długości, profili oraz LF2. Na innym uprawnionym koncie historia pierwszego konta musi być niedostępna.
-
-Alternatywnie udostępnić uprawnienie D1 do właściwej bazy przez bezpieczne ustawienia środowiska, bez wklejania tokenów w czat. Do czasu aktywacji widok toleruje 503 i pokazuje dostępną kopię lokalną, lecz pełna historia chmurowa nie jest potwierdzona.
+Aktywacja D1 jest zakończona; wcześniejszy brak dostępu administracyjnego środowiska nie jest już blokadą tej aktywacji. **Nie wykonywać ponownie migracji** `migrations/0001_generation_logs.sql`. Bez zmian kodu, danych D1 i konfiguracji produkcyjnej w ramach odnotowania wyniku. Potwierdzenie obejmuje zapis/odczyt na zalogowanym koncie; nie rozszerzamy go na produkcyjny test izolacji dwóch kont ani pełnej synchronizacji LF2.
 
 ## Testy i wycofanie
 
@@ -39,4 +34,4 @@ Walidacja lokalna: **507/507 testów** (22 nowe). Porównanie z main c2aabf2 na 
 
 Wpływ na długość/jakość playlist: brak, kod selekcji i pozyskiwania pozostaje bez zmian. Dodatkowy GET występuje tylko na życzenie; backend uwierzytelnia go dotychczasowym odczytem Spotify /me, bez nowych Search/Last.fm. Rollback: revert LOG2, bez DROP i kasowania lokalnych/chmurowych wpisów. Warunki wycofania: ujawnienie historii innego konta, utrata danych, dodatkowe odpytywanie w tle albo wpływ widoku na generator.
 
-Po aktywacji/smoke dziennika kolejny niezależny zakres: **M — wspólny monitor stanu odtwarzania Spotify**, a dopiero po nim osobni konsumenci V (głośność RMF) i S1/S2 (automatyczne pominięcia). Bez automatycznych ocen i regulacji głośności w PR M.
+Po pozytywnym produkcyjnym smoke teście dziennika kolejny niezależny zakres: **M — wspólny monitor stanu odtwarzania Spotify**, a dopiero po nim osobni konsumenci V (głośność RMF) i S1/S2 (automatyczne pominięcia). Bez automatycznych ocen i regulacji głośności w PR M.
