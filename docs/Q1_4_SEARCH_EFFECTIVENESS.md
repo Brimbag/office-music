@@ -20,7 +20,7 @@ Zbiorcze czytanie wszystkich stron cache w `primeDiverseQueries` pozostaje w ist
 
 ## Zgodność, prywatność i koszt
 
-Nowy cache dopisuje tylko małe metadane liczbowe `{raw,total}` obok istniejących `savedAt/items`. Stare klienty ignorują to pole. Stary cache pozostaje ważny, a nieznane surowe liczby/total mają `?`, zamiast fałszywego zera. Brak migracji cache lub D1, wzrostu limitów puli, nowych zapytań albo dodatkowej kwalifikacji. Liczniki nowych rekordów wykorzystują mapę już używaną przy zapisie puli, a powody odrzuceń zbierane są w istniejącym końcowym przebiegu.
+Nowy cache dopisuje tylko małe metadane liczbowe `{raw,total}` obok istniejących `savedAt/items`. Stare klienty ignorują to pole. Stary cache pozostaje ważny, a nieznane surowe liczby/total mają `?`, zamiast fałszywego zera. Brak pola items/total w odpowiedzi Spotify również oznacza wartość nieznaną; nie zmieniamy istniejącej obsługi takiej odpowiedzi przez generator. Brak migracji cache lub D1, wzrostu limitów puli, nowych zapytań albo dodatkowej kwalifikacji. Liczniki nowych rekordów wykorzystują mapę już używaną przy zapisie puli, a powody odrzuceń zbierane są w istniejącym końcowym przebiegu.
 
 Szczegóły są efemeryczne: widoczne w tej karcie i `lastGenerationReport.searchEffectiveness`, resetowane na nową próbę, znikają po zamknięciu strony. Nie zapisujemy ich do localStorage, D1, LOG1/LOG2, eksportu preferencji ani konsoli. LOG1 nadal stosuje jawną listę pól zbiorczych i dotychczasowy schemat. Nie przechowujemy tokenów, nagłówków, treści błędów API ani pełnych surowych odpowiedzi. Eksport istniejącego cache zawiera wyłącznie nowe metadane liczbowe obok wcześniej przechowywanych wyników.
 
@@ -32,6 +32,7 @@ Szczegóły są efemeryczne: widoczne w tej karcie i `lastGenerationReport.searc
 - Ograniczenie pamięci, reset między próbami, brak szczegółów/sekretów w chmurowym LOG i eksporcie preferencji.
 - Porównanie Q1.3/Q1.4 dla 2/4 osób: identyczne ID, punktacja, kolejność, pule, statystyki selekcji i transport. Fixture zawiera wyłącznie kod poprzedniej wersji, bez danych użytkownika.
 - Pełne `npm test`, standardowy benchmark generowania oraz Q1 audit smoke CI.
+- Pełne odtworzenie prywatnego eksportu z ustalonym zegarem i atrapami API: Q1.3/Q1.4 dają po 43 utwory i 12 Search; identyczne ID, kolejność, punktacja, statystyki, trzy kompletne pule oraz transport (zapytania/offsety). Q1.4 zapisuje 12 wierszy diagnostyki. To test zgodności, nie wynik produkcyjny ani pomiar wydajności. Dane eksportu pozostają poza repozytorium.
 
 Smoke użytkownika: sprawdzić nagłówek `1.0.4-rc`, wygenerować playlistę i skopiować sekcję „Skuteczność Search” ze szczegółów technicznych. Nie usuwać starego cache dla testu; `?` jest poprawne. Przy samych trafieniach zbiorczego cache możliwy jest brak nowych wierszy Search.
 

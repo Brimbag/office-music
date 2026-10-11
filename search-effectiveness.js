@@ -46,7 +46,7 @@
         return '\n\nSkuteczność Search — szczegóły lokalne tej próby (bez zapisu w chmurze).\nSurowe → po nazwach; nowe/aktualizowane: przed retencją. Bezpieczne i wybrane: końcowy stan; wkład zapytań może się nakładać.\n' + pages.map(p =>
           `${p.stage} · ${p.source} · ${p.query} · offset ${p.offset} · ${p.status}: ${unknown(p.raw)} → ${unknown(p.filtered)}, total ${unknown(p.total)}, odrzucone nazwy ${unknown(p.nameRejected)}; nowe ${p.added}, aktualizowane ${p.updated}` +
           (final ? `; w puli ${p.retained}, bezpieczne ${p.safe} (nowe rekordy ${p.newSafe}), wykonawcy ${p.artists} (nowi względem początku ${p.newArtists}), wybrane ${p.selected}; odrzucenia: ${Object.entries(p.rejected).map(([k,v]) => `${reasons[k] || k} ${v}`).join(', ') || 'brak'}` : '; końcowa kwalifikacja nieukończona')
-        ).join('\n') + (omitted ? `\nPominięte strony diagnostyki: ${omitted}.` : '') + '\n? = brak metadanych w starszym cache. Zbiorcze odczyty cache przed wyszukiwaniem pozostają w liczniku stron cache.';
+        ).join('\n') + (omitted ? `\nPominięte strony diagnostyki: ${omitted}.` : '') + '\n? = brak danych w odpowiedzi Spotify lub metadanych w starszym cache. Zbiorcze odczyty cache przed wyszukiwaniem pozostają w liczniku stron cache.';
       }
     };
   } };

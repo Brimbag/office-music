@@ -4307,7 +4307,7 @@ async function searchTracks(token, query, offset = 0) {
       if (response.ok) {
         const rawItems = data?.tracks?.items || [];
         const items = rawItems.filter(track => queryMatchesTrack(query, track));
-        const metadata = { raw: rawItems.length, total: Number.isInteger(data?.tracks?.total) && data.tracks.total >= 0 ? data.tracks.total : null };
+        const metadata = { raw: Array.isArray(data?.tracks?.items) ? rawItems.length : null, total: Number.isInteger(data?.tracks?.total) && data.tracks.total >= 0 ? data.tracks.total : null };
         audit?.response(auditPage, metadata.raw, items, metadata.total);
         writeSearchCache(query, offset, items, metadata);
         addToCandidatePool(query, items, { auditPage });

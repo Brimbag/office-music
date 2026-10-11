@@ -35,7 +35,7 @@ test('niedostateczny wynik bezpiecznej selekcji nie jest fałszywą kwalifikacj�
 test('stary cache nie udaje surowego wyniku; raport jest odseparowaną kopią', () => {
   const a = tracker(), p = a.begin('x', 0, 'Gatunki', 'cache'); a.response(p, null, [], null);
   const first = a.report(); first.pages[0].query = 'modified';
-  assert.equal(a.report().pages[0].query, 'x'); assert.equal(a.report().pages[0].raw, null); assert.match(a.text(), /brak metadanych/);
+  assert.equal(a.report().pages[0].query, 'x'); assert.equal(a.report().pages[0].raw, null); assert.match(a.text(), /metadanych w starszym cache/);
 });
 test('diagnoza jest ograniczona i resetowana między generowaniami', () => {
   const a = tracker(); for (let i=0; i<130; i++) a.begin('a'.repeat(500), i, 'Gatunki', 'cache');
@@ -93,6 +93,14 @@ test('błąd sieci nie zapisuje cache ani nie udaje pustego sukcesu', async () =
     try{await searchTracks('token','genre:"rock"');}catch(err){p.finish(err);}activeGenerationProgress=null;
     return {page:p.report().searchEffectiveness.pages[0],cache:readSearchCache('genre:"rock"',0)};
   });assert.equal(r.page.status,'network-error');assert.equal(r.page.raw,null);assert.equal(r.cache,null);
+});
+test('brak pola items w odpowiedzi nie udaje potwierdzonej pustej strony', async () => {
+  const r=await evaluate(async()=>{
+    waitForSearchSlot=async()=>{};fetch=async()=>Response.json({});
+    const p=OmmGenerationProgress.create(progressBox,60);activeGenerationProgress=p;p.stage(5);
+    const items=await searchTracks('token','genre:"rock"');p.finish(null,0);activeGenerationProgress=null;
+    return {length:items.length,page:p.report().searchEffectiveness.pages[0]};
+  });assert.equal(r.length,0);assert.equal(r.page.raw,null);assert.equal(r.page.nameRejected,null);assert.equal(r.page.total,null);
 });
 for (const people of [2,4]) test(`${people} osoby: diagnostyka zachowuje ID, wyniki, kolejność, pule i transport względem Q1.3`, async () => {
   const r = await evaluate(async ({baseline,people}) => {
