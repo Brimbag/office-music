@@ -70,7 +70,7 @@
     async function save(phase){const next={...cycle,phase,at:wall(),revision:uuid(),expected:cycle.revision};
       if(!await store('save',next))throw failed('ownership_lost');delete next.expected;cycle=next;return next;
     }
-    async function release(){if(cycle && !await store('remove',{account:cycle.account,owner,expected:cycle.revision}))throw failed('ownership_lost');cycle=null;recoverable=null;}
+    async function release(){if(cycle && !await store('remove',{account:cycle.account,owner,expected:cycle.revision}))throw failed('ownership_lost');cycle=null;recoverable=null;failureReason='';if(errorCode!==429 || wall()>=retryAt)errorCode=0;}
     async function recovery(){if(cycle){try{await save('recovery');}catch{}recoverable=cycle;}report('recovery');}
     async function checkOwnership(){const row=await store('get',{account:cycle.account});if(!validIntent(row)||row.owner!==owner||row.revision!==cycle.revision)throw failed('ownership_lost');}
     function failed(reason,code){const error=new Error(reason);error.reason=reason;error.code=code;return error;}
@@ -187,6 +187,7 @@
       // erase or take its intent merely because the device still shows baseline.
       if(['applying','restoring'].includes(row.phase) && wall()-row.at<30000){inspection='in_flight';report('recovery');return null;}
       const s=await monitor.read({fresh:true});
+      observedVolume=volume(s?.device?.volumePercent)?s.device.volumePercent:null;
       if(!fresh(s)){inspection='playback_unavailable';report('recovery');return null;}
       if(!capable(s)){inspection='unsupported_device';report('recovery');return null;}
       if(s.device.id!==row.device){inspection='different_device';report('recovery');return null;}
