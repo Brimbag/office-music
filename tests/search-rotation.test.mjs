@@ -132,3 +132,29 @@ test('priorytetowe próby są ograniczone do jednej; zdegradowane zapytania pozo
   await primeDiverseQueries('token',queries.map(query=>({query})),3,a);return {calls,probed:a.rotation.probed};
  });assert.deepEqual(r.calls,['artist:"A"','artist:"C"','artist:"B"']);assert.equal(r.probed,true);
 });
+test('trzy pełne generowania rzeczywiście zapisują uczenie i przekierowują trzecie żądanie',async()=>{
+ const r=await evaluate(async()=>{
+  const selected=['bartek','asia'].map(id=>({id,name:profiles[id].name,artists:[],genres:['rock'],categories:[],blockedArtists:[],taste:{hasSurvey:true,likedGenres:['Rock']}}));
+  const make=(id,artist)=>({id,uri:`spotify:track:${id}`,name:`Song ${id}`,artists:[{id:artist,name:artist}]});
+  const existing=Array.from({length:6},(_,i)=>make(`old${i}`,`Artist${i}`)),newTracks=[make('new0','NewA'),make('new1','NewB')];
+  let now=Date.now();Date.now=()=>now;localStorage.setItem(CANDIDATE_POOL_KEY,JSON.stringify(existing.map(track=>({track,queries:[`artist:"${track.artists[0].name}"`],savedAt:now}))));
+  addLastFmTracks([...existing,...newTracks].map(t=>({name:t.name,artist:{name:t.artists[0].name}})),{tags:['rock']});
+  localStorage.setItem('spotify_access_token','mock-token');localStorage.setItem('spotify_token_expires',String(now+3600000));
+  selectedProfiles=()=>selected;getAutoFeedbackAccount=()=> 'mock-account';playlistLength.value='30';
+  cleanupOldOfficePlaylists=async()=>({});refreshLastFmBeforeGeneration=async()=>{};syncSpotifyRecentHistory=async()=>{};uploadCloudStateIfChanged=async()=>({});OfficePlaylistCover.apply=async()=>false;waitForSearchSlot=async()=>{};
+  primeManualSeedArtists=async(token,_selected,_budget,acquisition)=>primeDiverseQueries(token,[{query:'genre:"rock"'},{query:'genre:"pop"'}],1,acquisition);
+  primeProfileGenres=async()=>{};primeCommonGroupQueries=async()=>{};
+  const searches=[];fetch=async input=>{
+   const u=new URL(input,location.href);if(u.pathname==='/v1/search'){
+    const query=u.searchParams.get('q');searches.push(query);
+    const tracks=query==='genre:"rock"'?Array.from({length:10},(_,i)=>({...make(`bad${i}`,'Bad'),name:`Bad ${i} - Live`})):newTracks;
+    return Response.json({tracks:{items:tracks,total:100}});
+   }
+   if(u.pathname==='/api/generations')return Response.json({ok:true,saved:true});
+   if(u.pathname.endsWith('/items'))return Response.json({snapshot_id:'done'});
+   return Response.json({id:'made',name:'Made',uri:'spotify:playlist:made'});
+  };
+  const results=[];for(let i=0;i<3;i++){await generateOfficePlaylist();results.push({outcome:lastGenerationReport.outcome,length:lastGenerationReport.length,rotation:lastGenerationReport.searchRotation,message:progressBox.querySelectorAll('p')[1]?.textContent,raw:localStorage.getItem(OmmSearchRotation.KEY)});now+=1000;}
+  return {searches,results,text:progressBox.textContent};
+ });assert.deepEqual(r.searches,['genre:"rock"','genre:"rock"','genre:"pop"'],JSON.stringify(r.results));assert.ok(r.results.every(x=>x.outcome==='success'&&x.rotation.learning==='saved'));assert.deepEqual(r.results.map(x=>x.length),[6,6,8]);assert.equal(JSON.parse(r.results[1].raw).entries[0].misses,2);assert.equal(r.results[2].rotation.deferred,1);assert.match(r.text,/uczenie: zapisano lokalnie/);
+});

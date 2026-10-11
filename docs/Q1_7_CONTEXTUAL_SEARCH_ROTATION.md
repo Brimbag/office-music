@@ -32,6 +32,8 @@ Panel techniczny pokazuje liczbę rozważanych zapytań z niższym priorytetem, 
 
 Testy pokrywają: próg dwóch obserwacji, cooldown/TTL/clock rollback, reset przy kontekście/kontach/profilach/feedbacku/historii/ustawieniach/dowodach/wygaśnięciu blokad, Lifer (safe > 0, selected = 0), retencję i niepełne wyniki, cache/błędy, deduplikację stron, jeden probe, fallback i twarde blokady, limity pamięci, future schema, brak zapisów preferencji/eksportu/D1, readonly fingerprint, zmianę danych w toku i quota.
 
+Integracyjny test trzech pełnych generowań z atrapami API potwierdza zapis obserwacji, dwukrotny streak i wybór innego źródła w trzeciej próbie (6/30 → 6/30 → 8/30 przy jednym Search na próbę). Bez wyuczonego stanu kontrolowany standardowy benchmark Q1.5/Q1.7 (2/4 cold/warm, stały zegar/losowanie) daje identyczne ID, selekcję/diagnostykę, liczbę i typy żądań, Search, liczności pul oraz rozmiar stanu D1; 60/60 w każdym przypadku.
+
 Kontrolowane porównanie dla 2/4 osób: po dwóch potwierdzonych niepowodzeniach dotychczasowe źródło nie wydłużało puli, a alternatywny wykonawca daje 2 → 4 utwory przy tym samym jednym Search, z minimum 35 dla każdej osoby i poprawną quota. Nie jest to obietnica wzrostu każdej playlisty; aktualne produkcyjne 60/60 nie może rosnąć powyżej zamówionego limitu. Oczekiwany zysk to mniej powtarzanych zer i większa różnorodność kwalifikowalnej puli. Średnie, ID i kolejność mogą się zmienić wraz z nowo pozyskanymi kandydatami; progów nie obniżamy.
 
 Przed scaleniem: pełne npm test i CI, standardowy benchmark 2/4 cold/warm, Q1 audit 3 warm oraz neutralne porównanie Q1.5/Q1.7 bez wyuczonego stanu przy ustalonym wejściu i losowaniu. Prywatne eksporty pozostają poza repozytorium.
