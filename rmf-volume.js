@@ -5,15 +5,15 @@
   const text=v=>typeof v==='string' && v.length>0 && v.length<=512;
   const volume=v=>Number.isInteger(v) && v>=0 && v<=100;
   function target(baseline,gain=10){
-    if(!volume(baseline)||!Number.isInteger(gain)||gain<0||gain>20)return null;
-    return baseline>=70?baseline:Math.min(70,Math.round(baseline*(1+gain/100)));
+    if(!volume(baseline)||!Number.isInteger(gain)||gain<0||gain>30)return null;
+    return Math.min(100,baseline+gain);
   }
   function regular(ep,show=ep?.show?.id){
     return show===SHOW && text(ep?.id) && ep.uri===`spotify:episode:${ep.id}` &&
       /^(?:[01]\d|2[0-3]):00 Fakty$/i.test(String(ep.name||'').trim()) && /^\d{4}-\d{2}-\d{2}$/.test(ep.release_date||'');
   }
   function validIntent(r){return r?.version===1 && text(r.account)&&text(r.owner)&&text(r.device)&&text(r.episode)&&text(r.session)&&
-    volume(r.baseline)&&volume(r.target)&&r.target>r.baseline&&r.target<=70&&Number.isFinite(r.at)&&text(r.revision)&&
+    volume(r.baseline)&&volume(r.target)&&r.target>r.baseline&&r.target<=100&&Number.isFinite(r.at)&&text(r.revision)&&
     ['applying','boosted','restoring','recovery','manual'].includes(r.phase);}
   // An intent is also a non-expiring exclusive lease. Expiry must never convert an
   // already boosted volume into the next controller's baseline. Recovery is explicit.
@@ -44,7 +44,7 @@
     };
   }
   function create({monitor,getSession,write,lookup,store=createStore(),onStatus=()=>{},visible=()=>!root.document?.hidden,
-    busy=()=>false,leader=()=>monitor.diagnostics?.().leader ?? true,wall=Date.now,mono=()=>root.performance.now(),uuid=()=>root.crypto.randomUUID(),setTimer=setTimeout,clearTimer=clearTimeout,timeoutMs=5000,confirmationDelays=[600,1200]}){
+    busy=()=>false,allowed=()=>true,background=false,leader=()=>monitor.diagnostics?.().leader ?? true,wall=Date.now,mono=()=>root.performance.now(),uuid=()=>root.crypto.randomUUID(),setTimer=setTimeout,clearTimer=clearTimeout,timeoutMs=5000,confirmationDelays=[600,1200]}){
     const owner=uuid(),known=new Map(),attempted=new Set();let enabled=false,gain=10,cycle=null,unsubscribe=null,job=null,last=null,lastMono=null,epoch=0;
     let suppressed='',recoverable=null,status='off',writes=0,lookups=0,suspending=null,retryAt=0,errorCode=0,inspection='',failureReason='',confirmationReads=0,observedVolume=null;
     const scope=()=>getSession();
@@ -58,7 +58,7 @@
       finally{clearTimer(timer);controller.abort();}
     }
     async function confirmed(s){
-      const item=s?.item;if(item?.type!=='episode'||!text(item.id)||item.uri!==`spotify:episode:${item.id}`||item.showId && item.showId!==SHOW)return false;
+      const item=s?.item;if(!allowed(s))return false;if(item?.type!=='episode'||!text(item.id)||item.uri!==`spotify:episode:${item.id}`||item.showId && item.showId!==SHOW)return false;
       if(known.has(item.id))return known.get(item.id);
       if(attempted.has(item.id))return false;
       attempted.add(item.id);if(attempted.size>100)attempted.delete(attempted.values().next().value);lookups++;
@@ -99,7 +99,7 @@
       await checkOwnership();const atEpoch=epoch;await save(phase);
       // Absolute PUT is not retried after network failure/timeout. The persisted
       // intent survives an ambiguous response; confirmation uses the shared reader.
-      if(!capable(s) || phase==='applying' && (!enabled || !visible() || busy() || !leader())) throw failed('stale_state');
+      if(!capable(s) || phase==='applying' && (!enabled || !visible() || busy() || !leader() || !allowed(s))) throw failed('stale_state');
       writes++;await limited(signal=>write(value,cycle.device,{account:cycle.account,session:cycle.session},signal));
       if(atEpoch!==epoch||!same(cycle,scope()))throw failed('session_changed');
       const after=await limited(signal=>confirmVolume(value,atEpoch,signal),'confirmation_timeout');
@@ -114,7 +114,7 @@
     }
     async function restore(s){
       if(!capable(s)||s.device.id!==cycle.device||!same(cycle,scope())){await recovery();return;}
-      if(s.device.volumePercent!==cycle.target){suppressed=s.item?.id||'';await save('manual');report('manual');return;}
+      if(s.device.volumePercent!==cycle.target){suppressed=s.item?.id||'';if(s.item?.type==='track'){await release();report('ready');return;}await save('manual');report('manual');return;}
       await change(s,cycle.baseline,'restoring');
     }
     async function consume(s,meta={}){
@@ -130,7 +130,7 @@
           if(!await confirmed(s)){report('ready');return;}
           // Metadata lookup can take seconds; never write using a stale observation.
           const before=await monitor.read({fresh:true});
-          if(!enabled||!visible()||busy()||!leader()||!capable(before)||!before.isPlaying||before.device.id!==s.device.id||before.item?.id!==s.item.id)return;
+          if(!enabled||!visible()||busy()||!leader()||!allowed(before)||!capable(before)||!before.isPlaying||before.device.id!==s.device.id||before.item?.id!==s.item.id)return;
           const next=target(before.device.volumePercent,gain);
           if(next<=before.device.volumePercent){suppressed=before.item.id;report('unchanged');return;}
           const record={version:1,account:before.account,session:before.session,owner,device:before.device.id,episode:before.item.id,
@@ -139,13 +139,13 @@
           if(!enabled||!visible()||busy()||!leader()||!same(cycle,scope())){await release();return;}
           await change(before,next,'applying');return;
         }
-        if(!meta.leader||!fresh(s)||previousMono!==null && (mono()-previousMono>10000||mono()<previousMono)||!same(cycle,scope())||s.device?.id!==cycle.device){await recovery();return;}
+        if(!meta.leader||!fresh(s)||previousMono!==null && ((!background && mono()-previousMono>10000)||mono()<previousMono)||!same(cycle,scope())||s.device?.id!==cycle.device){await recovery();return;}
         if(cycle.phase==='recovery'){report('recovery');return;}
         if(cycle.phase==='manual'){
           if(s.item?.id!==suppressed && s.item?.type!=='episode'){await release();suppressed='';report('ready');}else report('manual');return;
         }
         if(!capable(s)){await recovery();return;}
-        if(s.device.volumePercent!==cycle.target){suppressed=s.item?.id||'';await save('manual');report('manual');return;}
+        if(s.device.volumePercent!==cycle.target){suppressed=s.item?.id||'';if(s.item?.type==='track'){await release();report('ready');return;}await save('manual');report('manual');return;}
         if(!s.isPlaying){suppressed=s.item?.id||'';await restore(s);return;}
         if(await confirmed(s)){cycle.episode=s.item.id;await save('boosted');report('boosted');return;}
         await restore(s);
@@ -161,7 +161,7 @@
       if(startEpoch!==epoch || !same(session,scope()) || !visible() || busy()) { report("waiting"); return; }
       if(row){recoverable=validIntent(row)?row:null;report("recovery");return;}
       enabled=true;epoch++;lastMono=null;errorCode=0;failureReason='';inspection='';
-      unsubscribe=monitor.subscribe('rmf-volume',consume,{active:true});report('ready');
+      unsubscribe=monitor.subscribe('rmf-volume',consume,{active:true,background});report('ready');
     }
     async function stop(reason){
       enabled=false;epoch++;unsubscribe?.();unsubscribe=null;
