@@ -121,3 +121,7 @@ Użytkownik potwierdził produkcyjny smoke S1: 4 wpisy (3 early, 1 middle), bez 
 ### COVER — uproszczony zakres zatwierdzony 2026-10-11
 
 Użytkownik zastąpił wcześniejsze COVER1/COVER2 jednym automatycznym mechanizmem i zatwierdził stopkę pod grafikami (bez nakładania tekstu/logo na albumy), nazwę v1.0.0-rc.1 oraz scalenie/wdrożenie po pełnych testach i CI. Historyczne wpisy COVER1/COVER2 powyżej są zastąpione tą decyzją. Dokument: [AUTOMATIC_PLAYLIST_COVER.md](AUTOMATIC_PLAYLIST_COVER.md). Bez zmian rekomendacji, ustawień użytkownika i migracji D1.
+
+### Q1.1 — 1.0.1-rc (2026-10-11)
+
+Użytkownik potwierdził działanie okładek w v1.0.0-rc.1. Zatwierdził audyt Q1.1 bez zmiany selekcji oraz scalenie/wdrożenie po testach. Nowa numeracja: 1.0.1-rc, następnie 1.0.2-rc itd. Raport i narzędzie offline: [Q1_LENGTH_AUDIT.md](Q1_LENGTH_AUDIT.md). Kontrolowana dojrzała baza daje 60/60 dla 2/3/4 profili; nie odtworzono produkcyjnych 35–36/60, bo brak pełnego eksportu. Kolejny etap wymaga odtworzenia realnego przypadku, a następnie wyboru jednej poprawki Q1.2; brak zgody na arbitralne strojenie progów lub pozyskiwania.

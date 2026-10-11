@@ -4,13 +4,20 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { installP4Variant } from '../helpers/p4-variants.mjs';
 import { installP4Fixture } from '../helpers/p4-fixture.mjs';
+import { captureQ1Input, analyzeQ1 } from '../helpers/q1-audit.mjs';
 import { startBrowserHarness } from '../helpers/browser.mjs';
 
+const q1 = process.env.OMM_Q1_AUDIT === '1';
+const q1Empty = process.env.OMM_Q1_EMPTY_POOL === '1';
+if(q1Empty && !q1) throw new Error('Empty pool requires Q1 audit mode');
+const q1Export = process.env.OMM_Q1_EXPORT ? JSON.parse(readFileSync(process.env.OMM_Q1_EXPORT,'utf8')) : null;
+if(q1Export && !q1) throw new Error('Export requires Q1 audit mode');
+const auditSource = q1 ? captureQ1Input.toString() : null;
 const autoSkip = process.env.OMM_BENCH_AUTO_SKIP || '';
 assert.ok(['','early','cap'].includes(autoSkip));
 const freshResults = process.env.OMM_BENCH_FRESH_RESULTS === '1';
 const peopleCases = process.env.OMM_BENCH_PEOPLE ? [Number(process.env.OMM_BENCH_PEOPLE)] : [2,4];
-assert.ok(peopleCases.every(value=>[2,4].includes(value)));
+assert.ok(peopleCases.every(value=>[2,3,4].includes(value)));
 const cacheCases = process.env.OMM_BENCH_CACHE ? [process.env.OMM_BENCH_CACHE] : ['cold','warm'];
 assert.ok(cacheCases.every(value=>['cold','warm'].includes(value)));
 const variants = process.env.OMM_BENCH_VARIANTS === '1';
@@ -33,12 +40,13 @@ try {
     for (let iteration = 0; iteration <= repetitions; iteration++) {
       const session = await harness.page();
       try {
-        const output = await session.page.evaluate(async ({ people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind, fixtureSource, variant, variantSource, variants, freshResults, autoSkip }) => {
+        const output = await session.page.evaluate(async ({ people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind, fixtureSource, variant, variantSource, variants, freshResults, autoSkip, auditSource, q1Export, q1Empty }) => {
           if (baseline?.progressSource) (0,eval)(baseline.progressSource);
           if (baseline) for (const [name, source] of Object.entries(baseline.functions)) window[name] = (0, eval)(`(${source})`);
           if (fixedClock) {
             const wallNow = Date.now;
-            const modelNow = Date.parse('2026-10-09T09:00:00Z');
+            const modelNow = Date.parse(q1Export?.exportedAt || '2026-10-09T09:00:00Z');
+            if(!Number.isFinite(modelNow)) throw new Error('Invalid export clock');
             Date.now = () => modelNow;
             let randomState = 123456789;
             crypto.getRandomValues = array => {
@@ -88,6 +96,21 @@ try {
           }));
           if (people === 4 && target !== 60) { tracks[1].artists = tracks[0].artists; localStorage.setItem(CANDIDATE_POOL_KEY, JSON.stringify(tracks.map(track => ({ track, queries: ['genre:"rock"'], savedAt: now })))); }
           if (fixtureSource) ({ tracks, selected } = (0,eval)(`(${fixtureSource})`)({people,poolSize,variant}));
+          let mockAccount='mock-owner';
+          if(q1Export) {
+            for(const key of Object.keys(localStorage)) if(key.startsWith('office_')) localStorage.removeItem(key);
+            const storage=OmmLocalState.validate(q1Export);
+            for(const [key,value] of Object.entries(storage)) localStorage.setItem(key,value);
+            renderProfiles(); lastFmUserInput.value=localStorage.getItem(LASTFM_USER_KEY)||'';
+            for(const input of document.querySelectorAll('input[data-profile-id]')) input.checked=['bartek','asia','edyta','monika'].slice(0,people).includes(input.dataset.profileId);
+            selected=selectedProfiles(); tracks=loadCandidatePool().map(row=>row.track);
+            const accountKeys=Object.keys(storage).filter(key=>key.startsWith(OfficeAutoTrackFeedback.KEY+':'));
+            if(accountKeys.length>1) throw new Error('Choose a single-account export for Q1');
+            if(accountKeys.length) mockAccount=decodeURIComponent(accountKeys[0].slice(OfficeAutoTrackFeedback.KEY.length+1));
+            localStorage.setItem('spotify_access_token','mock-token');localStorage.setItem('spotify_token_expires',String(now+3600000));
+            lastFmSpotifyAccount=mockAccount;autoFeedbackAccount=mockAccount;playbackSessionTag='q1-offline';playbackSessionVerified=true;playbackVerifiedAccess='mock-token';playbackSessionNeedsCheck=false;
+          }
+          if(q1Empty) for(const key of [CANDIDATE_POOL_KEY,LASTFM_ARTIST_POOL_KEY,LASTFM_TRACK_POOL_KEY,HISTORY_KEY]) localStorage.setItem(key,'[]');
           const referenceSelected = selected.map((p,index)=>({ ...p, manualGenres: ['classic rock','blues','jazz'], genres:[...new Set(['classic rock','blues','jazz',...(p.taste?.likedGenres||[])])], artists:index===0?['Fixture Artist 0','Fixture Artist 1','Seed outside pool']:['Fixture Artist 2','Fixture Artist 3'] }));
           for(const p of referenceSelected) p.categories=genreCategories(p.genres);
           const historyAtStart=variants?loadHistory().filter(row=>new Date(row.playedAt).getTime()<=now):[];
@@ -137,7 +160,7 @@ try {
               if (action === 'tag.getTopTracks') return Response.json({ tracks: { track: [] } });
               if (action === 'user.getRecentTracks') return Response.json({ recenttracks: { track: [], '@attr': { page: '1', totalPages: '0' } } });
             }
-            if (url.pathname === '/v1/me') return Response.json({ id: 'mock-owner', account_id: 'mock-owner' });
+            if (url.pathname === '/v1/me') return Response.json({ id: mockAccount, account_id: mockAccount });
             if (url.pathname === '/v1/me/player/recently-played') return Response.json({ items: [] });
             if (url.pathname === '/v1/me/playlists' && method === 'GET') return Response.json({ items: [], next: null });
             if (url.pathname === '/v1/me/playlists' && method === 'POST') return Response.json({ id: 'mock-playlist', name: 'Benchmark', uri: 'spotify:playlist:mock-playlist' });
@@ -184,7 +207,8 @@ try {
             'buildPlaylistDiagnostics', 'createPlaylist', 'addItemsToPlaylist', 'saveRecentPlaylistSnapshot', 'renderPlaylistResult', 'uploadCloudStateIfChanged',
             'readSearchCache', 'saveCandidatePool', 'retainSpotifyPool', 'loadCandidatePool', 'createLastFmEvidenceSnapshot', 'loadLastFmArtistPool', 'loadLastFmTrackPool',
             'lastFmEvidenceForTrack', 'recognizabilityScore', 'trackDiagnostic', 'waitForSearchSlot', 'fetch'];
-          let selection, finalResult;
+          let selection, finalResult, q1Input;
+          const captureAudit = auditSource ? (0,eval)(`(${auditSource})`) : null;
           for (const name of instrument ? functions : ['generateOfficePlaylist', 'selectGroupPlaylist']) {
             const original = window[name];
             if (typeof original !== 'function') throw new Error(`Missing benchmark function ${name}`);
@@ -199,7 +223,10 @@ try {
                 row.calls++; row.inclusiveMs += ms; row.exclusiveMs += ms - entry.children;
               };
               try {
+                const initialStats = captureAudit && name === 'selectGroupPlaylist' ? structuredClone(args[3]) : null;
                 const value = original.apply(this, args);
+                if(captureAudit && name === 'eligibleGroupCandidates' && !finalResult) q1Input = captureAudit(value.eligible,Number(playlistLength.value),args[2],structuredClone(value.stats),{tracks:[],discoveryCount:0,discoveryQuota:discoveryQuotaForTotal(0),discoveryRepair:null,rejectionStats:value.stats});
+                if(initialStats) q1Input = captureAudit(args[0],args[1],args[2],initialStats,value);
                 if (name === 'selectGroupPlaylist') { finalResult=value; selection = {
                   min: Math.min(...[...value.details.values()].flatMap(row => Object.values(row.byUser))),
                   discovery: value.discoveryCount, maxDiscovery: value.discoveryQuota.max,
@@ -213,7 +240,7 @@ try {
           await generateOfficePlaylist();
           for (const [name, original] of originals) window[name] = original;
           const snapshot = loadRecentPlaylists()[0];
-          const expectedFailure = ['network', 'changed-profiles'].includes(caseKind);
+          const expectedFailure = ['network', 'changed-profiles'].includes(caseKind) || (auditSource && !written.length);
           if (!expectedFailure && (!snapshot || written.length !== snapshot.tracks.length || !written.length)) throw new Error(`Generation failed: ${playlistResult.textContent}`);
           if (expectedFailure && written.length) throw new Error('Expected failure wrote tracks');
           let experiment;
@@ -231,11 +258,11 @@ try {
             const artists=new Set(snapshot.tracks.flatMap(track=>track.artists.map(a=>a.id||normalizeArtistName(a.name))));
             experiment={variant,datasetDigest,ownScores:scores(own),referenceAScores:scores(reference),discovery:finalResult.discoveryCount,historyKnown:known,historyKnownShare:known/Math.max(1,snapshot.tracks.length),distinctArtists:artists.size};
           }
-          return { people, cache, target, poolSize, caseKind, ...(fixtureSource?{progressReport:lastGenerationReport}:{}), ...(variants?{experiment}:{}), appVersion: document.querySelector('h1 .version').textContent, autoScores:{enabled:autoTrackFeedback.enabled(),t0:autoTrackFeedback.score("t0")}, before, after: pools(), metrics, requests, selection: selection || null, searches: newSearchesThisGeneration,
-            journal: lastGenerationReport?.journal || null, length: written.length, ids: (snapshot?.tracks || []).map(track => track.id), disabled: generateButton.disabled,
+          return { q1Input, people, cache, target, poolSize, caseKind, ...(fixtureSource?{progressReport:lastGenerationReport}:{}), ...(variants?{experiment}:{}), appVersion: document.querySelector('h1 .version').textContent, autoScores:{enabled:autoTrackFeedback.enabled(),t0:autoTrackFeedback.score("t0")}, before, after: pools(), metrics, requests, selection: selection || null, searches: newSearchesThisGeneration,
+            journal: lastGenerationReport?.journal || null, length: written.length, ids: (auditSource && !written.length ? [] : snapshot?.tracks || []).map(track => track.id), disabled: generateButton.disabled,
             diagnostics: (snapshot?.tracks || []).map(track => track.diagnostic),
             stateBytes: new TextEncoder().encode(JSON.stringify({ state: remoteState })).length };
-        }, { people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind, fixtureSource, variant, variantSource, variants, freshResults, autoSkip });
+        }, { people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind, fixtureSource, variant, variantSource, variants, freshResults, autoSkip, auditSource, q1Export, q1Empty });
         assert.deepEqual(session.errors, []);
         if(autoSkip){assert.equal(output.autoScores.enabled,true);assert.ok(output.autoScores.t0 < (autoSkip==='cap'?-249:-99));}
         if(variants) {
@@ -245,7 +272,10 @@ try {
           else datasetDigests.set(key,output.experiment.datasetDigest);
           if(variant!=='A') assert.ok(output.requests.filter(r=>r.path==='/v1/search').every(r=>!/^artist:"(?:Fixture Artist [0-3]|Seed outside pool)"$/i.test(r.query)),'Seed refresh escaped experiment policy');
         }
-        assert.deepEqual(output.before, { spotify: poolSize, artists: fixtureSource ? 1777 : 1800, tracks: fixtureSource ? 2628 : 3000 });
+        if(q1) { output.q1 = output.q1Input ? analyzeQ1(output.q1Input) : null; delete output.q1Input;
+          if(caseKind==='normal') { assert.ok(output.q1); assert.equal(output.q1.length,output.length); assert.ok(Object.values(output.q1.hardFailures).every(value=>value===0)); assert.ok(output.q1.optimisticUpperBound>=output.length); }
+        }
+        if(!q1Export && !q1Empty) assert.deepEqual(output.before, { spotify: poolSize, artists: fixtureSource ? 1777 : 1800, tracks: fixtureSource ? 2628 : 3000 });
         assert.equal(output.disabled, false);
         if (!baseline && caseKind === 'normal') assert.equal(output.journal?.status, 'saved', 'LOG1 must write a valid aggregate journal in the happy-path benchmark');
         assert.ok(output.searches <= (target <= 60 ? 12 : 16));
@@ -268,5 +298,6 @@ try {
       }])), raw: samples });
   }
   console.log(JSON.stringify({ appVersion: results[0].raw[0].appVersion, baselineCommit: baseline?.commit || null, autoSkip, fixedClock, repetitions, transportDelayMs, instrument, freshResults,
+    q1Empty, dataSource: q1Export ? 'private-export-with-mocked-API' : 'synthetic-fixture',
     note: 'Synthetic Chromium full-pipeline audit, no live network. Cold/warm application caches, not machine disk cache. Original 700ms search pacing preserved. Nested inclusive times overlap; exclusive times partition each run. Last.fm cold mock returns valid empty responses, not a populated network backfill. p95 with five samples is the sample maximum, not a production percentile.', results }, null, 2));
 } finally { await harness.close(); }

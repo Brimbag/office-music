@@ -178,7 +178,7 @@ test('pełna ścieżka generowania: źródła, selekcja, kolejność, zapis i di
   }, { ids });
   assert.equal(result.covers.length, 1); assert.deepEqual(result.covers[0].ids, result.snapshot); assert.ok(result.covers[0].scores.every(Number.isFinite));
   assert.equal(result.written.length, 4); assert.ok(result.written.every(uri => !uri.includes(':B')));
-  assert.equal(result.snapshot.length, 4); assert.match(result.text, /Pozyskiwanie: kwalifikowalni wykonawcy/); assert.match(result.text, /v1.0.0-rc.1/); assert.equal(result.disabled, false);
+  assert.equal(result.snapshot.length, 4); assert.match(result.text, /Pozyskiwanie: kwalifikowalni wykonawcy/); assert.match(result.text, /1.0.1-rc/); assert.equal(result.disabled, false);
 });
 
 test('istniejące blokady historii, duplikaty i wersje nie są liczone jako kwalifikowalna różnorodność', async () => {

@@ -1,6 +1,6 @@
 /* LOG1 aggregate diagnostics: explicit fields only, no queries, tracks or credentials. */
 (function(root) {
-  const MAX_BYTES = 16384, VERSION = 'v1.0.0-rc.1';
+  const MAX_BYTES = 16384, VERSION = '1.0.1-rc';
   const PEOPLE = ['bartek','edyta','asia','monika'];
   const FILTERS = ['rawPool','invalid','feedbackTrack','unwantedVariant','explicitBlockedArtist','feedbackBlockedArtist','artistIdExcluded','strongNegativeArtistFeedback','artistCooldown','recentTrack','recognizability','lowGroupFit','lowIndividualFit','discoveryModeExcluded','eligible','artistLimitDuringSelection','duplicateDuringSelection','fallbackSelections','lowFinalScoreStop'];
   const STOP = ['remaining','duplicateBlocked','artistLimitBlocked','discoveryQuotaBlockedCurrent','discoveryQuotaBlockedTarget','selectableAtTargetQuota','base44Plus','base40to43','base35to39','baseBelow35','fallbackRange','fallbackFailMinUser','fallbackStrongNegativeFeedback','fallbackSafe','targetQuotaMax'];
@@ -16,7 +16,7 @@
   function valid(v) {
     if (!exact(v,['schema','id','version','finishedAt','outcome','requested','length','playlistCreated','profiles','totalMs','accounting','stages','counters','metrics','selection','cloud']) || v.schema!==1 ||
       typeof v.id!=='string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(v.id) ||
-      typeof v.version!=='string' || !/^v(?:\d{1,3}\.\d{1,3}\.[A-Z0-9]{1,12}|\d{1,3}\.\d{1,3}\.\d{1,3}-rc\.\d{1,3})$/.test(v.version) ||
+      typeof v.version!=='string' || !/^(?:v\d{1,3}\.\d{1,3}\.[A-Z0-9]{1,12}|v\d{1,3}\.\d{1,3}\.\d{1,3}-rc\.\d{1,3}|\d{1,3}\.\d{1,3}\.\d{1,3}-rc)$/.test(v.version) ||
       typeof v.finishedAt!=='string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(v.finishedAt) || !Number.isFinite(Date.parse(v.finishedAt)) || new Date(v.finishedAt).toISOString()!==v.finishedAt ||
       !['success','error'].includes(v.outcome) || !count(v.requested,1000) || !count(v.length,v.requested) || typeof v.playlistCreated!=='boolean' ||
       !Array.isArray(v.profiles) || v.profiles.length>4 || new Set(v.profiles).size!==v.profiles.length || !v.profiles.every(id=>PEOPLE.includes(id)) ||
