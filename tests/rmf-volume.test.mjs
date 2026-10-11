@@ -15,8 +15,8 @@ function fixture({baseline=40,gain=10,store=memory(),lookup,write}={}){
  const writes=[],statuses=[];
  function snapshot(overrides={}){return {available:true,status:'ok',...session,isPlaying:playing,device:{...device,volumePercent:current},item:{...item},receivedAt:at,observationId:String(++number),...overrides};}
  let force=null;
- const monitor={subscribe(_name,listener){sub=listener;return ()=>{sub=null;};},read:async()=>force||snapshot()};
- const controller=V.create({monitor,getSession:()=>session,store,wall:()=>at,mono:()=>clock,uuid:()=>`id-${++number}`,visible:()=>visible,busy:()=>busy,onStatus:s=>statuses.push(s),
+ const monitor={subscribe(_name,listener){sub=listener;return ()=>{sub=null;};},read:async()=>typeof force==='function'?force():force||snapshot()};
+ const controller=V.create({monitor,getSession:()=>session,store,confirmationDelays:[0,0],wall:()=>at,mono:()=>clock,uuid:()=>`id-${++number}`,visible:()=>visible,busy:()=>busy,onStatus:s=>statuses.push(s),
   lookup:lookup||(async id=>ep(id)),write:write||(async(value,id)=>{writes.push({value,id});current=value;})});
  controller.remember([ep('facts'),ep('facts-2')]);
  return {controller,store,writes,statuses,arm:()=>controller.arm(gain),send:async(overrides={},leader=true)=>controller.consume(snapshot(overrides),{leader}),
@@ -68,3 +68,21 @@ test('V recovery cannot clear another controller intent while its write may stil
  const store=memory();await store('claim',{version:1,account:'owner',session:'login',owner:'other',device:'PC',episode:'facts',baseline:40,target:44,phase:'applying',at:10000,revision:'pending'});
  const f=fixture({store});assert.equal(await f.controller.inspect(),null);assert.equal(store.rows.size,1);assert.equal(f.writes.length,0);f.advance(30000);const saved=await f.controller.inspect();assert.equal(saved.current,40);assert.equal(await f.controller.recover(saved),true);assert.equal(f.writes.length,0);assert.equal(store.rows.size,0);
 });
+test('V.1 no saved level is distinct from failure, without playback request',async()=>{const f=fixture();assert.equal(await f.controller.inspect(),null);assert.equal(f.controller.diagnostics().inspection,'none');assert.equal(f.writes.length,0);assert.equal(f.controller.diagnostics().confirmationReads,0);});
+test('V.1 missing verified session has its own inspection reason',async()=>{const f=fixture();f.session(null);assert.equal(await f.controller.inspect(),null);assert.equal(f.controller.diagnostics().inspection,'no_session');});
+test('V.1 healthy PUT plus delayed readback 41→45 confirms with one PUT',async()=>{
+ const f=fixture({baseline:41});let reads=0;f.force(()=>({...f.snapshot(),device:{...f.snapshot().device,volumePercent:++reads<=2?41:45}}));await f.arm();await f.send();assert.deepEqual(f.writes,[{value:45,id:'PC'}]);assert.equal(f.controller.diagnostics().status,'boosted');assert.equal(f.controller.diagnostics().enabled,true);assert.equal(f.controller.diagnostics().confirmationReads,2);assert.equal(f.statuses.at(-1).errorCode,0);assert.equal(f.store.rows.get('owner').phase,'boosted');
+});
+test('V.1 ignored volume PUT is bounded and not called a network failure',async()=>{
+ const f=fixture({baseline:41,write:async()=>{}});await f.arm();await f.send();assert.equal(f.controller.diagnostics().writes,1);assert.equal(f.controller.diagnostics().confirmationReads,3);assert.equal(f.controller.diagnostics().failureReason,'volume_not_confirmed');assert.equal(f.statuses.at(-1).errorCode,0);assert.equal(f.store.rows.get('owner').phase,'recovery');
+});
+test('V.1 delayed restoration confirms without repeated PUT',async()=>{
+ const f=fixture({baseline:41});await f.arm();await f.send();f.item({type:'track',id:'music'});let reads=0;f.force(()=>({...f.snapshot(),device:{...f.snapshot().device,volumePercent:++reads===1?45:41}}));await f.send();assert.deepEqual(f.writes.map(w=>w.value),[45,41]);assert.equal(f.store.rows.size,0);
+});
+test('V.1 manual change during delayed confirmation wins without more reads or restoration',async()=>{
+ const f=fixture({baseline:41});let reads=0;f.force(()=>({...f.snapshot(),device:{...f.snapshot().device,volumePercent:++reads===1?41:52}}));await f.arm();await f.send();assert.equal(f.writes.length,1);assert.equal(f.controller.diagnostics().status,'manual');assert.equal(f.controller.diagnostics().confirmationReads,1);await f.controller.suspend();assert.equal(f.writes.length,1);
+});
+test('V.1 playback 429 during confirmation stops reads and preserves intent',async()=>{
+ const f=fixture();let reads=0;f.force(()=>++reads===1?f.snapshot():{...f.snapshot(),available:false,status:'rate_limited',httpStatus:429});await f.arm();await f.send();assert.equal(f.writes.length,1);assert.equal(f.controller.diagnostics().confirmationReads,1);assert.equal(f.statuses.at(-1).errorCode,429);assert.equal(f.store.rows.get('owner').phase,'recovery');
+});
+for(const kind of ['different_device','unsupported_device','playback_unavailable'])test(`V.1 inspection reports ${kind} distinctly`,async()=>{const f=fixture();await f.arm();await f.send();if(kind==='different_device')f.device({id:'OTHER'});if(kind==='unsupported_device')f.device({supportsVolume:false});if(kind==='playback_unavailable')f.force({...f.snapshot(),available:false,status:'network'});assert.equal(await f.controller.inspect(),null);assert.equal(f.controller.diagnostics().inspection,kind);assert.equal(f.writes.length,1);assert.equal(f.store.rows.size,1);});

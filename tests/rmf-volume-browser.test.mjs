@@ -87,3 +87,16 @@ test('V generator lock is set before awaiting volume cleanup, duplicate click do
  });assert.deepEqual(r,{cleanup:1,locked:true,unlocked:true});assert.deepEqual(s.errors,[]);
  }finally{await s.close();}
 });
+test('V.1 recovery button with no intent clearly allows new test, without player GET',async()=>{
+ const s=await h.page();try{await setup(s.page);await s.page.locator('#rmfVolumeRecovery').click();await s.page.waitForFunction(()=>document.getElementById('rmfVolumeStatus').textContent.includes('Nie ma zapisanego poziomu'));assert.match(await s.page.locator('#rmfVolumeStatus').textContent(),/Nie ma zapisanego poziomu/);assert.deepEqual(await s.page.evaluate(()=>vCalls),[]);assert.deepEqual(s.errors,[]);}finally{await s.close();}
+});
+test('V.1 real shared monitor confirms delayed Spotify readback, never resends boost',async()=>{
+ const s=await h.page();try{await setup(s.page);await s.page.evaluate(()=>{
+   rmfVolumeController.remember([vEpisode]);const original=fetch;let stale=0;
+   fetch=async(url,options={})=>{
+     if(String(url).includes('/player/volume')){const response=await original(url,options);stale=1;return response;}
+     if(String(url).includes('/me/player?')&&stale-- >0){vCalls.push({url:String(url),method:'GET'});return Response.json({...vCurrent,device:{...vCurrent.device,volume_percent:40}});}
+     return original(url,options);
+   };
+ });await s.page.locator('#rmfVolumeEnabled').check();await s.page.waitForFunction(()=>rmfVolumeController.diagnostics().status==='boosted');const r=await s.page.evaluate(()=>({puts:vCalls.filter(c=>c.method==='PUT').length,confirmations:rmfVolumeController.diagnostics().confirmationReads,enabled:rmfVolumeController.diagnostics().enabled}));assert.deepEqual(r,{puts:1,confirmations:2,enabled:true});assert.deepEqual(s.errors,[]);}finally{await s.close();}
+});
