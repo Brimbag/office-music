@@ -23,7 +23,9 @@
       try{
         if(wall()>=deadline){await finish('expired');return;}
         const first=pending.values().next().value;
-        if(!first || !same(first,getSession()) || s?.available && s.device?.id && s.device.id!==first.device){await finish('interrupted');return;}
+        if(!first || !same(first,getSession()) || s?.available && (!same(first,s) || s.device?.id && s.device.id!==first.device)){await finish('interrupted');return;}
+        if(!s?.available && ['unauthorized','forbidden','quota_exceeded','rate_limited','network','timeout','invalid','unavailable','no_session'].includes(s?.status)){await finish('unavailable');return;}
+        if(s?.available && (s.device?.supportsVolume===false || s.device?.restricted===true)){await finish('unsupported');return;}
         if(allowed(s) && s.available && s.isPlaying)pending.get(s.item.id).seen=true;
         await listener(s,meta);
         const diag=volume.diagnostics();
