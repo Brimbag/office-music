@@ -149,6 +149,7 @@ try {
               }
               return Response.json({ tracks: { items: tracks.filter(track => queryMatchesTrack(query, track)).slice(offset, offset + 10) } });
             }
+            if (url.pathname === '/api/generations') return Response.json({ ok: true, saved: true, duplicate: false });
             if (url.pathname === '/api/lastfm') {
               if (method === 'PUT') return Response.json({ ok: true, saved: 1 });
               return Response.json({ ok: true, cache: null, base: null });
@@ -214,7 +215,7 @@ try {
             experiment={variant,datasetDigest,ownScores:scores(own),referenceAScores:scores(reference),discovery:finalResult.discoveryCount,historyKnown:known,historyKnownShare:known/Math.max(1,snapshot.tracks.length),distinctArtists:artists.size};
           }
           return { people, cache, target, poolSize, caseKind, ...(fixtureSource?{progressReport:lastGenerationReport}:{}), ...(variants?{experiment}:{}), appVersion: document.querySelector('h1 .version').textContent, before, after: pools(), metrics, requests, selection: selection || null, searches: newSearchesThisGeneration,
-            length: written.length, ids: (snapshot?.tracks || []).map(track => track.id), disabled: generateButton.disabled,
+            journal: lastGenerationReport?.journal || null, length: written.length, ids: (snapshot?.tracks || []).map(track => track.id), disabled: generateButton.disabled,
             diagnostics: (snapshot?.tracks || []).map(track => track.diagnostic),
             stateBytes: new TextEncoder().encode(JSON.stringify({ state: remoteState })).length };
         }, { people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind, fixtureSource, variant, variantSource, variants, freshResults });
@@ -227,7 +228,9 @@ try {
           if(variant!=='A') assert.ok(output.requests.filter(r=>r.path==='/v1/search').every(r=>!/^artist:"(?:Fixture Artist [0-3]|Seed outside pool)"$/i.test(r.query)),'Seed refresh escaped experiment policy');
         }
         assert.deepEqual(output.before, { spotify: poolSize, artists: fixtureSource ? 1777 : 1800, tracks: fixtureSource ? 2628 : 3000 });
-        assert.equal(output.disabled, false); assert.ok(output.searches <= (target <= 60 ? 12 : 16));
+        assert.equal(output.disabled, false);
+        if (!baseline && caseKind === 'normal') assert.equal(output.journal?.status, 'saved', 'LOG1 must write a valid aggregate journal in the happy-path benchmark');
+        assert.ok(output.searches <= (target <= 60 ? 12 : 16));
         if (output.selection) assert.ok(output.selection.min >= 35);
         if (output.selection) assert.ok(output.selection.discovery <= output.selection.maxDiscovery);
         if (output.selection) assert.ok(Object.values(output.selection.artistCounts).every(count => count <= 2));

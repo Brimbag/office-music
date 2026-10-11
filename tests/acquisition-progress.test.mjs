@@ -83,7 +83,7 @@ test('cache-first i pomijanie pokrytych artystów zachowują wyszukiwania oraz r
   }, { source: baseline.functions.primeDiverseQueries });
   assert.deepEqual(r[0],r[1]); assert.deepEqual(r[1].calls,['artist:"B"']);
 });
-for (const outcome of ['cloud-error','write-error','search-error']) test(`pełny panel: ${outcome}, stan tła, guard podwójnego startu i zachowanie wyniku`, async () => {
+for (const outcome of ['cloud-error','write-error','search-error','logger-missing']) test(`pełny panel: ${outcome}, stan tła, guard podwójnego startu i zachowanie wyniku`, async () => {
   const r = await evaluate(async outcome => {
     const selected = ['bartek','asia'].map(id => ({ id, name: profiles[id].name, artists: [], genres: ['rock'], categories: [], blockedArtists: [], taste: { hasSurvey: true, likedGenres: ['Rock'] } }));
     const tracks = [0,1,2].map(i => ({ id: `t${i}`, uri: `spotify:track:t${i}`, name: `Song ${i}`, artists: [{ id: `a${i}`, name: `A${i}` }] }));
@@ -95,15 +95,17 @@ for (const outcome of ['cloud-error','write-error','search-error']) test(`pełny
     selectedProfiles = () => selected; cleanupOldOfficePlaylists = async () => ({}); refreshLastFmBeforeGeneration = async () => {}; syncSpotifyRecentHistory = async () => {};
     waitForSearchSlot = async () => {}; primeProfileGenres = async () => {}; primeCommonGroupQueries = async () => {};
     let release, signalEntered; const enteredPromise = new Promise(resolve => { signalEntered = resolve; });
-    let entered = false, startCount = 0, refreshes = 0, searches = 0, creates = 0, adds = 0;
+    let entered = false, startCount = 0, refreshes = 0, searches = 0, creates = 0, adds = 0, logs = 0;
     primeManualSeedArtists = async () => { startCount++; entered = true; signalEntered(); await new Promise(resolve => { release=resolve; }); if (outcome==='search-error') throw new Error('Próba wyszukiwania przerwana'); await searchTracks('old','genre:"rock"'); };
     window.fetch = async (url, options) => {
+      if(String(url).includes('/api/generations')) { logs++; return Response.json({ok:true,saved:true}); }
       if(String(url).includes('/api/token')) { refreshes++; return Response.json({access_token:'new',refresh_token:'rotated',expires_in:3600}); }
       if(String(url).includes('/search')) { searches++; return options.headers.Authorization==='Bearer old' ? Response.json({}, {status:401}) : Response.json({tracks:{items:[]}}); }
       if(String(url).includes('/items')) { adds++; if(outcome==='write-error') throw new TypeError('Zapis mógł zostać wykonany'); return Response.json({snapshot_id:'done'}); }
       creates++; return Response.json({id:'made',name:'Made',uri:'spotify:playlist:made'});
     };
     uploadCloudStateIfChanged = async () => { throw new Error('D1 unavailable'); };
+    if (outcome === 'logger-missing') delete window.OfficeGenerationLog;
     const running = generateOfficePlaylist();
     await enteredPromise;
     await generateOfficePlaylist();
@@ -112,11 +114,11 @@ for (const outcome of ['cloud-error','write-error','search-error']) test(`pełny
     const hiddenText = progressBox.textContent; release(); await running;
     const report = lastGenerationReport, snapshot = loadRecentPlaylists()[0];
     return { startCount, disabledDuring, enabledAfter: !generateButton.disabled, hiddenText, report, snapshotLength: snapshot?.tracks?.length || 0, snapshotId: snapshot?.id,
-      text: progressBox.textContent, playlist: playlistResult.textContent, creates, adds, searches, refreshes, sourceRestored: !generationInFlight && activeGenerationProgress===null };
+      text: progressBox.textContent, playlist: playlistResult.textContent, creates, adds, searches, refreshes, logs, sourceRestored: !generationInFlight && activeGenerationProgress===null };
   }, outcome);
-  assert.equal(r.startCount,1); assert.equal(r.disabledDuring,true); assert.equal(r.enabledAfter,true); assert.equal(r.sourceRestored,true); assert.match(r.hiddenText,/Karta jest w tle/);
+  assert.equal(r.logs,outcome==='logger-missing'?0:1); assert.equal(r.startCount,1); assert.equal(r.disabledDuring,true); assert.equal(r.enabledAfter,true); assert.equal(r.sourceRestored,true); assert.match(r.hiddenText,/Karta jest w tle/);
   assert.ok(r.report.totalMs>=0); assert.ok(!JSON.stringify(r.report).includes('rotated')); assert.ok(!JSON.stringify(r.report).includes('Bearer'));
-  if(outcome==='cloud-error') { assert.equal(r.report.outcome,'success'); assert.equal(r.snapshotLength,3); assert.equal(r.report.counters.searches,1); assert.equal(r.report.counters.searchRequests,2); assert.equal(r.refreshes,1); assert.equal(r.report.counters.oauthSuccess,1); assert.ok(r.report.warnings.length); assert.match(r.playlist,/Song/); }
+  if(['cloud-error','logger-missing'].includes(outcome)) { assert.equal(r.report.outcome,'success'); assert.equal(r.snapshotLength,3); assert.equal(r.report.counters.searches,1); assert.equal(r.report.counters.searchRequests,2); assert.equal(r.refreshes,1); assert.equal(r.report.counters.oauthSuccess,1); assert.ok(r.report.warnings.length); assert.match(r.playlist,/Song/); }
   else { assert.equal(r.snapshotId,'previous'); assert.equal(r.snapshotLength,3); assert.equal(r.report.outcome,'error'); assert.match(r.text,/Etap:/); assert.equal(r.report.playlistCreated,outcome==='write-error'); assert.equal(r.creates,outcome==='write-error'?1:0); }
 });
 test('żywy feedback współwykonawcy i nowa historia rzeczywiście zmieniają kwalifikację po reuse', async () => {
