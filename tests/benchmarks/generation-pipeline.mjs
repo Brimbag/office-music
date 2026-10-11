@@ -173,6 +173,10 @@ try {
             }
             throw new Error(`Unexpected mock request: ${method} ${url.pathname}`);
           };
+          // This benchmark measures recommendation/generation, not optional artwork.
+          // Parallel background requests cannot be represented by its nested stack;
+          // cover rendering/upload are exercised in playlist-cover.test.mjs instead.
+          if (window.OfficePlaylistCover) OfficePlaylistCover.apply = async () => false;
           const metrics = {}, stack = [], originals = new Map();
           const functions = ['generateOfficePlaylist', 'cleanupOldOfficePlaylists', 'refreshLastFmBeforeGeneration', 'syncSpotifyRecentHistory',
             'createCandidateAcquisition', 'getAcquisitionCoverage', 'primeManualSeedArtists', 'primeProfileGenres', 'primeCommonGroupQueries', 'acquisitionCoverage',
