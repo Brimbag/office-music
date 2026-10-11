@@ -15,6 +15,9 @@ test('cover uses existing final fit, not shuffled playlist order; input unchange
 test('different artwork preferred before duplicate, even for a lower score', () => {
   assert.deepEqual(selected([track('a','same'),track('b','same'),track('c'),track('d'),track('e')], [100,99,98,97,96]), ['a','c','d','e']);
 });
+test('missing artwork does not displace a higher-scoring legacy track before metadata lookup', () => {
+  assert.deepEqual(selected([track('a',null),track('b'),track('c'),track('d'),track('e')], [100,99,98,97,96]), ['a','b','c','d']);
+});
 test('ties deterministic regardless of input order, missing scores safe', () => {
   assert.deepEqual(selected([track('b'),track('a')], [80,80]), ['a','b']);
   assert.deepEqual(selected([track('b'),track('a')], [undefined,undefined]), ['a','b']);
@@ -110,4 +113,23 @@ for (const people of [2,4]) test(`${people} profiles: artwork metadata cannot ch
     return {without:run(false),with:run(true)};
   },people);
   assert.ok(result.without.order.length>0);assert.deepEqual(result.with,result.without);
+});
+test('metadata reveals duplicates: use another available album rather than repeat four images', async () => {
+  const result=await browser(async()=>{
+    const tracks=Array.from({length:5},(_,i)=>({id:String(i),album:i===4?{images:[{url:'https://i.scdn.co/image/other'}]}:{}}));
+    const details=new Map(tracks.map((t,i)=>[t.id,{final:100-i}])), images=[], original=CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage=function(image,...rest){images.push(image.src);return original.call(this,image,...rest);};
+    try {const ok=await OfficePlaylistCover.apply({token:'test',playlistId:'p',tracks,details,people:[],request:async(_token,_url,options={})=>options.method==='PUT'?new Response(null,{status:202}):Response.json({album:{images:[{url:'https://i.scdn.co/image/same'}]}})});return {ok,images};}
+    finally{CanvasRenderingContext2D.prototype.drawImage=original;}
+  });
+  assert.equal(result.ok,true);assert.equal(result.images.length,4);assert.equal(new Set(result.images).size,2);
+});
+test('Canvas security/serialization failure never uploads a broken cover', async()=>{
+  const result=await browser(async()=>{
+    const original=HTMLCanvasElement.prototype.toDataURL;let calls=0;
+    HTMLCanvasElement.prototype.toDataURL=()=>{throw new DOMException('Tainted canvas','SecurityError');};
+    try {const ok=await OfficePlaylistCover.apply({token:'test',playlistId:'p',tracks:[{id:'a',album:{images:[{url:'https://i.scdn.co/image/a'}]}}],details:new Map(),people:[],request:async()=>{calls++;return new Response(null,{status:202});}});return {ok,calls};}
+    finally{HTMLCanvasElement.prototype.toDataURL=original;}
+  });
+  assert.deepEqual(result,{ok:false,calls:0});
 });

@@ -12,7 +12,10 @@
       return (score(b) - score(a)) || String(a.id).localeCompare(String(b.id), 'en');
     });
     const chosen = [], seen = new Set();
-    for (const track of ranked) { const image = imageFor(track); if (image && !seen.has(image)) { chosen.push(track); seen.add(image); if (chosen.length === 4) break; } }
+    for (const track of ranked) {
+      const image = imageFor(track); if (image && seen.has(image)) continue;
+      chosen.push(track); if (image) seen.add(image); if (chosen.length === 4) break;
+    }
     for (const track of ranked) if (chosen.length < 4 && !chosen.includes(track)) chosen.push(track);
     return chosen;
   }
@@ -70,7 +73,8 @@
         } catch { return track; }
       }));
       if (controller.signal.aborted) return false;
-      const body = await render(choose(enriched, details), people, controller.signal);
+      const available = [...enriched, ...tracks.filter(track => !selected.includes(track) && imageFor(track))];
+      const body = await render(choose(available, details), people, controller.signal);
       if (!body || controller.signal.aborted) return false;
       const response = await request(token, `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/images`, {
         method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body, signal: controller.signal
