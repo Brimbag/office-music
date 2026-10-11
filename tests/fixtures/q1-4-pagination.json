@@ -1,0 +1,4 @@
+{
+  "commit": "39160d5",
+  "searchOffsetsForQuery": "function searchOffsetsForQuery(query) {\n  const offsets = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90];\n  const uncached = offsets.filter(offset => !hasFreshSearchCache(query, offset));\n  const cached = offsets.filter(offset => hasFreshSearchCache(query, offset));\n  return [...shuffle(uncached), ...shuffle(cached)];\n}\n"
+}

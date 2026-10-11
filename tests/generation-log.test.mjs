@@ -21,6 +21,6 @@ test('LOG1 reports actual Last.fm write/read/skip/error separately from preferen
 });
 
 test('LOG1 release candidate version preserves legacy cloud log compatibility',()=>{
- for(const version of ['v43.41.S2','v43.25.U1','v1.0.0-rc.1','1.0.3-rc','1.0.4-rc']){const e=entry();e.version=version;assert.equal(log.valid(e),true);}
+ for(const version of ['v43.41.S2','v43.25.U1','v1.0.0-rc.1','1.0.3-rc','1.0.4-rc','1.0.5-rc']){const e=entry();e.version=version;assert.equal(log.valid(e),true);}
  for(const version of ['v1.0.0-rc.1 token','v1.0.0-rc.','v1.0.0-rc.1234','secret']){const e=entry();e.version=version;assert.equal(log.valid(e),false);}
 });
