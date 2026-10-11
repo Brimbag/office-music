@@ -113,3 +113,7 @@ Użytkownik potwierdził pozytywny smoke V1: 49% → 54% podczas Faktów → 49%
 ## S1 — v43.40.S1: lokalny dziennik prawdopodobnych pominięć
 
 Pozytywny smoke V2 potwierdzony przez użytkownika: przywrócony poziom i zatrzymany monitor, końcowe 58%, 2 zmiany / 3 odczyty potwierdzające. S1: jawna sesja jednej zapisanej playlisty OMM (do 8 h), wspólny background M, konserwatywne przedziały early/middle/late i stabilizacja, lokalny atomowy dziennik 100/konto z widokiem ostatnich 30 dni. Default off po reloadzie. Bez kar, feedbacku wykonawców, zmian selekcji, RMF i D1. Dokument: SPOTIFY_SKIP_JOURNAL_S1.md. Użytkownik autoryzował scalenie/wdrożenie po testach. Kolejny krok: realny smoke i audyt jakości detekcji, potem osobny S2 z zatwierdzonymi kumulacją/wygasaniem/resetem/synchronizacją; nie naliczać kar wstecz z S1. Dalej COVER1 → COVER2.
+
+## S2 — v43.41.S2, 2026-10-11
+
+Użytkownik potwierdził produkcyjny smoke S1: 4 wpisy (3 early, 1 middle), bez ocen; zatwierdził S2 i warunkowe scalenie/wdrożenie. Dawne/testowe wpisy nie są backfillowane. Nowy opt-in, osobny dokładny Track ID feedback z decay 30/90 dni i cap −250, trwały reset 👍, per-account atomowy local edit i osobny CAS endpoint w istniejącym app_state. Bez migracji D1/LOG, RMF lub zmian progów/discovery. Szczegóły, testy, wpływ i rollback: [AUTO_TRACK_FEEDBACK_S2.md](AUTO_TRACK_FEEDBACK_S2.md). Następny krok po smoke: COVER1 → COVER2, bez automatycznego rozpoczęcia tych prac.
