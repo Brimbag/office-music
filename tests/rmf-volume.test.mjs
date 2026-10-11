@@ -64,3 +64,7 @@ test('V metadata API 429 stops polling and respects Retry-After before rearming'
 });
 test('V device changes during fresh preflight prevent boost, not just restoration',async()=>{const f=fixture();await f.arm();f.force({...f.snapshot(),device:{...f.snapshot().device,id:'OTHER'}});await f.send();assert.equal(f.writes.length,0);assert.equal(f.store.rows.size,0);});
 test('V session changes while metadata response is pending cannot write',async()=>{let resolve;const f=fixture({lookup:async()=>new Promise(r=>resolve=r)});f.item({type:'episode',id:'unknown',uri:'spotify:episode:unknown'});await f.arm();const p=f.send();while(!resolve)await new Promise(r=>setImmediate(r));f.session({account:'other',session:'other'});resolve(ep('unknown'));await p;assert.equal(f.writes.length,0);assert.equal(f.store.rows.size,0);});
+test('V recovery cannot clear another controller intent while its write may still be in flight',async()=>{
+ const store=memory();await store('claim',{version:1,account:'owner',session:'login',owner:'other',device:'PC',episode:'facts',baseline:40,target:44,phase:'applying',at:10000,revision:'pending'});
+ const f=fixture({store});assert.equal(await f.controller.inspect(),null);assert.equal(store.rows.size,1);assert.equal(f.writes.length,0);f.advance(30000);const saved=await f.controller.inspect();assert.equal(saved.current,40);assert.equal(await f.controller.recover(saved),true);assert.equal(f.writes.length,0);assert.equal(store.rows.size,0);
+});

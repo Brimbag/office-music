@@ -6903,7 +6903,7 @@ if (window.OfficeRmfVolume && spotifyPlaybackMonitor) {
     try {
       if (!playbackSession()) { const token = await getValidAccessToken(); if (token) await getProfile(token); }
       const saved = await rmfVolumeController.inspect();
-      if (!saved) { status.textContent = "Brak poziomu do przywrócenia na tym aktywnym urządzeniu. Sprawdź także głośność bezpośrednio w Spotify."; return; }
+      if (!saved) { status.textContent = "Nie można teraz potwierdzić poziomu do przywrócenia na tym urządzeniu. Jeśli trwa zapis w innej karcie, odczekaj 30 s i sprawdź ponownie. Sprawdź także głośność w Spotify."; return; }
       const restore = !saved.manual && saved.current === saved.target;
       const message = restore ? `Na tym samym aktywnym urządzeniu jest ${saved.current}%. Przywrócić zapisane ${saved.baseline}%?` : `Aktualny poziom to ${saved.current}%. Zachować go i usunąć zapis poprzedniej regulacji?`;
       if (confirm(message) && !await rmfVolumeController.recover(saved)) status.textContent = "Stan Spotify zmienił się lub przywrócenie nie zostało potwierdzone. Sprawdź ponownie.";

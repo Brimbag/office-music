@@ -163,6 +163,9 @@
       const row=await store('get',{account:session.account});recoverable=validIntent(row)?row:null;
       if(row && !recoverable){report('storage');return null;}
       if(!row){report(enabled?'ready':'off');return null;}
+      // Another card may still be awaiting an applying/restoring request. Do not
+      // erase or take its intent merely because the device still shows baseline.
+      if(['applying','restoring'].includes(row.phase) && wall()-row.at<30000){report('recovery');return null;}
       const s=await monitor.read({fresh:true});
       if(!capable(s)||s.device.id!==row.device){report('recovery');return null;}
       // Different current volume proves the saved target is no longer ours.
