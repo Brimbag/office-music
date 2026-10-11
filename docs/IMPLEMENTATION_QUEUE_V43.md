@@ -109,3 +109,7 @@ Po nieudanym smoke v43.37.V najpierw rozróżnienie braku intentu od błędów u
 ## V2 — v43.39.V2: kolejka, tło i punkty procentowe
 
 Użytkownik potwierdził pozytywny smoke V1: 49% → 54% podczas Faktów → 49% podczas muzyki. Odznaczanie checkboxa po ukryciu karty uznano za niezgodne z docelową pracą na przypiętej karcie. V2 oddziela preferencję od sesji po udanym dodaniu Faktów, opt-in background w M, maks. 60 min i 10 oczekujących ID, zakończenie po powrocie do muzyki. Suwak 0–30 p.p., default +10, max 100% (bez limitu 70%). Dokument: RMF_VOLUME_V2.md. Stare ustawienia i intent-y zachowane; brak zmian algorytmu/D1. Użytkownik autoryzował scalenie i wdrożenie po testach. Po publikacji smoke przypiętej karty, następnie niezależny S1 (bez kar); S2 i COVER1/COVER2 osobno.
+
+## S1 — v43.40.S1: lokalny dziennik prawdopodobnych pominięć
+
+Pozytywny smoke V2 potwierdzony przez użytkownika: przywrócony poziom i zatrzymany monitor, końcowe 58%, 2 zmiany / 3 odczyty potwierdzające. S1: jawna sesja jednej zapisanej playlisty OMM (do 8 h), wspólny background M, konserwatywne przedziały early/middle/late i stabilizacja, lokalny atomowy dziennik 100/konto z widokiem ostatnich 30 dni. Default off po reloadzie. Bez kar, feedbacku wykonawców, zmian selekcji, RMF i D1. Dokument: SPOTIFY_SKIP_JOURNAL_S1.md. Użytkownik autoryzował scalenie/wdrożenie po testach. Kolejny krok: realny smoke i audyt jakości detekcji, potem osobny S2 z zatwierdzonymi kumulacją/wygasaniem/resetem/synchronizacją; nie naliczać kar wstecz z S1. Dalej COVER1 → COVER2.
