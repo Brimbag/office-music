@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.33.LF2</title>
+  <title>Office Music Mixer v43.34.LOG1</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -412,7 +412,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.33.LF2</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.34.LOG1</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -624,6 +624,7 @@
 <script src="pool-retention.js"></script>
 <script src="discovery-quota.js"></script>
 <script src="generation-progress.js"></script>
+<script src="generation-log.js"></script>
 <script>
 const clientId = "d207523201ce4426923cda4cc893f76f";
 const redirectUri = "https://office-music.pages.dev/";
@@ -1261,7 +1262,7 @@ async function syncLastFmCloud(token, { force = false } = {}) {
   if (lastFmCloudFlight) return lastFmCloudFlight;
   const account = lastFmSpotifyAccount, local = compactLocalLastFm(), fingerprint = JSON.stringify(local);
   if (!force && lastFmCloudBackoff?.account === account && lastFmCloudBackoff.user === local.user && Date.now() < lastFmCloudBackoff.until) throw new Error(lastFmCloudBackoff.message);
-  if (!force && lastFmCloudMemo?.account === account && lastFmCloudMemo.fingerprint === fingerprint && Date.now() - lastFmCloudMemo.at < 10 * 60000) return { skipped: true };
+  if (!force && lastFmCloudMemo?.account === account && lastFmCloudMemo.fingerprint === fingerprint && Date.now() - lastFmCloudMemo.at < 10 * 60000) return { ...lastFmCloudMemo.summary, written: false, skipped: true };
   lastFmCloudFlight = (async () => {
     for (let attempt = 0; attempt < 3; attempt++) {
       const remote = await lastFmCloudRequest(token, { method: "GET" });
@@ -1271,12 +1272,15 @@ async function syncLastFmCloud(token, { force = false } = {}) {
       // Incoming cloud absence/truncation is never a local tombstone.
       applyLastFmCloudCatalog(merged);
       try {
+        let written = false;
         if ((merged.artists.length || merged.tracks.length || remote.cache) && !OfficeLastFmCloud.same(merged, remote.cache)) {
           await lastFmCloudRequest(token, { method: "PUT", body: JSON.stringify({ cache: merged, base: remote.base }) });
+          written = true;
         }
         lastFmCloudBackoff = null;
-        lastFmCloudMemo = { account, fingerprint: JSON.stringify(compactLocalLastFm()), at: Date.now() };
-        return { artists: merged.artists.length, tracks: merged.tracks.length, bytes: OfficeLastFmCloud.bytes(merged) };
+        const summary = { artists: merged.artists.length, tracks: merged.tracks.length, bytes: OfficeLastFmCloud.bytes(merged) };
+        lastFmCloudMemo = { account, fingerprint: JSON.stringify(compactLocalLastFm()), at: Date.now(), summary };
+        return { ...summary, written };
       } catch (error) { if (error.status !== 409 || attempt === 2) throw error; }
     }
   })();
@@ -1424,7 +1428,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.33.LF2",
+      source: "Office Music Mixer v43.34.LOG1",
       storage: exportedStorageState()
     };
 
@@ -5984,6 +5988,62 @@ async function primeCommonGroupQueries(token, selected, maxNewSearches = 3, acqu
   await primeDiverseQueries(token, queries.map(query => ({ query })), maxNewSearches, acquisition);
 }
 
+let generationJournalBackoff = null;
+async function persistGenerationLog(token, entry, container = progressBox) {
+  const node = document.createElement("p"); node.className = "small"; node.dataset.generationLog = "pending";
+  node.textContent = "Historia generowań: zapisuję zbiorczą diagnostykę…"; container.append(node);
+  const started = performance.now(), account = lastFmSpotifyAccount;
+  let status = "error", localSaved = false;
+  try {
+    if (!OfficeGenerationLog.valid(entry)) throw new Error("Nieprawidłowa diagnostyka.");
+    // One local latest entry, independent of preference cloud state; no raw histories.
+    if (OmmLocalState.blocked) throw new Error("Import danych w toku.");
+    // Optional telemetry never evicts expensive search/history caches to make space.
+    try {
+      localStorage.setItem("office_generation_log_last_v1", JSON.stringify({ account, entry }));
+      localSaved = true;
+    } catch {}
+    if (!token) throw new Error("Brak połączenia Spotify.");
+    if (OmmLocalState.blocked) throw new Error("Import danych w toku.");
+    if (generationJournalBackoff?.account === account && Date.now() < generationJournalBackoff.until) { status = "deferred"; throw new Error("Limit API."); }
+    cloudRequestsInFlight++;
+    try {
+      const options = { method: "POST", body: JSON.stringify(entry), headers: { "Content-Type": "application/json" } };
+      const send = active => {
+        if (account !== lastFmSpotifyAccount) throw new Error("Konto Spotify zmieniło się.");
+        return generationCloudRequest(active, "/api/generations", { ...options, signal: AbortSignal.timeout(5000) });
+      };
+      let response = await send(token);
+      if (response.status === 401) {
+        const active = await refreshAccessToken(localStorage.getItem("spotify_access_token") || token);
+        if (!active) throw new Error("Brak sesji Spotify.");
+        response = await send(active); // Explicit 401 occurred before SQL; no network/5xx replay.
+      }
+      const retryAfter = response.headers.get("Retry-After");
+      if ([429, 503].includes(response.status) && /^\d{1,6}$/.test(retryAfter || "") && Number(retryAfter) > 0) {
+        generationJournalBackoff = { account, until: Date.now() + Number(retryAfter) * 1000 };
+      }
+      const data = await parseJsonSafely(response);
+      if (!response.ok || data?.ok !== true) throw new Error("Dziennik chmurowy niedostępny.");
+      generationJournalBackoff = null;
+      status = "saved";
+      node.textContent = data.duplicate ? "Historia generowań: wpis już zapisany w chmurze." : "Historia generowań: zbiorcza diagnostyka zapisana w chmurze.";
+    } finally { cloudRequestsInFlight--; }
+  } catch {
+    node.textContent = "Historia generowań: nie potwierdzono zapisu w chmurze. Wynik playlisty zachowany; ostatnia diagnostyka pozostaje w tej karcie.";
+  }
+  node.dataset.generationLog = status;
+  return { status, localSaved, ms: Math.round(performance.now() - started) };
+}
+function appendLastFmCloudDiagnostic(result) {
+  const lf = result.lastfm;
+  const node = document.createElement("p"); node.className = "small";
+  node.textContent = lf.status === "error" ? "Katalog Last.fm w chmurze: synchronizacja nie powiodła się; dane lokalne zachowano."
+    : lf.status === "not_run" ? "Katalog Last.fm w chmurze: synchronizacji nie wykonano."
+    : `Katalog Last.fm w chmurze: ${lf.status === "skipped" ? "użyto poprzedniego potwierdzenia" : lf.written ? "zapisano" : "odczyt zakończony"}; ${lf.artists ?? "?"} wykonawców, ${lf.tracks ?? "?"} utworów, ${lf.bytes ?? "?"} bajtów.`;
+  progressBox.append(node);
+}
+
 async function generateOfficePlaylist() {
   if (OmmLocalState.blocked) { alert("Najpierw zakończ odzyskiwanie danych lokalnych."); return; }
   if (generationInFlight) return;
@@ -6003,7 +6063,8 @@ async function generateOfficePlaylist() {
     window[name] = function (...args) { return progress.measure(metric, () => { const value = original.apply(this, args); if (name === "loadCandidatePool") progress.update({ pool: value.length });
       if (name === "readSearchCache") progress.count(value === null ? "cacheReadMisses" : "cacheReadHits"); return value; }); };
   }
-  let createdPlaylist = null, finalLength = 0;
+  let createdPlaylist = null, finalLength = 0, logToken = null;
+  const logContext = { id: null, requested: total, profiles: [], group: null, cloud: { state: "not_run", lastfm: { status: "not_run", artists: null, tracks: null, bytes: null, written: false } } };
   try {
     generateButton.disabled = true;
     await Promise.all([...localPreferenceFields.values()].map(field => field.queue));
@@ -6016,6 +6077,7 @@ async function generateOfficePlaylist() {
     generationStage(0);
 
     const token = await getValidAccessToken();
+    logToken = token;
     if (!token) throw new Error("Brak aktywnej sesji Spotify.");
 
 
@@ -6032,6 +6094,7 @@ async function generateOfficePlaylist() {
     }
 
     const mixProfiles = selected.filter(hasMusicProfile);
+    logContext.profiles = mixProfiles.map(profile => profile.id);
     const ignoredProfiles = selected.filter(profile => !hasMusicProfile(profile));
 
     generationStage(2);
@@ -6070,6 +6133,7 @@ async function generateOfficePlaylist() {
     groupResult.acquisition = { before: acquisition.before, after: getAcquisitionCoverage(acquisition).artists, cachedPages: acquisition.cachedPages, newSearches: newSearchesThisGeneration };
     const finalTracks = sequencePlaylistForListening(groupResult.tracks, 5);
     groupResult.tracks = finalTracks;
+    logContext.group = groupResult;
 
     if (!finalTracks.length) {
       throw new Error("Algorytm grupowy nie wybrał żadnego utworu.");
@@ -6110,8 +6174,11 @@ async function generateOfficePlaylist() {
     // nie może unieważnić poprawnie utworzonej playlisty.
     generationStage(10);
     try {
-      await uploadCloudStateIfChanged(token, { status: true });
+      const cloudResult = await uploadCloudStateIfChanged(token, { status: true });
+      logContext.cloud.state = "success";
+      if (window.OfficeGenerationLog) logContext.cloud = OfficeGenerationLog.cloudResult(cloudResult);
     } catch (cloudErr) {
+      logContext.cloud.state = "error";
       console.error("Cloud sync after generation:", cloudErr);
       setCloudStatus(`po generowaniu: ${cloudErr.message}`, "error");
       progress.warn("Playlista gotowa; synchronizacja chmury nie powiodła się. Lokalny wynik został zachowany.");
@@ -6132,7 +6199,15 @@ async function generateOfficePlaylist() {
   } finally {
     lastGenerationReport = progress.report();
     for (const [name, original] of originals) window[name] = original;
-    activeGenerationProgress = null; generationInFlight = false;
+    activeGenerationProgress = null;
+    try {
+      if (!window.OfficeGenerationLog) throw new Error("Moduł dziennika niedostępny.");
+      appendLastFmCloudDiagnostic(logContext.cloud);
+      logContext.id = crypto.randomUUID();
+      const entry = OfficeGenerationLog.build(lastGenerationReport, logContext);
+      lastGenerationReport.journal = await persistGenerationLog(logToken, entry);
+    } catch { lastGenerationReport.journal = { status: "error" }; }
+    generationInFlight = false;
     generateButton.disabled = false;
   }
 }
@@ -6393,9 +6468,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.33.LF2: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.34.LOG1: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.33.LF2 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.34.LOG1 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +

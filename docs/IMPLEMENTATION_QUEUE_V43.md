@@ -77,3 +77,9 @@ Następny zakres: LF2, kompaktowa baza Last.fm w chmurze. Najpierw ustalić kont
 Kompaktowy katalog kandydatów Last.fm do 128 KiB przez osobne `/api/lastfm`, w istniejącej tabeli i z atomowym CAS. TTL oryginalnych danych, oznaczenie konta Last.fm, zgodność starszych klientów; raw cache, historia i świeże obserwacje pozostają lokalne. Brak migracji SQL, zmiany limitów i strojenia selekcji. Szczegóły: LASTFM_CLOUD_LF2.md.
 
 Następny niezależny zakres: **LOG1 — backend dziennika generowań**. Najpierw kontrakt bez danych uwierzytelniających i surowej historii, izolacja przez account_id, retencja do 100 wpisów/konto, obsługa błędów bez przerywania playlisty, testy i rollback. Jeśli wymaga nowej tabeli, przygotowanie SQL i kodu jest oddzielne od zatwierdzanego wykonania migracji produkcyjnej. Potem LOG2 → M → V / S1 / S2 → COVER1 → COVER2. Zmiany algorytmu i T1 nadal osobno.
+
+## LOG1 — v43.34.LOG1
+
+Osobne GET/POST `/api/generations`, whitelisty zbiorczej diagnostyki i tabela `generation_logs`, limit 100/konto z atomową retencją i deduplikacją UUID. Minimalny zapis klienta po zakończeniu generatora; osobny wynik LF2 i ostatni lokalny wpis bez usuwania cache po quota. Bez zmian selekcji, progów, discovery, feedbacku ani RMF. Dokument: GENERATION_LOG_LOG1.md.
+
+**Aktywacja produkcyjnej tabeli wymaga osobnego zatwierdzenia** pliku migrations/0001_generation_logs.sql; kod toleruje brak tabeli i nie wykonuje SQL migracji automatycznie. Po aktywacji i uprawnionym smoke testem następny niezależny PR: **LOG2 — chroniony widok historii** (wersja, długość, czasy, profile, filtry, wynik LF2; lokalna diagnostyka przy błędzie backendu). Dalej M → V / S1 / S2 → COVER1 → COVER2; Q1/F4/T1 i strojenie selekcji pozostają osobno.
