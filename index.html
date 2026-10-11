@@ -6104,7 +6104,7 @@ function reuseQualifyingCache(cachedRows, acquisition) {
     const artists = [...trackArtistKeys(row.track)], signature = trackSignature(row.track);
     return artists.length && !artists.some(artist => (counts.get(artist)?.size || 0) >= 2 || counts.get(artist)?.has(signature));
   });
-  if (!candidates.length) { rebuildCanonicalCleanVariantSignatures(existing); return; }
+  if (!candidates.length) { rebuildCanonicalCleanVariantSignatures(existing, createLastFmEvidenceSnapshot().artistByName); return; }
   // Keep the full prospective context and canonical variants, but score only additions
   // with available artist slots. Existing rows were scored by coverage already.
   const prospective = [...existing, ...additions];
@@ -6122,11 +6122,11 @@ function reuseQualifyingCache(cachedRows, acquisition) {
       counts.get(artist).add(signature);
     }
   }
-  if (!chosen.length) { rebuildCanonicalCleanVariantSignatures(existing); return; }
+  if (!chosen.length) { rebuildCanonicalCleanVariantSignatures(existing, createLastFmEvidenceSnapshot().artistByName); return; }
   // D.2 owns retention across all saved profiles, including redundant qualified rows.
   saveCandidatePool([...existing, ...chosen]);
   activeGenerationProgress?.count("cacheContributed", chosen.length);
-  rebuildCanonicalCleanVariantSignatures(loadCandidatePool());
+  rebuildCanonicalCleanVariantSignatures(loadCandidatePool(), createLastFmEvidenceSnapshot().artistByName);
   renderHistorySummary();
 }
 

@@ -9,7 +9,9 @@ async function run(kind,policy){const s=await harness.page();try{return await s.
  const selected=['bartek','asia','edyta','monika'].map(id=>({id,genres:['rock'],artists:[],categories:[],taste:{hasSurvey:true,likedGenres:['Rock'],okGenres:[],blockedGenres:[]}}));
  const make=(artist,n,variant=false,co=false)=>({id:`${artist}-${n}`,uri:`spotify:track:${artist}-${n}`,name:`Song ${n}${variant?' - Rework':''}`,artists:[{id:artist.repeat(22),name:artist},...(co?[{id:'A'.repeat(22),name:'A'}]:[])],album:{name:'Album'}});
  const rows=['A','B'].flatMap(artist=>Array.from({length:artist==='A'?2:1},(_,n)=>({track:make(artist,n),queries:['genre:"rock"'],savedAt:Date.now()})));
+ if(kind.startsWith("first-"))rows[0].track.artists.push({id:"o",name:"Royal Philharmonic Orchestra"});
  saveCandidatePool(rows);addLastFmTracks(['A','B','C'].flatMap(artist=>Array.from({length:20},(_,n)=>({name:`Song ${n}`,artist:{name:artist}}))),{tags:['rock']});
+ if(kind.startsWith('first-'))localStorage.setItem(LASTFM_ARTIST_POOL_KEY,JSON.stringify((kind==='first-classical'?['classical','rock']:['rock','classical']).map(tag=>({artist:'A',tags:[tag],sources:['tag'],savedAt:Date.now()}))));
  const a=createCandidateAcquisition(selected);let additions;
  if(kind==='saturated')additions=Array.from({length:15},(_,n)=>make('A',n+2));
  else if(kind==='existing')additions=rows.map(r=>r.track);
@@ -23,7 +25,7 @@ async function run(kind,policy){const s=await harness.page();try{return await s.
  const pool=loadCandidatePool(),ctx=acquisitionContext(selected);const {eligible,stats}=original(selected,generationBlocklists(selected),ctx);const result=selectGroupPlaylist(eligible,10,ctx,stats);
  return {pool,ids:result.tracks.map(t=>t.id),details:[...result.details],counts:result.discoveryCount,calls,canonical:[...canonicalCleanVariantSignatures].sort()};
  },{kind,policy,baseline});}finally{assert.deepEqual(s.errors,[]);await s.close();}}
-for(const kind of ['saturated','existing','coartist','duplicate','mixed'])test(`Q1.3 ${kind}: identical pool, scores, selection and canonical variants`,async()=>{
+for(const kind of ['saturated','existing','coartist','duplicate','mixed','first-classical','first-modern'])test(`Q1.3 ${kind}: identical pool, scores, selection and canonical variants`,async()=>{
  const a=await run(kind,'baseline'),b=await run(kind,'candidate');const {calls:ac,...ao}=a,{calls:bc,...bo}=b;assert.deepEqual(bo,ao);
  if(['saturated','coartist','duplicate'].includes(kind)){assert.ok(ac.length>0);assert.equal(bc.length,0);}
  if(kind==='mixed'){assert.ok(bc[0].rows<ac[0].rows);assert.equal(bc[0].canonical,ac[0].canonical);assert.ok(b.pool.some(r=>r.track.id==='C-3'));}
