@@ -17,7 +17,7 @@ Reguły dla całego szacowanego przedziału S1:
 
 Kumulacja w kolejności timestamp + event ID, cap −250 po każdym kroku: nie magazynujemy nadmiarowych punktów ponad cap. Między zdarzeniami i po nich wpływ maleje z half-life 30 dni. Zdarzenie wygasa przy dokładnie 90 dniach. „Pierwsze wczesne” liczone w zachowanych zdarzeniach po resecie. Bez utożsamiania innych wydań/ID, artystów, tytułów ani współwykonawców.
 
-Ręczne 👎 zachowuje istniejące wykluczenie utworu i działanie na wykonawców. Ręczne 👍 zachowuje istniejący efekt i zapisuje reset dla dokładnego Track ID, również gdy auto jest off lub klient nie ma jeszcze auto danych z chmury. Ponowne kliknięcie 👍 zdejmujące ręczną ocenę również zachowuje reset. Manual track value !=0 ma pierwszeństwo przed auto. Błąd resetu nie kasuje ręcznej oceny: komunikat prosi ponowić 👍 przed zdjęciem oceny. Bez zweryfikowanego immutable account_id nie przypisujemy automatycznych danych do publicznego id.
+Ręczne 👎 zachowuje istniejące wykluczenie utworu i działanie na wykonawców. Ręczne 👍 zachowuje istniejący efekt i zapisuje reset dla dokładnego Track ID, również gdy auto jest off lub klient nie ma jeszcze auto danych z chmury. Ponowne kliknięcie 👍 zdejmujące ręczną ocenę również zachowuje reset. Manual track value !=0 ma pierwszeństwo przed auto. Ponowienie nieudanego resetu nie zdejmuje chroniącej ręcznej 👍. Błąd resetu nie kasuje ręcznej oceny: komunikat prosi ponowić 👍 przed zdjęciem oceny. Bez zweryfikowanego immutable account_id nie przypisujemy automatycznych danych do publicznego id.
 
 ## Wpięcie do modelu
 

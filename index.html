@@ -1997,8 +1997,17 @@ async function primeManualSeedArtists(token, selectedProfilesList, maxNewSearche
 async function setTrackFeedback(track, value) {
   const signature = trackSignature(track);
   if (!signature) return;
-  const data = loadFeedback();
-  const current = Number(data[signature]?.value || 0);
+  let data = loadFeedback();
+  let current = Number(data[signature]?.value || 0);
+  let resetDone = false;
+  // Retrying an unsuccessful reset must not first toggle off the protecting 👍.
+  if (value > 0 && current === value && autoTrackFeedback && getAutoFeedbackAccount()) {
+    const before = localStorage.getItem(FEEDBACK_KEY), account = getAutoFeedbackAccount();
+    try { await autoTrackFeedback.reset(track.id); resetDone = true; }
+    catch { document.getElementById("autoSkipStatus").textContent="Nie zdjęto ręcznej 👍: reset automatycznych kar nie powiódł się. Ocena i dane pozostają zachowane; spróbuj później."; return; }
+    if (before !== localStorage.getItem(FEEDBACK_KEY) || account !== getAutoFeedbackAccount()) return;
+    data = loadFeedback(); current = Number(data[signature]?.value || 0);
+  }
   if (current === value) {
     delete data[signature];
   } else {
@@ -2010,7 +2019,7 @@ async function setTrackFeedback(track, value) {
     };
   }
   saveFeedback(data);
-  if (value > 0) {
+  if (value > 0 && !resetDone) {
     try { await autoTrackFeedback?.reset(track.id); scheduleAutomaticCloudSync(); }
     catch { document.getElementById("autoSkipStatus").textContent="Ręczna ocena zapisana, ale nie udało się wyzerować automatycznych kar. Ponów 👍 przed usunięciem ręcznej oceny."; }
   }
