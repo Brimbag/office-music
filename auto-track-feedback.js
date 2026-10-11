@@ -12,7 +12,7 @@
   function validShape(s){
     return exact(s,'version,account,floor,events,resets')&&s.version===1&&text(s.account)&&num(s.floor)&&
       [s.events,s.resets].every(m=>m&&typeof m==='object'&&!Array.isArray(m)&&Object.keys(m).length<=MAX_ROWS)&&bytes(s)<=MAX_BYTES&&
-      Object.entries(s.events).every(([key,e])=>text(key)&&!['__proto__','constructor','prototype'].includes(key)&&exact(e,'trackId,at,kind')&&id(e.trackId)&&num(e.at)&&['early','middle'].includes(e.kind))&&
+      Object.entries(s.events).every(([key,e])=>text(key)&&!['__proto__','constructor','prototype'].includes(key)&&exact(e,'trackId,at,kind,weight')&&[50,100].includes(e.weight)&&(e.kind!=='middle'||e.weight===50)&&id(e.trackId)&&num(e.at)&&['early','middle'].includes(e.kind))&&
       Object.entries(s.resets).every(([key,at])=>id(key)&&num(at));
   }
   function parse(raw,account){
@@ -24,6 +24,8 @@
     const out=empty(s.account);out.floor=Math.max(s.floor,Math.max(0,now-90*DAY));
     for(const [key,at] of Object.entries(s.resets).sort())if(at>out.floor)out.resets[key]=at;
     for(const [key,e] of Object.entries(s.events).sort())if(e.at>out.floor&&e.at>(out.resets[e.trackId]??-1))out.events[key]={...e};
+    const seen=new Set();
+    for(const [,e] of Object.entries(out.events).sort(([a,x],[b,y])=>x.at-y.at||a.localeCompare(b))){if(e.kind==='early'){if(seen.has(e.trackId))e.weight=50;seen.add(e.trackId);}}
     if(!valid(out))throw new Error('Limit dziennika automatycznych kar; wcześniejsze dane zachowano.');
     return out;
   }
@@ -32,14 +34,15 @@
     for(const [key,at] of [...Object.entries(a.resets),...Object.entries(b.resets)])out.resets[key]=Math.max(out.resets[key]??0,at);
     for(const [key,e] of [...Object.entries(a.events),...Object.entries(b.events)]){
       if(Object.hasOwn(out.events,key)&&(out.events[key].trackId!==e.trackId||out.events[key].at!==e.at||out.events[key].kind!==e.kind))throw new Error('Konflikt ID pominięcia; dane zachowano.');
-      out.events[key]={trackId:e.trackId,at:e.at,kind:e.kind};
+      out.events[key]={trackId:e.trackId,at:e.at,kind:e.kind,weight:Math.min(out.events[key]?.weight??100,e.weight)};
     }
     return normalize(out,now);
   }
   function add(s,event,now=Date.now()){
     if(!root.OfficeSkipJournal?.validEvent(event)||event.account!==s.account||event.at>now||event.at<now-10000)throw new Error('Nieaktualne pominięcie; bez kary.');
     if(event.kind==='late')return normalize(s,now);
-    const next=empty(s.account);next.events[event.id]={trackId:event.trackId,at:event.at,kind:event.kind};
+    const next=empty(s.account);const previousEarly=Object.values(s.events).some(e=>e.trackId===event.trackId&&e.kind==='early'&&e.at>Math.max(s.floor,s.resets[event.trackId]??-1,now-90*DAY));
+    next.events[event.id]={trackId:event.trackId,at:event.at,kind:event.kind,weight:s.events[event.id]?.weight??(event.kind==='early'&&!previousEarly?100:50)};
     return merge(s,next,s.account,now);
   }
   function reset(s,trackId,now=Date.now()){
@@ -47,10 +50,10 @@
     const next=empty(s.account);next.resets[trackId]=now;return merge(s,next,s.account,now);
   }
   function score(s,trackId,now=Date.now()){
-    if(!id(trackId))return 0;let early=0,total=0,last=0;
+    if(!id(trackId))return 0;let total=0,last=0;
     const events=Object.entries(s.events).filter(([,e])=>e.trackId===trackId&&e.at>Math.max(s.floor,s.resets[trackId]??-1,now-90*DAY)&&e.at<=now)
       .sort(([a,x],[b,y])=>x.at-y.at||a.localeCompare(b));
-    for(const [,e] of events){const weight=e.kind==='early'&&early++===0?100:50;total=Math.min(250,total*Math.pow(.5,(e.at-last)/(30*DAY))+weight);last=e.at;}
+    for(const [,e] of events){const weight=e.weight;total=Math.min(250,total*Math.pow(.5,(e.at-last)/(30*DAY))+weight);last=e.at;}
     return total?-total*Math.pow(.5,(now-last)/(30*DAY)):0;
   }
   const localKey=account=>KEY+':'+encodeURIComponent(account);
@@ -68,7 +71,7 @@
     }
     return Object.freeze({enabled,state,has:a=>storage.getItem(localKey(a))!==null,
       async configure(value){const a=getAccount();if(!text(a))throw new Error('Połącz Spotify.');state(a);const key=enabledKey(a);await edit(key,storage.getItem(key),value?'1':'0');},
-      async record(event){const a=getAccount();if(!enabled()||a!==event.account)return false;await update(a,s=>add(s,event,now()));return true;},
+      async record(event){const a=getAccount();if(!enabled()||a!==event.account)return false;await update(a,s=>add(s,event,now()));return Object.hasOwn(state(a).events,event.id);},
       async reset(trackId){const a=getAccount();if(!a)return;await update(a,s=>reset(s,trackId,now()));},
       async accept(account,remote){await update(account,s=>merge(s,remote,account,now()));},
       score(trackId){const a=getAccount();if(!a||!enabled())return 0;try{return score(state(a),trackId,now());}catch{onError();return 0;}}

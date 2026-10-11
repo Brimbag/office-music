@@ -62,7 +62,7 @@ try {
             localStorage.setItem('spotify_access_token','mock-token');localStorage.setItem('spotify_token_expires',String(now+3600000));
             lastFmSpotifyAccount='mock-owner';autoFeedbackAccount='mock-owner';playbackSessionTag='benchmark';playbackSessionVerified=true;playbackVerifiedAccess='mock-token';playbackSessionNeedsCheck=false;
             const A=OfficeAutoTrackFeedback,state=A.empty('mock-owner');
-            for(let i=0;i<(autoSkip==='early'?20:100);i++)for(let j=0;j<(autoSkip==='early'?1:4);j++)state.events[`synthetic-${i}-${j}`]={trackId:`t${i}`,kind:'early',at:now-1000+j};
+            for(let i=0;i<(autoSkip==='early'?20:100);i++)for(let j=0;j<(autoSkip==='early'?1:4);j++)state.events[`synthetic-${i}-${j}`]={trackId:`t${i}`,kind:'early',weight:j===0?100:50,at:now-1000+j};
             localStorage.setItem(A.localKey('mock-owner'),JSON.stringify(state));localStorage.setItem(A.enabledKey('mock-owner'),'1');
           }
           const makeTrack = i => ({ id: `t${i}`, uri: `spotify:track:t${i}`, name: `Song ${i}${i >= 100 ? ' - Rework' : ''}`,
