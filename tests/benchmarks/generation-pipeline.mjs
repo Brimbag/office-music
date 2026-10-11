@@ -6,6 +6,8 @@ import { installP4Variant } from '../helpers/p4-variants.mjs';
 import { installP4Fixture } from '../helpers/p4-fixture.mjs';
 import { startBrowserHarness } from '../helpers/browser.mjs';
 
+const autoSkip = process.env.OMM_BENCH_AUTO_SKIP || '';
+assert.ok(['','early','cap'].includes(autoSkip));
 const freshResults = process.env.OMM_BENCH_FRESH_RESULTS === '1';
 const peopleCases = process.env.OMM_BENCH_PEOPLE ? [Number(process.env.OMM_BENCH_PEOPLE)] : [2,4];
 assert.ok(peopleCases.every(value=>[2,4].includes(value)));
@@ -31,7 +33,7 @@ try {
     for (let iteration = 0; iteration <= repetitions; iteration++) {
       const session = await harness.page();
       try {
-        const output = await session.page.evaluate(async ({ people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind, fixtureSource, variant, variantSource, variants, freshResults }) => {
+        const output = await session.page.evaluate(async ({ people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind, fixtureSource, variant, variantSource, variants, freshResults, autoSkip }) => {
           if (baseline?.progressSource) (0,eval)(baseline.progressSource);
           if (baseline) for (const [name, source] of Object.entries(baseline.functions)) window[name] = (0, eval)(`(${source})`);
           if (fixedClock) {
@@ -56,6 +58,13 @@ try {
           }
           Math.random = () => 0.25;
           const now = Date.now();
+          if(autoSkip){
+            localStorage.setItem('spotify_access_token','mock-token');localStorage.setItem('spotify_token_expires',String(now+3600000));
+            lastFmSpotifyAccount='mock-owner';autoFeedbackAccount='mock-owner';playbackSessionTag='benchmark';playbackSessionVerified=true;playbackVerifiedAccess='mock-token';playbackSessionNeedsCheck=false;
+            const A=OfficeAutoTrackFeedback,state=A.empty('mock-owner');
+            for(let i=0;i<(autoSkip==='early'?20:100);i++)for(let j=0;j<(autoSkip==='early'?1:4);j++)state.events[`synthetic-${i}-${j}`]={trackId:`t${i}`,kind:'early',at:now-1000+j};
+            localStorage.setItem(A.localKey('mock-owner'),JSON.stringify(state));localStorage.setItem(A.enabledKey('mock-owner'),'1');
+          }
           const makeTrack = i => ({ id: `t${i}`, uri: `spotify:track:t${i}`, name: `Song ${i}${i >= 100 ? ' - Rework' : ''}`,
             artists: [{ id: `a${i}`, name: i < 100 ? `Good${i}` : `Unused${i % 1700}` }], album: { name: `Album ${i}` } });
           let tracks = Array.from({ length: poolSize }, (_, i) => makeTrack(i));
@@ -116,7 +125,7 @@ try {
           }
           const pools = () => ({ spotify: loadCandidatePool().length, artists: loadLastFmArtistPool().length, tracks: loadLastFmTrackPool().length });
           const before = pools(), requests = [], written = [];
-          let remoteState = {}, searchRequests = 0;
+          let remoteState = {}, remoteAuto=null, searchRequests = 0;
           window.fetch = async (input, options = {}) => {
             const url = new URL(input, location.href), method = options.method || 'GET';
             const started = performance.now();
@@ -153,6 +162,10 @@ try {
             if (url.pathname === '/api/lastfm') {
               if (method === 'PUT') return Response.json({ ok: true, saved: 1 });
               return Response.json({ ok: true, cache: null, base: null });
+            }
+            if (url.pathname === '/api/auto-feedback') {
+              if(method==='PUT'){remoteAuto=JSON.parse(options.body).state;return Response.json({ok:true,state:remoteAuto});}
+              return Response.json({ok:true,state:remoteAuto,base:remoteAuto===null?null:JSON.stringify(remoteAuto)});
             }
             if (url.pathname === '/api/state') {
               if (method === 'PUT') { remoteState = JSON.parse(options.body).state; return Response.json({ ok: true, saved: Object.keys(remoteState).length }); }
@@ -214,12 +227,13 @@ try {
             const artists=new Set(snapshot.tracks.flatMap(track=>track.artists.map(a=>a.id||normalizeArtistName(a.name))));
             experiment={variant,datasetDigest,ownScores:scores(own),referenceAScores:scores(reference),discovery:finalResult.discoveryCount,historyKnown:known,historyKnownShare:known/Math.max(1,snapshot.tracks.length),distinctArtists:artists.size};
           }
-          return { people, cache, target, poolSize, caseKind, ...(fixtureSource?{progressReport:lastGenerationReport}:{}), ...(variants?{experiment}:{}), appVersion: document.querySelector('h1 .version').textContent, before, after: pools(), metrics, requests, selection: selection || null, searches: newSearchesThisGeneration,
+          return { people, cache, target, poolSize, caseKind, ...(fixtureSource?{progressReport:lastGenerationReport}:{}), ...(variants?{experiment}:{}), appVersion: document.querySelector('h1 .version').textContent, autoScores:{enabled:autoTrackFeedback.enabled(),t0:autoTrackFeedback.score("t0")}, before, after: pools(), metrics, requests, selection: selection || null, searches: newSearchesThisGeneration,
             journal: lastGenerationReport?.journal || null, length: written.length, ids: (snapshot?.tracks || []).map(track => track.id), disabled: generateButton.disabled,
             diagnostics: (snapshot?.tracks || []).map(track => track.diagnostic),
             stateBytes: new TextEncoder().encode(JSON.stringify({ state: remoteState })).length };
-        }, { people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind, fixtureSource, variant, variantSource, variants, freshResults });
+        }, { people, cache, transportDelayMs, instrument, fixedClock, baseline, target, poolSize, caseKind, fixtureSource, variant, variantSource, variants, freshResults, autoSkip });
         assert.deepEqual(session.errors, []);
+        if(autoSkip){assert.equal(output.autoScores.enabled,true);assert.ok(output.autoScores.t0 < (autoSkip==='cap'?-249:-99));}
         if(variants) {
           assert.ok(output.experiment?.datasetDigest);
           const key=JSON.stringify([people,cache,target,poolSize,caseKind,iteration]);
@@ -249,6 +263,6 @@ try {
         exclusiveP95Ms: p95(samples.map(row => row.metrics[name]?.exclusiveMs || 0))
       }])), raw: samples });
   }
-  console.log(JSON.stringify({ appVersion: results[0].raw[0].appVersion, baselineCommit: baseline?.commit || null, fixedClock, repetitions, transportDelayMs, instrument, freshResults,
+  console.log(JSON.stringify({ appVersion: results[0].raw[0].appVersion, baselineCommit: baseline?.commit || null, autoSkip, fixedClock, repetitions, transportDelayMs, instrument, freshResults,
     note: 'Synthetic Chromium full-pipeline audit, no live network. Cold/warm application caches, not machine disk cache. Original 700ms search pacing preserved. Nested inclusive times overlap; exclusive times partition each run. Last.fm cold mock returns valid empty responses, not a populated network backfill. p95 with five samples is the sample maximum, not a production percentile.', results }, null, 2));
 } finally { await harness.close(); }
