@@ -125,3 +125,5 @@ Użytkownik zastąpił wcześniejsze COVER1/COVER2 jednym automatycznym mechaniz
 ### Q1.1 — 1.0.1-rc (2026-10-11)
 
 Użytkownik potwierdził działanie okładek w v1.0.0-rc.1. Zatwierdził audyt Q1.1 bez zmiany selekcji oraz scalenie/wdrożenie po testach. Nowa numeracja: 1.0.1-rc, następnie 1.0.2-rc itd. Raport i narzędzie offline: [Q1_LENGTH_AUDIT.md](Q1_LENGTH_AUDIT.md). Kontrolowana dojrzała baza daje 60/60 dla 2/3/4 profili; nie odtworzono produkcyjnych 35–36/60, bo brak pełnego eksportu. Kolejny etap wymaga odtworzenia realnego przypadku, a następnie wyboru jednej poprawki Q1.2; brak zgody na arbitralne strojenie progów lub pozyskiwania.
+
+Q1.2 (`1.0.2-rc`): ostatni etap pozyskiwania preferuje niewypełnione zapytania wykonawców Last.fm przed wspólnymi gatunkami; budżet, blokady, selekcja i pule bez zmian. Plan/rollback: `docs/Q1_2_TARGETED_ACQUISITION.md`. Następny kandydat: osobna optymalizacja kwalifikacji cache po kontrolowanym pomiarze i smoke Q1.2.
