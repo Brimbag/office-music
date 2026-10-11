@@ -95,3 +95,9 @@ Chroniony widok w Narzędzia i dane → Historia generowań: odczyt na żądanie
 Wspólny, wyłącznie odczytowy snapshot Spotify dla RMF i przyszłych konsumentów. Single-flight, jawnie uzbrajany polling, Web Locks/atomowa dzierżawa i BroadcastChannel, backoff/401/deadline, luki i izolacja sesji. Brak uzbrojonych konsumentów w M oznacza zero dodatkowego cyklicznego odpytywania po wdrożeniu. Kolejka RMF, algorytm playlist, feedback, discovery i produkcyjne D1 pozostają bez zmian. Dokument: SPOTIFY_PLAYBACK_MONITOR_M.md. Uzupełniono wyłącznie zapis przekazanego pozytywnego smoke testu LOG1/LOG2; migracja zakończona.
 
 Następny niezależny PR: **V — opcjonalna względna głośność Faktów RMF**, z rzeczywistą kontrolą możliwości urządzenia i osobnym projektem dzierżawy/przywracania. Potem S1/S2 → COVER1/COVER2; automatyczne kary, zmiany selekcji i strojenie nie należą do M.
+
+## V — v43.37.V
+
+Opcjonalne względne podbicie regularnych Faktów, off po otwarciu strony, lokalny intent/CAS i jawne odzyskiwanie, ochrona ręcznej głośności/urządzenia. Jeden konsument M, bez zmian kolejki, algorytmu i D1. Limit 70%, gain 0–20%, default +10%; zamknięcie karty pozwala wyłącznie na best-effort restore. Dokument: RMF_VOLUME_V.md. Realne capabilities/Premium wymagają świadomego smoke testu po włączeniu, mock nie zastępuje urządzenia użytkownika.
+
+Następny niezależny zakres: **S1 — dziennik prawdopodobnych pominięć bez wpływu na rekomendacje**. Wspólny monitor M, tylko jawnie wybrana playlista OMM i Track ID, niejednoznaczne przejścia pomijane, deduplikacja i izolacja od ręcznych ocen/wykonawców. S2 wymaga osobnej decyzji o wygasaniu, kumulacji i resetach oraz pomiaru długości/jakości dla 2/4 osób. Potem COVER1/COVER2; Q1/F4/T1 osobno. Produkcyjny smoke LOG1/LOG2 pozostaje pozytywny; żadnego ponawiania migracji.
