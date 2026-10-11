@@ -1366,10 +1366,11 @@ async function syncLastFmCloudSafely(token, options) {
   }
 }
 
-let autoFeedbackSyncFlight = null, autoFeedbackSyncMemo = null;
+let autoFeedbackSyncFlight = null, autoFeedbackSyncMemo = null, autoFeedbackSyncBackoff = null;
 async function syncAutoTrackFeedback(token, {force=false}={}) {
   const account=getAutoFeedbackAccount();
   if(!account || !autoTrackFeedback || (!autoTrackFeedback.has(account) && !autoTrackFeedback.enabled()))return {skipped:true};
+  if(autoFeedbackSyncBackoff?.account===account && Date.now()<autoFeedbackSyncBackoff.until)throw new Error("Odczekaj przed ponowną synchronizacją automatycznych ocen; dane zachowano.");
   if(autoFeedbackSyncFlight)return autoFeedbackSyncFlight;
   const fingerprint=JSON.stringify(autoTrackFeedback.state(account));
   if(!force && autoFeedbackSyncMemo?.account===account && autoFeedbackSyncMemo.fingerprint===fingerprint && Date.now()-autoFeedbackSyncMemo.at<10*60000)return {skipped:true};
@@ -1381,7 +1382,7 @@ async function syncAutoTrackFeedback(token, {force=false}={}) {
       let response=await send(token);
       if(response.status===401){const active=await refreshAccessToken(localStorage.getItem("spotify_access_token")||token);if(!active)throw new Error("Połącz Spotify ponownie.");response=await send(active);}
       const data=await parseJsonSafely(response);
-      if(!response.ok){const error=new Error(`Synchronizacja automatycznych ocen: HTTP ${response.status}; dane lokalne zachowano.`);error.status=response.status;throw error;}
+      if(!response.ok){const error=new Error(`Synchronizacja automatycznych ocen: HTTP ${response.status}; dane lokalne zachowano.`);error.status=response.status;const retry=Number(response.headers.get("Retry-After"));error.retryAfterMs=Number.isFinite(retry)&&retry>0?Math.min(3600000,Math.max(1000,retry*1000)):120000;throw error;}
       if(getAutoFeedbackAccount()!==account)throw new Error("Konto zmieniło się; nie przenoszę automatycznych ocen.");
       return data;
     } finally {cloudRequestsInFlight--;}
@@ -1395,14 +1396,15 @@ async function syncAutoTrackFeedback(token, {force=false}={}) {
       try {
         const saved=await request({method:"PUT",body:JSON.stringify({state,base:remote.base})});
         await autoTrackFeedback.accept(account,saved.state);
-        autoFeedbackSyncMemo={account,fingerprint:JSON.stringify(autoTrackFeedback.state(account)),at:Date.now()};return {saved:1};
+        autoFeedbackSyncBackoff=null;autoFeedbackSyncMemo={account,fingerprint:JSON.stringify(autoTrackFeedback.state(account)),at:Date.now()};return {saved:1};
       } catch(error){if(error.status!==409 || attempt===2)throw error;}
     }
   })();
   try{return await autoFeedbackSyncFlight;}finally{autoFeedbackSyncFlight=null;}
 }
 async function syncAutoTrackFeedbackSafely(token,options){
-  try{return await syncAutoTrackFeedback(token,options);}catch(error){document.getElementById("autoSkipStatus").textContent=`Nie udało się zsynchronizować automatycznych ocen${error.status?` (HTTP ${error.status})`:""}; dane lokalne zachowano. Ponów synchronizację później.`;return {error:true};}
+  const account=getAutoFeedbackAccount();
+  try{return await syncAutoTrackFeedback(token,options);}catch(error){if(account && getAutoFeedbackAccount()===account && !(autoFeedbackSyncBackoff?.account===account && autoFeedbackSyncBackoff.until>Date.now()))autoFeedbackSyncBackoff={account,until:Date.now()+(error.retryAfterMs||120000)};document.getElementById("autoSkipStatus").textContent=`Nie udało się zsynchronizować automatycznych ocen${error.status?` (HTTP ${error.status})`:""}; dane lokalne zachowano. Ponów synchronizację później.`;return {error:true};}
 }
 
 async function uploadCloudStateIfChanged(token, { force = false, status = true } = {}) {
@@ -7068,7 +7070,7 @@ if (window.OfficeSkipJournal && window.OfficeAutoTrackFeedback && spotifyPlaybac
   skipJournalController=OfficeSkipJournal.create({monitor:spotifyPlaybackMonitor,getSession:playbackSession,
     busy:()=>generationInFlight || OmmLocalState.blocked,onEvent:event=>{
       void refreshRows();const gate=autoSkipGate;
-      if(gate && gate.account===event.account && event.at>=gate.since && event.kind!=="late")void autoTrackFeedback.record({...event,account:gate.autoAccount}).then(applied=>{if(applied && autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){void refreshRows();autoStatus.textContent="Zapisano nową automatyczną ocenę dla dokładnego Spotify Track ID. Bez kary wykonawcy.";scheduleAutomaticCloudSync();}}).catch(()=>{skipJournalController.stop("storage");autoStatus.textContent="Nie zapisano automatycznej kary; poprzednie dane zachowano. Obserwacja zatrzymana.";});
+      if(gate && gate.account===event.account && event.at>=gate.since && event.kind!=="late")void autoTrackFeedback.record({...event,account:gate.autoAccount}).then(applied=>{if(applied && autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){void refreshRows();autoStatus.textContent="Zapisano nową automatyczną ocenę dla dokładnego Spotify Track ID. Bez kary wykonawcy.";scheduleAutomaticCloudSync();}}).catch(()=>{if(autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){skipJournalController.stop("storage");autoStatus.textContent="Nie zapisano automatycznej kary; poprzednie dane zachowano. Obserwacja zatrzymana.";}});
     },onStatus:info=>{
       if(!info.active)autoSkipGate=null;
       start.disabled=info.active;stop.disabled=!info.active;choice.disabled=info.active;
