@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer v43.38.V1</title>
+  <title>Office Music Mixer v43.39.V2</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -418,7 +418,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">v43.38.V1</span></h1>
+        <h1>Office Music Mixer <span class="version">v43.39.V2</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -547,8 +547,8 @@
       <fieldset class="rmf-volume-settings">
         <legend>Głośność Faktów</legend>
         <label><input id="rmfVolumeEnabled" type="checkbox"> Automatycznie zwiększaj głośność Faktów</label>
-        <label>Wzmocnienie względne: <input id="rmfVolumeGain" type="number" min="0" max="20" step="1" value="10" style="width:5em">%</label>
-        <p class="small">Np. 40% → 44% przy +10%. Limit podbicia: 70%; wyższy poziom pozostaje bez zmian. Włączaj w jednej karcie i jednej przeglądarce. Po ponownym otwarciu sterowanie jest wyłączone.</p>
+        <label for="rmfVolumeGain">Wzmocnienie: <input id="rmfVolumeGain" type="range" min="0" max="30" step="1" value="10"> <output id="rmfVolumeGainValue" for="rmfVolumeGain">+10 p.p.</output></label>
+        <p class="small">Np. 40% → 50% przy +10 p.p.; maksymalnie 100%. Monitor działa także w tle, tylko po dodaniu Faktów przez OMM, przez maks. 60 minut. Po powrocie do muzyki kończy sesję; kolejne oczekujące Fakty przedłużają obserwację w ramach tego limitu. Włączaj w jednej przeglądarce na jednym komputerze.</p>
         <p class="small">Zamknięcie lub uśpienie przeglądarki może uniemożliwić przywrócenie głośności. Po powrocie sprawdź zapisany poziom. Ręczna zmiana ma pierwszeństwo; ustawienia dokładnie tej samej wartości API nie rozróżnia.</p>
         <p id="rmfVolumeStatus" class="small" role="status">Głośność Faktów: funkcja wyłączona.</p>
         <button id="rmfVolumeRecovery" type="button" class="secondary">Sprawdź zapisany poziom</button>
@@ -657,6 +657,7 @@
 <script src="generation-history.js"></script>
 <script src="spotify-playback-monitor.js"></script>
 <script src="rmf-volume.js"></script>
+<script src="rmf-volume-session.js"></script>
 <script>
 const clientId = "d207523201ce4426923cda4cc893f76f";
 const redirectUri = "https://office-music.pages.dev/";
@@ -1469,7 +1470,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer v43.38.V1",
+      source: "Office Music Mixer v43.39.V2",
       storage: exportedStorageState()
     };
 
@@ -2198,6 +2199,10 @@ function sleepMs(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 async function queueRmfWithDiagnostics(token, episode, playback, mode = "auto") {
   const before = await fetchSpotifyQueueSnapshot(token);
   await addEpisodeToQueue(token, episode, playback?.deviceId || "");
+  // A volume failure must never repeat or invalidate a successful queue POST.
+  try { const registered = await rmfVolumeController?.queued({...episode, show:{id:RMF_SHOW_ID}}, playback?.deviceId || "");
+    if (registered === false && rmfVolumeController.diagnostics().selected) document.getElementById("rmfVolumeStatus").textContent = "Fakty dodane do kolejki, ale regulacja nie została uzbrojona: brak potwierdzonego urządzenia lub limit oczekujących odcinków."; }
+  catch { document.getElementById("rmfVolumeStatus").textContent = "Fakty dodane do kolejki, ale nie udało się uruchomić regulacji. Sprawdź zapisany poziom."; }
   await sleepMs(900);
   const after = await fetchSpotifyQueueSnapshot(token);
   const afterPosition = queuePosition(after, episode.uri);
@@ -6176,7 +6181,6 @@ async function generateOfficePlaylist() {
   try {
     generateButton.disabled = true;
     if (rmfVolumeController) await rmfVolumeController.suspend("generation");
-    document.getElementById("rmfVolumeEnabled").checked = false;
     await Promise.all([...localPreferenceFields.values()].map(field => field.queue));
     newSearchesThisGeneration = 0;
     queriesAttemptedThisGeneration = new Set();
@@ -6579,9 +6583,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy v43.38.V1: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy v43.39.V2: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.38.V1 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a v43.39.V2 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -6865,40 +6869,45 @@ if (window.OfficeSpotifyPlayback) {
   } catch { document.getElementById("playbackMonitorStatus").textContent = "Monitor odtwarzania niedostępny; dotychczasowe narzędzia RMF pozostają dostępne."; }
 }
 // V uses the M snapshot; it never changes transport, RMF queue or generation inputs.
-if (window.OfficeRmfVolume && spotifyPlaybackMonitor) {
+if (window.OfficeRmfVolumeSession && spotifyPlaybackMonitor) {
   const toggle = document.getElementById("rmfVolumeEnabled"), gain = document.getElementById("rmfVolumeGain");
   const status = document.getElementById("rmfVolumeStatus");
-  try { const saved = JSON.parse(localStorage.getItem("office_rmf_volume_settings_v1") || "{}");
-    if (Number.isInteger(saved.gain) && saved.gain >= 0 && saved.gain <= 20) gain.value = saved.gain;
+  try { const saved = JSON.parse(localStorage.getItem("office_rmf_volume_settings_v2") || "{}");
+    if (saved.unit === "pp" && Number.isInteger(saved.gain) && saved.gain >= 0 && saved.gain <= 30) { gain.value = saved.gain; toggle.checked = saved.enabled === true; }
   } catch {}
+  const gainValue = document.getElementById("rmfVolumeGainValue");
+  const showGain = () => { gainValue.value = `+${gain.value} p.p.`; };
+  showGain(); gain.addEventListener("input", showGain);
+  const saveSettings = () => localStorage.setItem("office_rmf_volume_settings_v2", JSON.stringify({unit:"pp",gain:Number(gain.value),enabled:toggle.checked}));
   const failures = {ownership_lost:"Zapis regulacji został przejęty lub zmieniony w innej karcie. Nie ponawiam zmiany.",stale_state:"Stan urządzenia stracił aktualność przed zmianą. Sprawdź ponownie.",volume_not_confirmed:"Spotify nie potwierdziło oczekiwanej głośności mimo ponownych odczytów. Zapis poziomu zachowano.",confirmation_timeout:"Przekroczono czas potwierdzania głośności. Zapis poziomu zachowano.",device_changed:"Zmieniło się urządzenie lub nie potwierdza ono obsługi głośności.",session_changed:"Sesja sterowania zmieniła się podczas potwierdzania.",playback_unavailable:"Nie udało się odczytać stanu odtwarzania do potwierdzenia."};
-  const descriptions = {off:"funkcja wyłączona",ready:"czekam na regularne Fakty",boosted:"podbicie potwierdzone",unchanged:"poziom nie wymaga podbicia",waiting:"wymagane widoczne okno i aktywna sesja Spotify",unsupported:"urządzenie nie potwierdza możliwości regulacji lub odtwarzanie nie jest aktywne",manual:"ręczna zmiana ma pierwszeństwo; poprzedni poziom nie zostanie narzucony",recovery:"zapisany poziom wymaga sprawdzenia — nie podbijam ponownie",unavailable:"nie udało się sprawdzić Spotify; odtwarzanie pozostaje bez zmian",storage:"nie można bezpiecznie zapisać poziomu — regulacja zatrzymana"};
-  rmfVolumeController = OfficeRmfVolume.create({monitor:spotifyPlaybackMonitor,getSession:playbackSession,
+  const descriptions = {off:"funkcja wyłączona",ready:"czekam na regularne Fakty",boosted:"podbicie potwierdzone",unchanged:"poziom nie wymaga podbicia",idle:"włączone; monitor uruchomi się po dodaniu Faktów do kolejki",completed:"poziom przywrócony lub zachowano ręczną zmianę; monitor zatrzymany do kolejnych Faktów",expired:"upłynął limit 60 minut; sprawdź zapisany poziom przed kolejną próbą",interrupted:"sesja przerwana; sprawdź zapisany poziom",settings:"zmieniono wzmocnienie; czekam na kolejne dodanie Faktów",generation:"sesja wstrzymana na czas generowania; czekam na kolejne dodanie Faktów",pagehide:"karta zamknięta lub uśpiona; sprawdź zapisany poziom",session:"sesja Spotify zmieniła się; sprawdź zapisany poziom",waiting:"wymagana aktywna sesja Spotify",unsupported:"urządzenie nie potwierdza możliwości regulacji lub odtwarzanie nie jest aktywne",manual:"ręczna zmiana ma pierwszeństwo; poprzedni poziom nie zostanie narzucony",recovery:"zapisany poziom wymaga sprawdzenia — nie podbijam ponownie",unavailable:"nie udało się sprawdzić Spotify; odtwarzanie pozostaje bez zmian",storage:"nie można bezpiecznie zapisać poziomu — regulacja zatrzymana"};
+  rmfVolumeController = OfficeRmfVolumeSession.create({monitor:spotifyPlaybackMonitor,getSession:playbackSession,
     busy:()=>generationInFlight || OmmLocalState.blocked,
     lookup:async(id,scope,signal)=>{ const response = await requestRmfVolumeApi(`https://api.spotify.com/v1/episodes/${encodeURIComponent(id)}?market=PL`, "GET", scope, signal); return response.json(); },
     write:async(value,device,scope,signal)=>requestRmfVolumeApi(`https://api.spotify.com/v1/me/player/volume?volume_percent=${value}&device_id=${encodeURIComponent(device)}`, "PUT", scope, signal),
-    onStatus:info=>{ toggle.checked = info.enabled; status.textContent = `Głośność Faktów: ${descriptions[info.status] || "brak potwierdzenia"}.${info.baseline !== null ? ` Zapisany poziom: ${info.baseline}% → ${info.target}%.` : ""} ${info.errorCode === 401 ? "Zaloguj się ponownie." : info.errorCode === 403 ? "Spotify nie zezwala na sterowanie — sprawdź Premium i uprawnienia." : info.errorCode === 429 ? "Limit API — regulacja wstrzymana; odczekaj przed ponowieniem." : info.errorCode === 503 ? "Błąd połączenia lub brak potwierdzenia — sprawdź Spotify." : ""} ${failures[info.failureReason] || ""}${info.observedVolume !== null ? ` Ostatni odczyt głośności Spotify: ${info.observedVolume}%.` : ""} Zmiany: ${info.writes}; sprawdzenia odcinków: ${info.lookups}; odczyty potwierdzające: ${info.confirmationReads}.`; }
+    onStatus:info=>{ toggle.checked = info.selected; status.textContent = `Głośność Faktów: ${descriptions[info.status] || "brak potwierdzenia"}.${info.baseline !== null ? ` Zapisany poziom: ${info.baseline}% → ${info.target}%.` : ""} ${info.errorCode === 401 ? "Zaloguj się ponownie." : info.errorCode === 403 ? "Spotify nie zezwala na sterowanie — sprawdź Premium i uprawnienia." : info.errorCode === 429 ? "Limit API — regulacja wstrzymana; odczekaj przed ponowieniem." : info.errorCode === 503 ? "Błąd połączenia lub brak potwierdzenia — sprawdź Spotify." : ""} ${failures[info.failureReason] || ""}${info.observedVolume !== null ? ` Ostatni odczyt głośności Spotify: ${info.observedVolume}%.` : ""} Zmiany: ${info.writes}; sprawdzenia odcinków: ${info.lookups}; odczyty potwierdzające: ${info.confirmationReads}.`; }
   });
   toggle.addEventListener("change", async()=>{
     toggle.disabled = true;
     try {
-      if (!toggle.checked) await rmfVolumeController.suspend("disabled");
+      if (!toggle.checked) await rmfVolumeController.configure(false, Number(gain.value));
       else {
         const value = Number(gain.value);
-        if (!Number.isInteger(value) || value < 0 || value > 20) throw new Error("Wzmocnienie musi wynosić od 0 do 20%.");
+        if (!Number.isInteger(value) || value < 0 || value > 30) throw new Error("Wzmocnienie musi wynosić od 0 do 30 p.p.");
         if (!playbackSession()) { const token = await getValidAccessToken(); if (token) await getProfile(token); }
-        await rmfVolumeController.arm(value);
+        await rmfVolumeController.configure(true, value);
       }
-    } catch { toggle.checked = false; status.textContent = "Nie można uruchomić regulacji. Sprawdź sesję Spotify i wzmocnienie 0–20%."; }
+      saveSettings();
+    } catch { status.textContent = "Nie można zapisać lub uruchomić regulacji. Sprawdź sesję Spotify i wzmocnienie 0–30 p.p."; }
     finally { toggle.disabled = false; }
   });
   gain.addEventListener("change", async()=>{
-    await rmfVolumeController.suspend("settings");
     const value = Number(gain.value);
-    if (!Number.isInteger(value) || value < 0 || value > 20) { gain.value = 10; status.textContent = "Wzmocnienie musi wynosić od 0 do 20%. Sterowanie wyłączone."; return; }
-    try { localStorage.setItem("office_rmf_volume_settings_v1", JSON.stringify({gain:value})); }
+    if (!Number.isInteger(value) || value < 0 || value > 30) { gain.value = 10; showGain(); return; }
+    try { await rmfVolumeController.configure(toggle.checked,value); saveSettings(); }
     catch { status.textContent = "Nie udało się zapisać wzmocnienia. Preferencje i cache pozostają zachowane."; }
   });
+  void rmfVolumeController.configure(toggle.checked, Number(gain.value)).catch(()=>{status.textContent="Nie udało się odczytać ustawień regulacji.";});
   document.getElementById("rmfVolumeRecovery").addEventListener("click", async event=>{
     const button = event.currentTarget; button.disabled = true;
     try {
@@ -6915,7 +6924,6 @@ if (window.OfficeRmfVolume && spotifyPlaybackMonitor) {
     } catch { status.textContent = "Nie można sprawdzić zapisanego poziomu. Sprawdź Spotify; zapis przywrócenia pozostaje zachowany."; }
     finally { button.disabled = false; }
   });
-  document.addEventListener("visibilitychange", ()=>{ if (document.hidden) void rmfVolumeController.suspend("hidden"); });
   window.addEventListener("pagehide", ()=>void rmfVolumeController.suspend("pagehide"));
   window.addEventListener("storage", event=>{ if (event.storageArea === localStorage && (event.key === null || event.key === "spotify_access_token")) void rmfVolumeController.suspend("session"); });
 }

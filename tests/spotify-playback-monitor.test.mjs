@@ -113,3 +113,16 @@ test('M delayed preflight does not send a GET after the deadline or sleep',async
  const m=M.createCore({...c,getSession:()=>({account:'owner',session:'login'}),request:async(_scope,_signal,attempt)=>{await new Promise(r=>start=r);attempt();calls++;return Response.json(payload());}});
  const pending=m.read();await flush();await c.advance(5001);start();assert.equal((await pending).status,'timeout');await flush();assert.equal(calls,0);
 });
+test('M background polling is opt-in per active consumer; visibility change does not reset ownership',async()=>{
+ const s=pollSetup();const off=s.m.subscribe('rmf-volume',()=>{},{active:true,background:true});await flush();const before=s.calls();
+ s.visible(false);s.m.wake('visibility');await s.c.advance(10000);assert.equal(s.calls(),before+2);assert.equal(s.m.diagnostics().leader,true);
+ off();await s.c.advance(60000);assert.equal(s.calls(),before+2);s.m.dispose();
+});
+test('M passive background flag cannot enable hidden polling for ordinary active consumer',async()=>{
+ const s=pollSetup();s.visible(false);s.m.subscribe('ordinary',()=>{},{active:true});s.m.subscribe('passive',()=>{},{background:true});await flush();await s.c.advance(60000);assert.equal(s.calls(),0);s.m.dispose();
+});
+test('M queued background consumer can restart an existing hidden ordinary consumer safely',async()=>{
+ const s=pollSetup();s.visible(false);s.m.subscribe('ordinary',()=>{},{active:true});await flush();assert.equal(s.calls(),0);
+ const off=s.m.subscribe('rmf-volume',()=>{},{active:true,background:true});await flush();assert.equal(s.calls(),1);
+ off();await s.c.advance(60000);assert.equal(s.calls(),1);s.m.dispose();
+});

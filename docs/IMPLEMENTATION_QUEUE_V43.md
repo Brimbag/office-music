@@ -105,3 +105,7 @@ Następny niezależny zakres: **S1 — dziennik prawdopodobnych pominięć bez w
 ## V.1 — naprawa diagnostyki przed S1
 
 Po nieudanym smoke v43.37.V najpierw rozróżnienie braku intentu od błędów urządzenia/sesji oraz ograniczone potwierdzanie opóźnionego readback (wyłącznie GET, bez powtórzenia PUT). Szczegóły: RMF_VOLUME_V1.md. Nie stwierdzono jeszcze jednoznacznej przyczyny błędu live; po V.1 powtórzyć test urządzenia. S1 pozostaje następnym osobnym zakresem po weryfikacji V; S2 i zmiany rekomendacji nie są częścią poprawki.
+
+## V2 — v43.39.V2: kolejka, tło i punkty procentowe
+
+Użytkownik potwierdził pozytywny smoke V1: 49% → 54% podczas Faktów → 49% podczas muzyki. Odznaczanie checkboxa po ukryciu karty uznano za niezgodne z docelową pracą na przypiętej karcie. V2 oddziela preferencję od sesji po udanym dodaniu Faktów, opt-in background w M, maks. 60 min i 10 oczekujących ID, zakończenie po powrocie do muzyki. Suwak 0–30 p.p., default +10, max 100% (bez limitu 70%). Dokument: RMF_VOLUME_V2.md. Stare ustawienia i intent-y zachowane; brak zmian algorytmu/D1. Użytkownik autoryzował scalenie i wdrożenie po testach. Po publikacji smoke przypiętej karty, następnie niezależny S1 (bez kar); S2 i COVER1/COVER2 osobno.

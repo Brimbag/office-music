@@ -140,13 +140,14 @@
       const authority=leader && runnable() && (!held || held.until>wall());
       notify(sample,authority);try{channel?.postMessage({kind:'sample',sample});}catch{}report();
     }});
-    const runnable=()=>!disposed && Boolean(getSession()?.account && getSession()?.session) && visible() && !busy() && [...consumers.values()].some(c=>c.active);
+    const backgroundActive=()=>[...consumers.values()].some(c=>c.active && c.background);
+    const runnable=()=>!disposed && Boolean(getSession()?.account && getSession()?.session) && (visible() || backgroundActive()) && !busy() && [...consumers.values()].some(c=>c.active);
     function connect() {
       const next=getSession()?.account || '';if(next===account)return;
       if(account)suspend('session');
       channel?.close();channel=null;account=next;core.syncSession();
       if(account)try{channel=channelFactory(`omm-playback-v1:${account}`);if(channel)channel.onmessage=event=>{
-        if(disposed || leader || !visible() || busy())return;
+        if(disposed || leader || (!visible() && !backgroundActive()) || busy())return;
         const sample=event.data?.kind==='sample' ? core.shared(event.data.sample) : null;if(sample)notify(sample,false);
       };}catch{}
     }
@@ -190,11 +191,11 @@
       } catch {coordination='unavailable';core.invalidate('coordination');await release();}
       finally {pumping=false;report();if(runnable() && coordination!=='unavailable')timer=setTimer(pump,captured===turn?5000:0);}
     }
-    function wake(reason='gap') {suspend(reason);connect();if(runnable())void pump();}
-    function subscribe(name,listener,{active=false}={}) {
+    function wake(reason='gap') {if(reason==='visibility' && backgroundActive()){report();return;}suspend(reason);connect();if(runnable())void pump();}
+    function subscribe(name,listener,{active=false,background=false}={}) {
       if(disposed || typeof name!=='string' || consumers.has(name) || typeof listener!=='function')throw new Error('Invalid playback consumer');
-      const wasActive=[...consumers.values()].some(c=>c.active);
-      consumers.set(name,{listener,active:active===true});if(!wasActive && active===true)wake('consumer');else{connect();report();}
+      const wasActive=[...consumers.values()].some(c=>c.active),wasRunnable=runnable();
+      consumers.set(name,{listener,active:active===true,background:background===true});if(active===true && (!wasActive || !wasRunnable && runnable()))wake('consumer');else{connect();report();}
       let removed=false;return ()=>{if(!removed){removed=true;consumers.delete(name);if(![...consumers.values()].some(c=>c.active))suspend('consumer');report();}};
     }
     async function read(options) {if(disposed)return null;connect();if(runnable() && !pumping && timer===null)void pump();return core.read(options);}

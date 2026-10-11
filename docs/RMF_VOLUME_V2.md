@@ -1,0 +1,29 @@
+# V2 — v43.39.V2: sesja regulacji po dodaniu Faktów
+
+## Zakres i kontrakt
+
+Użytkownik zatwierdził implementację, scalenie i wdrożenie po przejściu testów. Wzmocnienie zmienia jednostkę na punkty procentowe: suwak 0–30 p.p., default +10 p.p., `min(100, baseline + gain)`. Znika limit 70%; nawet 0% może wzrosnąć do 10%, a 90% do 100%. Zero p.p. nie wykonuje PUT. Baseline przywracany bez przeliczania. Playlisty, jakość, discovery, feedback, harmonogram RMF, POST kolejki, OAuth scopes oraz D1 nie zmieniają semantyki.
+
+`rmf-volume-session.js` oddziela wybraną preferencję od działającej sesji. Nowy lokalny klucz `office_rmf_volume_settings_v2` zawiera `unit: "pp"`, gain i enabled. Stary v1 pozostaje nietknięty i nie jest interpretowany jako p.p.; default V2 to 10 p.p. i wyłączona funkcja. Zapisana preferencja może pozostać zaznaczona po otwarciu strony, ale sama nie uruchamia odczytów. Nie zmienia listy kluczy synchronizacji chmurowej. Oczekujące odcinki są tylko w pamięci; reload nie uruchamia regulacji istniejącej kolejki. Durable intent pozostaje w dotychczasowym IndexedDB, z walidacją target do 100%, więc stare intent-y nadal można odzyskać.
+
+## Kolejka i monitor
+
+Hook jest wspólny dla ręcznego i automatycznego `queueRmfWithDiagnostics`: dopiero po zaakceptowanym POST, przed istniejącym odczytem diagnostycznym po 900 ms. Błąd regulacji nie powtarza POST i nie odbiera sukcesu kolejki. Rejestracja wymaga regularnego odcinka z katalogu RMF (exact ID/URI, show i tytuł HH:00 Fakty), potwierdzonej sesji i znanego urządzenia. Brak identyfikatora urządzenia zatrzymuje uzbrajanie. Monitor nadal potwierdza aktywność, supports_volume i bieżącą głośność przed każdą zmianą. Podbicie dotyczy tylko zarejestrowanych odcinków i urządzenia; inne podcasty/Fakty dodane poza tą sesją nie są podbijane.
+
+M jest współdzielony: jeden aktywny konsument, single-flight, ta sama koordynacja Web Locks/atomowa dzierżawa/BroadcastChannel i obsługa OAuth/backoff. `background:true` jest opt-in tego konsumenta; pasywny konsument nie może włączyć pracy w tle. Zmiana widoczności nie odznacza checkboxa ani nie resetuje prowadzącej karty. Kadencja pozostaje 5 s podczas odtwarzania, 30 s podczas pauzy/braku odtwarzania; potwierdzenia PUT są dodatkowymi ograniczonymi GET (jak V1). Brak sesji oznacza zero dodatkowego cyklicznego odpytywania.
+
+Sesja trwa najwyżej 60 minut od najstarszego oczekującego dodania; nowe dodanie ani duplikat nie przedłuża tego limitu. Maksymalnie 10 oczekujących ID. Po przejściu od zaobserwowanych Faktów do muzyki: przywrócenie lub zachowanie ręcznego poziomu, usunięcie zakończonych ID, odpięcie konsumenta gdy nie zostały inne oczekujące odcinki. Dwa kolejne odcinki zachowują jeden baseline; odcinki rozdzielone muzyką są podbijane osobno. Przerwane/usunięte przed rozpoczęciem odcinki, których rozpoczęcia nie zaobserwowano, kończą oczekiwanie najpóźniej po 60 min; bez dodatkowego cyklicznego endpointu kolejki. Pauza przywraca poziom, ale nie kończy oczekiwania na przejście do muzyki. Zmiana suwaka w trakcie sesji przywraca poziom i czeka na nowe dodanie; nie zmienia podbicia w locie.
+
+## Bezpieczeństwo i ograniczenia
+
+Po spowolnieniu timerów V2 nie interpretuje luki jako pominięcia: sprawdza świeży stan, tę samą sesję/urządzenie, własność intentu i aktualny poziom. Tylko nadal zgodny target może być przywrócony; inny poziom zachowany jako ręczny. Nie ma ponownego podbijania istniejącego cyklu. Zmiana urządzenia/sesji, błąd API, utrata prowadzenia, niespójny zapis lub timeout kończą obserwację i zachowują intent wymagający odzyskania. Preferencja pozostaje zaznaczona; nie oznacza potwierdzonej aktywnej automatyzacji. 429/backoff, jednorazowy retry po jawnej odmowie 401 oraz brak retry PUT po błędzie sieciowym zachowane.
+
+Ukryta/przypięta karta może być throttlowana lub zamrożona. Po całkowitym uśpieniu/zamknięciu żaden timer nie gwarantuje przywrócenia o czasie; timeout również wykona się dopiero po wznowieniu. Pagehide, wylogowanie i generowanie kończą sesję z best-effort restore lub zachowanym intentem. Po nieobserwowanym podbiciu nie następuje zapis na podstawie starego stanu. Nie zmieniamy Windows ani innych aplikacji. Jedna przeglądarka/komputer kontrolujący Spotify: koordynacja nie obejmuje innych komputerów. API nadal nie rozróżnia ręcznego ustawienia dokładnie tego samego targetu.
+
+## Weryfikacja i rollback
+
+Testy jednostkowe: granice p.p./100%, stary intent, default/persisted preference bez GET, udane dodanie kontra odmowa, duplikaty/limit/TTL, urządzenie i konto, niepowiązany podcast, kolejne/rozdzielone odcinki, manual, pause/disable, tło/gap/resume, recovery, pagehide/generation i deadline. Browser: realny shared monitor i IndexedDB, suwak/preferencja, wspólny hook auto/manual, odmowa POST, błąd regulacji bez duplikacji POST, odtwarzanie ukrytej karty na timerze i zero polling po powrocie do muzyki. Pełny `npm test`, CI i benchmark mockowanych generowań dla 2/4 profili sprawdzają brak wpływu na selekcję.
+
+Rollback: najpierw wyłączyć funkcję przy dostępnej karcie i sprawdzić przywrócenie lub ręcznie ustawić Spotify oraz rozwiązać intent przez przycisk odzyskiwania. Dopiero potem revert PR. Stary klient nie akceptuje intentów z target >70%, więc nie wolno oczekiwać, że sam revert przywróci poziom lub obsłuży taki zapis. Zachować dane; nie usuwać intentów/preferencji bez potwierdzenia rozwiązania. Stary klucz v1 umożliwia powrót do dawnych ustawień. Bez migracji SQL.
+
+Smoke użytkownika: wersja v43.39.V2, jedna przypięta karta, muzyka, +10 p.p., włączyć i dodać najnowsze Fakty przez OMM. Przejść do innej karty na cały odcinek; po muzyce wrócić, sprawdzić baseline→min(100,baseline+10) i przywrócenie, zaznaczony checkbox i zatrzymany monitor. Powtórzyć z ręczną zmianą suwaka Spotify podczas Faktów — poziom ma pozostać ręczny. Procenty odczytać z komunikatów OMM.
