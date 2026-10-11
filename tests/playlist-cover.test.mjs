@@ -100,10 +100,12 @@ test('slim metadata preserves one image; OAuth requests image scope; only genera
 });
 for (const people of [2,4]) test(`${people} profiles: artwork metadata cannot change eligibility, scores or shuffled order`, async () => {
   const result=await browser(people=>{
+    const clock=Date.now();Date.now=()=>clock;
     const selected=['bartek','asia','edyta','monika'].slice(0,people).map(id=>({id,name:profiles[id].name,genres:['rock'],artists:[],categories:[],blockedArtists:[],taste:{hasSurvey:true,likedGenres:['Rock'],okGenres:[],blockedGenres:[]}}));
     const tracks=Array.from({length:8},(_,i)=>({id:`track${i}`,uri:`spotify:track:track${i}`,name:`Song ${i}`,artists:[{id:`artist${Math.floor(i/2)}`,name:`Artist ${Math.floor(i/2)}`}],album:{name:'Album'}}));
     addLastFmTracks(tracks.map(t=>({name:t.name,artist:{name:t.artists[0].name}})),{tags:['rock']});
     const run=withImages=>{
+      let seed=1;crypto.getRandomValues=array=>{for(let i=0;i<array.length;i++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;array[i]=seed;}return array;};
       saveCandidatePool(tracks.map(t=>({track:withImages?{...t,album:{...t.album,images:[{url:`https://i.scdn.co/image/${t.id}`}]}}:t,queries:['genre:"rock"'],savedAt:Date.now()})));
       const ctx=buildGroupRecommendationContext(selected),{eligible,stats}=eligibleGroupCandidates(selected,generationBlocklists(selected),ctx);
       Math.random=()=>0.25;

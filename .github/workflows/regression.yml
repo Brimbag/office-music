@@ -29,3 +29,11 @@ jobs:
         run: node tests/benchmarks/generation-pipeline.mjs > /tmp/generation-benchmark.json
         env:
           OMM_BENCH_REPETITIONS: '1'
+
+      - name: Q1 read-only audit smoke (3 profiles, mock APIs)
+        run: node tests/benchmarks/generation-pipeline.mjs > /tmp/q1-audit-smoke.json
+        env:
+          OMM_Q1_AUDIT: '1'
+          OMM_BENCH_PEOPLE: '3'
+          OMM_BENCH_CACHE: warm
+          OMM_BENCH_REPETITIONS: '1'
