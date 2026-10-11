@@ -12,7 +12,7 @@ export async function onRequestGet({request,env}){
 }
 export async function onRequestPut({request,env}){
   const auth=await getSpotifyAccountId(request);if(!auth.ok)return fail(auth.error,auth.status,auth.headers);
-  const max=journal.MAX_BYTES*2+4096;
+  const max=journal.MAX_BYTES*3+4096; // Include JSON escaping of the CAS predecessor.
   if(Number(request.headers.get('Content-Length'))>max)return fail('Auto feedback request too large',413);
   if(!request.body)return fail('Missing JSON body',400);
   const reader=request.body.getReader(),decoder=new TextDecoder('utf-8',{fatal:true});let source='',size=0,body;
