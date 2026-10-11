@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer 1.0.3-rc</title>
+  <title>Office Music Mixer 1.0.4-rc</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -418,7 +418,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">1.0.3-rc</span></h1>
+        <h1>Office Music Mixer <span class="version">1.0.4-rc</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -668,6 +668,7 @@
 <script src="artist-catalog-evidence.js"></script>
 <script src="pool-retention.js"></script>
 <script src="discovery-quota.js"></script>
+<script src="search-effectiveness.js"></script>
 <script src="generation-progress.js"></script>
 <script src="generation-log.js"></script>
 <script src="generation-history.js"></script>
@@ -1540,7 +1541,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer 1.0.3-rc",
+      source: "Office Music Mixer 1.0.4-rc",
       storage: exportedStorageState()
     };
 
@@ -4008,11 +4009,11 @@ function readSearchCache(query, offset) {
   }
 }
 
-function writeSearchCache(query, offset, items) {
+function writeSearchCache(query, offset, items, metadata = null) {
   try {
     localStorage.setItem(
       searchCacheKey(query, offset),
-      JSON.stringify({ savedAt: Date.now(), items })
+      JSON.stringify({ savedAt: Date.now(), items, ...(metadata ? { metadata } : {}) })
     );
   } catch (err) {
     console.warn("Nie udało się zapisać cache wyszukiwania.", err);
@@ -4174,17 +4175,20 @@ function queryMatchesTrack(query, track) {
   return true;
 }
 
-function addToCandidatePool(query, items, { fromCache = false, acquiredAt = Date.now() } = {}) {
+function addToCandidatePool(query, items, { fromCache = false, acquiredAt = Date.now(), auditPage = null } = {}) {
   if (!query || !Array.isArray(items) || !items.length) return;
   const pool = loadCandidatePool();
   const map = new Map(pool.map(item => [item.track.id, item]));
   const now = Date.now();
+  let added = 0, updated = 0;
+  const auditedIds = new Set(), addedIds = [];
 
   for (const track of items) {
     if (!track?.id || !track?.uri) continue;
     if (!queryMatchesTrack(query, track)) continue;
     const existing = map.get(track.id);
     if (existing) {
+      if (!auditedIds.has(track.id)) updated++;
       if (!fromCache) existing.savedAt = now;
       existing.lastUsedAt = now;
       existing.track = slimTrack(track);
@@ -4197,6 +4201,7 @@ function addToCandidatePool(query, items, { fromCache = false, acquiredAt = Date
         return true;
       });
     } else {
+      if (!auditedIds.has(track.id)) { added++; addedIds.push(track.id); }
       map.set(track.id, {
         track: slimTrack(track),
         queries: [query],
@@ -4204,8 +4209,10 @@ function addToCandidatePool(query, items, { fromCache = false, acquiredAt = Date
         lastUsedAt: now
       });
     }
+    auditedIds.add(track.id);
   }
 
+  activeGenerationProgress?.searchAudit?.pool(auditPage, added, updated, addedIds);
   saveCandidatePool([...map.values()]);
   if (typeof historySummary !== "undefined" && historySummary) renderHistorySummary();
 }
@@ -4258,9 +4265,12 @@ async function searchTracks(token, query, offset = 0) {
   const cached = readSearchCache(query, offset);
   if (cached) {
     const validCached = cached.filter(track => queryMatchesTrack(query, track));
-    let acquiredAt = Date.now();
-    try { acquiredAt = JSON.parse(localStorage.getItem(searchCacheKey(query, offset))).savedAt; } catch {}
-    addToCandidatePool(query, validCached, { fromCache: true, acquiredAt });
+    let acquiredAt = Date.now(), metadata = null;
+    try { const saved = JSON.parse(localStorage.getItem(searchCacheKey(query, offset))); acquiredAt = saved.savedAt; metadata = saved.metadata; } catch {}
+    const audit = activeGenerationProgress?.searchAudit;
+    const page = audit?.begin(canonicalQuery(query), offset, activeGenerationProgress.stageName(), "cache");
+    audit?.response(page, metadata?.raw ?? null, validCached, metadata?.total ?? null);
+    addToCandidatePool(query, validCached, { fromCache: true, acquiredAt, auditPage: page });
     return validCached;
   }
 
@@ -4277,55 +4287,68 @@ async function searchTracks(token, query, offset = 0) {
     offset: String(offset)
   }).toString();
 
-  const authState = { retried: false };
-  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
-    if (activeGenerationProgress) await activeGenerationProgress.measureAsync("throttle", waitForSearchSlot);
-    else await waitForSearchSlot();
+  const audit = activeGenerationProgress?.searchAudit;
+  const auditPage = audit?.begin(canonicalQuery(query), offset, activeGenerationProgress.stageName(), "Spotify");
+  let lastStatus = null;
+  try {
+    const authState = { retried: false };
+    for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+      if (activeGenerationProgress) await activeGenerationProgress.measureAsync("throttle", waitForSearchSlot);
+      else await waitForSearchSlot();
 
-    const response = await spotifyGenerationRequest(token, url, {
-      headers: { Authorization: `Bearer ${token}` }
-    }, authState);
+      lastStatus = null;
+      const response = await spotifyGenerationRequest(token, url, {
+        headers: { Authorization: `Bearer ${token}` }
+      }, authState);
 
-    const data = await parseJsonSafely(response);
+      lastStatus = response.status;
+      const data = await parseJsonSafely(response);
 
-    if (response.ok) {
-      const items = (data?.tracks?.items || []).filter(track => queryMatchesTrack(query, track));
-      writeSearchCache(query, offset, items);
-      addToCandidatePool(query, items);
-      return items;
-    }
-
-    if (response.status === 429) {
-      const reason = data?.error?.reason;
-      if (reason === "QUOTA_EXCEEDED") {
-        throw new Error(
-          "Spotify: wyczerpano quota aplikacji w Development Mode. To nie jest chwilowy limit szybkości. Odczekaj do odnowienia limitu i spróbuj ponownie później."
-        );
+      if (response.ok) {
+        const rawItems = data?.tracks?.items || [];
+        const items = rawItems.filter(track => queryMatchesTrack(query, track));
+        const metadata = { raw: Array.isArray(data?.tracks?.items) ? rawItems.length : null, total: Number.isInteger(data?.tracks?.total) && data.tracks.total >= 0 ? data.tracks.total : null };
+        audit?.response(auditPage, metadata.raw, items, metadata.total);
+        writeSearchCache(query, offset, items, metadata);
+        addToCandidatePool(query, items, { auditPage });
+        return items;
       }
 
-      const retryAfterHeader = Number(response.headers.get("Retry-After"));
-      const retrySeconds = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
-        ? retryAfterHeader
-        : Math.min(30, 2 ** attempt * 2);
+      if (response.status === 429) {
+        const reason = data?.error?.reason;
+        if (reason === "QUOTA_EXCEEDED") {
+          throw new Error(
+            "Spotify: wyczerpano quota aplikacji w Development Mode. To nie jest chwilowy limit szybkości. Odczekaj do odnowienia limitu i spróbuj ponownie później."
+          );
+        }
 
-      if (attempt >= MAX_RATE_LIMIT_RETRIES) {
-        throw new Error(
-          `Spotify nadal ogranicza liczbę zapytań (429). Ostatnie Retry-After: ${retrySeconds} s.`
-        );
+        const retryAfterHeader = Number(response.headers.get("Retry-After"));
+        const retrySeconds = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+          ? retryAfterHeader
+          : Math.min(30, 2 ** attempt * 2);
+
+        if (attempt >= MAX_RATE_LIMIT_RETRIES) {
+          throw new Error(
+            `Spotify nadal ogranicza liczbę zapytań (429). Ostatnie Retry-After: ${retrySeconds} s.`
+          );
+        }
+
+        generationNote(`Spotify ogranicza zapytania (429). Czekam ${retrySeconds} s i próbuję ponownie…`);
+        if (activeGenerationProgress) await activeGenerationProgress.measureAsync("retryWait", () => sleep(retrySeconds * 1000 + 250));
+        else await sleep(retrySeconds * 1000 + 250);
+        continue;
       }
 
-      generationNote(`Spotify ogranicza zapytania (429). Czekam ${retrySeconds} s i próbuję ponownie…`);
-      if (activeGenerationProgress) await activeGenerationProgress.measureAsync("retryWait", () => sleep(retrySeconds * 1000 + 250));
-      else await sleep(retrySeconds * 1000 + 250);
-      continue;
+      console.error(data);
+      const message = data?.error?.message ? `: ${data.error.message}` : "";
+      throw new Error(`Błąd wyszukiwania Spotify: ${response.status}${message}`);
     }
 
-    console.error(data);
-    const message = data?.error?.message ? `: ${data.error.message}` : "";
-    throw new Error(`Błąd wyszukiwania Spotify: ${response.status}${message}`);
+    return [];
+  } catch (err) {
+    audit?.error(auditPage, lastStatus && lastStatus >= 400 ? lastStatus : null, err instanceof TypeError);
+    throw err;
   }
-
-  return [];
 }
 
 function normalizeArtistName(name) {
@@ -5548,7 +5571,7 @@ function analyzeSelectionStop(remaining, state, requestedTotal) {
   return out;
 }
 
-function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidatePool(), canonicalRows = rows) {
+function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidatePool(), canonicalRows = rows, audit = null) {
   rebuildCanonicalCleanVariantSignatures(canonicalRows, ctx.acquisitionVariantArtists || null);
   const stats = newRejectionStats(rows.length);
   const eligible = [];
@@ -5559,20 +5582,24 @@ function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidate
     const track = row?.track;
     if (!track?.id || !track?.uri || seenIds.has(track.id)) {
       stats.invalid++;
+      audit?.observe(track, "invalid");
       continue;
     }
     seenIds.add(track.id);
 
     if (trackHasArtistExclusion(track)) {
       stats.artistIdExcluded++;
+      audit?.observe(track, "artistIdExcluded");
       continue;
     }
     if ((ctx.retentionSnapshot ? Number(ctx.retentionSnapshot.feedback[trackSignature(track)]?.value || 0) : trackFeedbackValue(track)) < 0) {
       stats.feedbackTrack++;
+      audit?.observe(track, "feedbackTrack");
       continue;
     }
     if (looksLikeUnwantedVariant(track, ctx.acquisitionVariantArtists || null)) {
       stats.unwantedVariant++;
+      audit?.observe(track, "unwantedVariant");
       continue;
     }
 
@@ -5581,14 +5608,17 @@ function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidate
 
     if (artistNames.some(name => blocklists.explicitBlockedNames.has(name))) {
       stats.explicitBlockedArtist++;
+      audit?.observe(track, "explicitBlockedArtist");
       continue;
     }
     if (artistNames.some(name => blocklists.feedbackBlockedNames.has(name))) {
       stats.feedbackBlockedArtist++;
+      audit?.observe(track, "feedbackBlockedArtist");
       continue;
     }
     if (hasStrongNegativeArtistFeedback(track, artistFeedback)) {
       stats.strongNegativeArtistFeedback++;
+      audit?.observe(track, "strongNegativeArtistFeedback");
       continue;
     }
     if (
@@ -5596,6 +5626,7 @@ function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidate
       artistNames.some(name => blocklists.historyBlockedNames.has(name))
     ) {
       stats.artistCooldown++;
+      audit?.observe(track, "artistCooldown");
       continue;
     }
 
@@ -5607,12 +5638,14 @@ function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidate
       duplicateSignatures.some(key => blocklists.blockedTrackSignatures.has(key))
     ) {
       stats.recentTrack++;
+      audit?.observe(track, "recentTrack");
       continue;
     }
 
     const staticInfo = groupCandidateStatic(track, ctx);
     if (!satisfiesIndividualMinimum(staticInfo, ctx)) {
       stats.lowIndividualFit++;
+      audit?.observe(track, "lowIndividualFit");
       continue;
     }
     const strongTasteDiscovery =
@@ -5622,11 +5655,13 @@ function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidate
 
     if (!recognizabilityPass(track, ctx.retentionSnapshot) && !strongTasteDiscovery) {
       stats.recognizability++;
+      audit?.observe(track, "recognizability");
       continue;
     }
 
     if (staticInfo.groupBase < 34 || staticInfo.maxScore < 45) {
       stats.lowGroupFit++;
+      audit?.observe(track, "lowGroupFit");
       continue;
     }
 
@@ -6089,7 +6124,9 @@ function getAcquisitionCoverage(acquisition) {
 
 function createCandidateAcquisition(selected, blocklists = generationBlocklists(selected)) {
   const acquisition = { selected, blocklists, searched: new Set(), cachedQueries: new Set(), before: 0, cachedPages: 0 };
-  acquisition.before = getAcquisitionCoverage(acquisition).artists;
+  const coverage = getAcquisitionCoverage(acquisition);
+  acquisition.before = coverage.artists;
+  activeGenerationProgress?.searchAudit?.baselineArtists(coverage.byArtist.keys());
   return acquisition;
 }
 
@@ -6344,9 +6381,11 @@ async function generateOfficePlaylist() {
     if (!document.hidden && globalThis.scheduler?.yield) await scheduler.yield();
     const blocklists = generationBlocklists(selected);
     const ctx = buildGroupRecommendationContext(mixProfiles, loadCandidatePool(), createLastFmEvidenceSnapshot());
-    const { eligible, stats } = eligibleGroupCandidates(mixProfiles, blocklists, ctx);
-
+    const diagnosticPool = loadCandidatePool();
+    const { eligible, stats } = eligibleGroupCandidates(mixProfiles, blocklists, ctx, diagnosticPool, diagnosticPool, progress.searchAudit);
+    // Observe the existing final qualification; never run scoring again for telemetry.
     if (!eligible.length) {
+      progress.searchAudit?.finish(ctx.poolByTrack, eligible, [], acquisitionQualifying, trackArtistKeys);
       throw new Error("Po filtrach nie został żaden kandydat. Diagnostyka będzie wymagała poluzowania źródeł lub filtrów.");
     }
 
@@ -6354,6 +6393,7 @@ async function generateOfficePlaylist() {
     groupResult.acquisition = { before: acquisition.before, after: getAcquisitionCoverage(acquisition).artists, cachedPages: acquisition.cachedPages, newSearches: newSearchesThisGeneration };
     const finalTracks = sequencePlaylistForListening(groupResult.tracks, 5);
     groupResult.tracks = finalTracks;
+    progress.searchAudit?.finish(ctx.poolByTrack, eligible, finalTracks, acquisitionQualifying, trackArtistKeys);
     logContext.group = groupResult;
 
     if (!finalTracks.length) {
@@ -6695,9 +6735,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy 1.0.3-rc: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy 1.0.4-rc: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.3-rc koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.4-rc koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
