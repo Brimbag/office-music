@@ -83,3 +83,9 @@ Następny niezależny zakres: **LOG1 — backend dziennika generowań**. Najpier
 Osobne GET/POST `/api/generations`, whitelisty zbiorczej diagnostyki i tabela `generation_logs`, limit 100/konto z atomową retencją i deduplikacją UUID. Minimalny zapis klienta po zakończeniu generatora; osobny wynik LF2 i ostatni lokalny wpis bez usuwania cache po quota. Bez zmian selekcji, progów, discovery, feedbacku ani RMF. Dokument: GENERATION_LOG_LOG1.md.
 
 **Aktywacja produkcyjnej tabeli wymaga osobnego zatwierdzenia** pliku migrations/0001_generation_logs.sql; kod toleruje brak tabeli i nie wykonuje SQL migracji automatycznie. Po aktywacji i uprawnionym smoke testem następny niezależny PR: **LOG2 — chroniony widok historii** (wersja, długość, czasy, profile, filtry, wynik LF2; lokalna diagnostyka przy błędzie backendu). Dalej M → V / S1 / S2 → COVER1 → COVER2; Q1/F4/T1 i strojenie selekcji pozostają osobno.
+
+## LOG2 — v43.35.LOG2
+
+Chroniony widok w Narzędzia i dane → Historia generowań: odczyt na żądanie, filtry lokalne, czasy i ograniczenia doboru, osobny wynik LF2 oraz kopia ostatniej lokalnej próby. Bez strojenia algorytmu, nowej migracji i pollingu. Dokument: GENERATION_HISTORY_LOG2.md.
+
+Migracja LOG1 została zatwierdzona przez użytkownika, ale nie wykonana: środowisko nie ma dostępu administracyjnego D1. Kod toleruje nieaktywną tabelę; chmurowy dziennik wymaga wykonania przygotowanego SQL i uwierzytelnionego smoke testu. Zgody nie trzeba ponawiać. Następny niezależny PR: M — wspólny monitor Spotify; dalej V / S1 / S2 → COVER1 → COVER2, z zachowaniem odrębnych zakresów.
