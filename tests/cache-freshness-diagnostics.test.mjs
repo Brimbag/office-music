@@ -1,0 +1,21 @@
+import test, { before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { startBrowserHarness } from './helpers/browser.mjs';
+let h;before(async()=>{h=await startBrowserHarness();});after(async()=>h?.close());
+async function run(fn){const s=await h.page();try{const r=await s.page.evaluate(fn);assert.deepEqual(s.errors,[]);return r;}finally{await s.close();}}
+test('Q1.10: stale observation shows last confirmed count, actual fresh zero remains zero, foreign account never leaks',async()=>{
+ const r=await run(()=>{const now=Date.now();localStorage.setItem(LASTFM_USER_KEY,'owner');const set=(count,at,user='owner')=>localStorage.setItem(LASTFM_RECENT_OBSERVATION_KEY,JSON.stringify({user,count,observedAt:at}));set(600,now-600001);renderHistorySummary();const stale=historySummary.textContent,model=lastFmRecentCount();set(0,now);const zero=lastFmObservationText();set(600,now,'other');const foreign=lastFmObservationText();set(600,now+60000);const future=lastFmObservationText();return{stale,model,zero,foreign,future};});
+ assert.match(r.stale,/obserwacja nieaktualna; ostatnio potwierdzono 600/);assert.equal(r.model,0);assert.match(r.zero,/^0 zaobserwowanych/);assert.ok(!r.foreign.includes('600'));assert.match(r.future,/czas obserwacji/);
+});
+test('Q1.10: TTL boundary and corrupt cache deletion count, no queries in report',async()=>{
+ const r=await run(()=>{let now=Date.now();Date.now=()=>now;writeSearchCache('PRIVATE_QUERY',0,[]);now+=SEARCH_CACHE_TTL_MS;const boundary=readSearchCache('PRIVATE_QUERY',0);now++;const expired=readSearchCache('PRIVATE_QUERY',0);readSearchCache('PRIVATE_QUERY',0);localStorage.setItem(LASTFM_CACHE_PREFIX+'PRIVATE_NAME','bad');purgeExpiredCaches();return{boundary,expired,report:OmmCacheDiagnostics.report()};});assert.deepEqual(r.boundary,[]);assert.equal(r.expired,null);assert.equal(r.report.ttl.spotify,1);assert.equal(r.report.invalid.lastfm,1);assert.ok(!JSON.stringify(r.report).includes('PRIVATE'));
+});
+test('Q1.10: quota cleanup keeps preferences/history/pools and reports both cache services',async()=>{
+ const r=await run(()=>{writeSearchCache('PRIVATE',0,[]);localStorage.setItem(LASTFM_CACHE_PREFIX+'private',JSON.stringify({savedAt:Date.now(),data:{}}));localStorage.setItem(HISTORY_KEY,'[]');localStorage.setItem(CANDIDATE_POOL_KEY,'[]');const original=Storage.prototype.setItem;let once=false;Storage.prototype.setItem=function(k,v){if(k==='office_seed_bartek'&&!once){once=true;throw new DOMException('full','QuotaExceededError');}return original.call(this,k,v);};try{OmmLocalState.write('office_seed_bartek','kept');}finally{Storage.prototype.setItem=original;}return{report:OmmCacheDiagnostics.report(),history:localStorage.getItem(HISTORY_KEY),pool:localStorage.getItem(CANDIDATE_POOL_KEY),seed:localStorage.getItem('office_seed_bartek')};});assert.equal(r.report.quota.spotify,1);assert.equal(r.report.quota.lastfm,1);assert.equal(r.history,'[]');assert.equal(r.pool,'[]');assert.equal(r.seed,'kept');
+});
+test('Q1.10: failed removal not counted, repeated missing deletion neutral; diagnostics stays local',async()=>{
+ const r=await run(()=>{const storage={getItem:()=> 'value',removeItem:()=>{throw new Error('failure');}};let failed=false;try{OmmCacheDiagnostics.remove(storage,'office_search_cache_v1:private','quota');}catch{failed=true;}OmmCacheDiagnostics.remove(localStorage,'office_search_cache_v1:missing','quota');const container=document.createElement('div'),p=OmmGenerationProgress.create(container,60);p.finish(null,60);return{failed,report:p.report().cacheCleanup,text:container.textContent};});assert.equal(r.failed,true);assert.equal(r.report.quota.spotify,0);assert.match(r.text,/Usunięcia cache od otwarcia tej strony/);assert.ok(!r.text.includes('private'));
+});
+test('Q1.10: actual import counts cache removals, never counts preferences',async()=>{
+ const r=await run(async()=>{writeSearchCache('private',0,[]);localStorage.setItem('office_seed_bartek','old');await OmmLocalState.importState({office_seed_bartek:'new'});return{report:OmmCacheDiagnostics.report(),seed:localStorage.getItem('office_seed_bartek')};});assert.equal(r.report.import.spotify,1);assert.equal(r.report.import.lastfm,0);assert.equal(r.seed,'new');
+});
