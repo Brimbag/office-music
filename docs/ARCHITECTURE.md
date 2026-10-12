@@ -1,6 +1,6 @@
 # Aktualna architektura OMM
 
-Stan: 2026-10-12, `1.0.6-rc`, baza main `9894d9a`. Ten dokument zastępuje opis v42 z historycznego handoffu; szczegółowe dokumenty PR pozostają historią decyzji.
+Stan: 2026-10-12, `1.0.12-rc` (kandydat S3.1), baza main przed tym PR `1391449`. Ten dokument zastępuje opis v42 z historycznego handoffu; szczegółowe dokumenty PR pozostają historią decyzji.
 
 ## Aplikacja i integracje
 
@@ -39,6 +39,8 @@ Q1.2–Q1.7 poprawiają wykorzystanie istniejącego budżetu: ukierunkowane pozy
 
 `rmf-volume*.js` (V2) uzbraja opcjonalną automatykę po dodaniu regularnych Faktów do kolejki; działa w tle i kończy obserwację po powrocie do muzyki. Wzmocnienie **0–30 punktów procentowych, domyślnie 10, maksimum 100%** zastępuje stare względne procenty/cap70. Ochrona urządzenia, ręcznej zmiany i potwierdzenia zapisu ogranicza restore; zamknięta/uśpiona karta nie gwarantuje przywrócenia. [V2](RMF_VOLUME_V2.md).
 
-`spotify-skip-journal.js` (S1) obserwuje jawnie wybraną listę OMM do 8h; lokalny dziennik 100 zdarzeń/30 dni. S2 wymaga osobnego opt-in i używa tylko nowych zdarzeń, bez backfillu/testowych pominięć. Kary wczesne/środkowe −100/−50, cap −250, half-life30 dni, wygaśnięcie90 dni; ręczne oceny mają pierwszeństwo, 👍 resetuje auto. Nie są to twarde blokady wykonawcy. Niejednoznaczne przejścia i podcasty nie tworzą kar. [Monitor](SPOTIFY_PLAYBACK_MONITOR_M.md), [S1](SPOTIFY_SKIP_JOURNAL_S1.md).
+`spotify-skip-journal.js` (S1/S3) obserwuje automatycznie rozpoznany kontekst playlisty Spotify do 8h; lokalny dziennik 100 zdarzeń/30 dni. S2 wymaga osobnego opt-in i potwierdzenia obu TrackID przejścia w zapisanym snapshotcie OMM. Obce playlisty są tylko diagnostyczne, bez backfillu/testowych ocen. S3.1 zapisuje opcjonalne nazwy pomijanego utworu lokalnie, bez dodatkowego API. Kary wczesne/środkowe −100/−50, cap −250, half-life30 dni, wygaśnięcie90 dni; ręczne oceny mają pierwszeństwo, 👍 resetuje auto. Nie są to twarde blokady wykonawcy. Niejednoznaczne przejścia i podcasty nie tworzą kar. [Monitor](SPOTIFY_PLAYBACK_MONITOR_M.md), [S1](SPOTIFY_SKIP_JOURNAL_S1.md).
 
 `playlist-cover.js` automatycznie wybiera cztery najlepiej dopasowane utwory, preferuje różne albumy i renderuje kolaż ze stopką inicjałów/OMM. Stopka jest poza grafikami albumów. Upload JPEG jest best effort; brak grafik/scope/API nigdy nie przerywa playlisty. Brak edytora i dodatkowej obsługi. [Okładki](AUTOMATIC_PLAYLIST_COVER.md).
+
+Aktualny UX: [U4](GENERATOR_UX_U4.md), jeden panel i kopiowanie raportu. Odtwarzanie: [S3](SKIP_MONITOR_S3.md), jeden przełącznik, pause/resume generowania i off po reload; [S3.1](JOURNAL_NAMES_S3_1.md), kompatybilne nazwy w dzienniku.

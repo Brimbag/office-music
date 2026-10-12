@@ -14,8 +14,15 @@
   }
   function validEvent(r){return r?.version===1 && text(r.account)&&text(r.id)&&id(r.trackId)&&id(r.playlistId)&&
     finite(r.at)&&finite(r.durationMs)&&r.durationMs<=86400000&&['early','middle','late'].includes(r.kind)&&finite(r.fromMs)&&finite(r.toMs)&&classify(r.fromMs,r.toMs,r.durationMs)===r.kind;}
+  function display(value){
+    const label=(v,max)=>typeof v==='string' && v.trim().length>0 && v.length<=max && !/[\p{Control}]/u.test(v) ? v.trim() : '';
+    const name=label(value?.name,300);
+    if(!name)return null;
+    const artists=Array.isArray(value.artists)?value.artists.slice(0,5).map(v=>label(v,160)).filter(Boolean):[];
+    return {name,artists};
+  }
   const clean=r=>({version:1,account:r.account,id:r.id,trackId:r.trackId,playlistId:r.playlistId,at:r.at,
-    durationMs:r.durationMs,fromMs:r.fromMs,toMs:r.toMs,kind:r.kind});
+    durationMs:r.durationMs,fromMs:r.fromMs,toMs:r.toMs,kind:r.kind,...(display(r.display)?{display:display(r.display)}:{})});
   function createStore(db=root.indexedDB,wall=Date.now){
     let opening;
     const open=()=>opening ||= new Promise((resolve,reject)=>{
@@ -87,7 +94,7 @@
       const kind=classify(low,high,prev.item.durationMs);
       if(s.progressMs>elapsed+latency+2000 || !kind){reset(!kind?'end_or_boundary':'next_progress');anchor=newAnchor(s);return;}
       const event={version:1,account:selection.account,id:previous.instance,trackId:prev.item.id,playlistId:selection.id,
-        at:s.receivedAt,durationMs:prev.item.durationMs,fromMs:low,toMs:high,kind};
+        at:s.receivedAt,durationMs:prev.item.durationMs,fromMs:low,toMs:high,kind,...(display(prev.item)?{display:display(prev.item)}:{})};
       try{
         const result=await store('append',event.account,event);
         if(turn!==epoch || !same(selection,getSession()))return;

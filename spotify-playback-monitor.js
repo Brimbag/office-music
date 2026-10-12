@@ -6,13 +6,19 @@
   const freeze = value => { if(value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
   const sameScope = (a,b) => Boolean(a && b && a.account === b.account && a.session === b.session);
   const emptyState = () => ({isPlaying:false,device:null,item:null,contextUri:'',progressMs:null});
+  const label=(value,max)=>typeof value==='string' && value.trim().length>0 && value.length<=max && !/[\p{Control}]/u.test(value) ? value.trim() : '';
+  function display(item){
+    if(item?.type!=='track')return {};
+    const name=label(item.name,300), artists=Array.isArray(item.artists)?item.artists.slice(0,5).map(a=>label(a?.name,160)).filter(Boolean):[];
+    return {...(name?{name}:{}),...(artists.length?{artists}: {})};
+  }
   function normalize(data) {
     if(!data || typeof data !== 'object' || Array.isArray(data) || typeof data.is_playing !== 'boolean')return null;
     const d=data.device, item=data.item;
     return {isPlaying:data.is_playing,contextUri:text(data.context?.uri),progressMs:number(data.progress_ms),
       device:d && typeof d === 'object' ? {id:text(d.id),name:text(d.name),active:flag(d.is_active),restricted:flag(d.is_restricted),
         volumePercent:Number.isInteger(d.volume_percent) && d.volume_percent>=0 && d.volume_percent<=100 ? d.volume_percent : null,supportsVolume:flag(d.supports_volume)} : null,
-      item:item && typeof item === 'object' ? {type:['track','episode'].includes(item.type)?item.type:'unknown',id:text(item.id),uri:text(item.uri),durationMs:number(item.duration_ms),showId:text(item.show?.id)} : null};
+      item:item && typeof item === 'object' ? {type:['track','episode'].includes(item.type)?item.type:'unknown',id:text(item.id),uri:text(item.uri),durationMs:number(item.duration_ms),showId:text(item.show?.id),...display(item)} : null};
   }
   function retryDelay(header,now) {
     if(typeof header!=='string' || !header.trim())return null;
@@ -98,7 +104,7 @@
       // Rebuild the whitelist rather than accepting arbitrary cross-tab payloads.
       const state=sample.available===true ? normalize({is_playing:sample.isPlaying,progress_ms:sample.progressMs,context:{uri:sample.contextUri},
         device:sample.device && {id:sample.device.id,name:sample.device.name,is_active:sample.device.active,is_restricted:sample.device.restricted,volume_percent:sample.device.volumePercent,supports_volume:sample.device.supportsVolume},
-        item:sample.item && {type:sample.item.type,id:sample.item.id,uri:sample.item.uri,duration_ms:sample.item.durationMs,show:{id:sample.item.showId}}}) : null;
+        item:sample.item && {type:sample.item.type,id:sample.item.id,uri:sample.item.uri,duration_ms:sample.item.durationMs,show:{id:sample.item.showId},name:sample.item.name,artists:Array.isArray(sample.item.artists)?sample.item.artists.slice(0,5).map(name=>({name})):[]}}) : null;
       const allowed=['ok','inactive','unauthorized','forbidden','quota_exceeded','rate_limited','network','timeout','invalid','unavailable'];
       if(!allowed.includes(sample.status) || sample.available===true && (!state || sample.status!=='ok') || !sample.available && sample.status==='ok')return null;
       if(Number.isFinite(sample.retryAt) && sample.retryAt>wall())until=Math.max(until,Math.min(sample.retryAt,wall()+86400000));

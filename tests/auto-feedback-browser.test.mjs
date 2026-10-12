@@ -12,7 +12,7 @@ async function setup(page){await page.evaluate(()=>{
  fetch=async(url,opts={})=>{
   url=String(url);s1Calls.push({url,method:opts.method||'GET'});
   if(url.includes('/me/player/volume')){s1State.volume=Number(new URL(url).searchParams.get('volume_percent'));return new Response(null,{status:204});}
-  if(url.includes('/me/player?'))return Response.json({is_playing:s1State.playing,progress_ms:Math.round(s1State.base+performance.now()-s1State.started),device:{id:s1State.device,is_active:true,is_restricted:false,supports_volume:true,volume_percent:s1State.volume},context:{uri:s1State.context},item:{id:s1State.id,type:s1State.type,uri:`spotify:${s1State.type}:${s1State.id}`,duration_ms:200000,...s1State.type==='episode'?{show:{id:RMF_SHOW_ID}}:{}}});
+  if(url.includes('/me/player?'))return Response.json({is_playing:s1State.playing,progress_ms:Math.round(s1State.base+performance.now()-s1State.started),device:{id:s1State.device,is_active:true,is_restricted:false,supports_volume:true,volume_percent:s1State.volume},context:{uri:s1State.context},item:{id:s1State.id,type:s1State.type,uri:`spotify:${s1State.type}:${s1State.id}`,duration_ms:200000,...s1State.type==='episode'?{show:{id:RMF_SHOW_ID}}:{name:'Track '+s1State.id,artists:[{name:'Artist '+s1State.id}]}}});
   throw new Error('Unexpected mocked API');
  };
 });}

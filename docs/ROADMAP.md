@@ -1,6 +1,6 @@
 # Roadmapa i zaparkowane zakresy
 
-Stan: 2026-10-12, produkcja `1.0.6-rc` po Q1.7 (#46). Źródło aktualnych statusów; [IMPLEMENTATION_QUEUE_V43](IMPLEMENTATION_QUEUE_V43.md) jest chronologiczną historią, nie bieżącą listą zadań. Poniższe propozycje nie upoważniają do implementacji/scalenia.
+Stan: 2026-10-12, produkcja `1.0.11-rc` po S3 (#52), kandydat `1.0.12-rc` w S3.1. Źródło aktualnych statusów; [IMPLEMENTATION_QUEUE_V43](IMPLEMENTATION_QUEUE_V43.md) jest chronologiczną historią, nie bieżącą listą zadań. Poniższe propozycje nie upoważniają do implementacji/scalenia.
 
 ## Stan pierwotnych punktów
 
@@ -64,3 +64,7 @@ Zatwierdzone `1.0.10-rc`: jeden panel/5 sekcji, kopiowanie raportu, bez zmian re
 ## S3 — obserwacja bez wyboru playlisty
 
 Zatwierdzone `1.0.11-rc`: jeden przełącznik, automatyczne konteksty wszystkich playlist, reset na zmianie playlisty/device, pauza/wznowienie po generowaniu bez wydłużenia8h, off po reload. Kary wyłącznie dla potwierdzonych TrackID z zapisanych snapshotów OMM, opt-in nadal osobny. [Zakres i smoke](SKIP_MONITOR_S3.md). Naprawa separatorów kopiowanego raportu U4 w tym samym PR. Plan trwałego uzbrajania z poprzedniego dokumentu pozostaje odłożony, nie jest częścią pierwszego S3.
+
+## S3.1 — kandydat przed wydaniem stabilnym
+
+Zatwierdzony PR stabilizacyjny `1.0.12-rc`: opcjonalne nazwy nowych zdarzeń z istniejącego monitora, zgodność starych rekordów i aktualne dokumenty. [Smoke, ograniczenia i rollback](JOURNAL_NAMES_S3_1.md). Po pozytywnym krótkim smoke decyzja o wydaniu stabilnym; nie wdrażamy zaparkowanych P5/T1/F4/E.2 ani trwałego uzbrajania/kar obcych playlist.
