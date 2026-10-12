@@ -92,7 +92,7 @@
         const result=await store('append',event.account,event);
         if(turn!==epoch || !same(selection,getSession()))return;
         if(result?.retained===false){ignored.retention=(ignored.retention||0)+1;reason='retention';report();return;}
-        if(result?.duplicate)duplicates++;else {recorded++;onEvent(event);}reason='recorded';report();
+        if(result?.duplicate)duplicates++;else {recorded++;onEvent(event,{nextTrackId:s.item.id});}reason='recorded';report();
       }catch{if(turn===epoch)stop('storage');}
     }
     function receive(s,meta){const turn=epoch;flight=flight.then(()=>consume(s,meta,turn)).catch(()=>{if(turn===epoch)stop('storage');});return flight;}
