@@ -53,3 +53,82 @@ test('S2 optional autosync honors Retry-After, preserves data and redacts raw AP
 test('S2 retrying failed up-reset cannot toggle off manual protection and revive auto penalty',async()=>{const s=await h.page();try{await setup(s.page);await enable(s.page);const r=await s.page.evaluate(async()=>{await autoTrackFeedback.record({version:1,account:'owner',id:'one',trackId:'A',playlistId:'omm',at:Date.now(),durationMs:200000,fromMs:10000,toMs:15000,kind:'early'});const real=autoTrackFeedback;autoTrackFeedback={...real,reset:async()=>{throw new Error('quota');}};await setTrackFeedback(s1Playlist.tracks[0],1);const first=trackFeedbackValue(s1Playlist.tracks[0]);await setTrackFeedback(s1Playlist.tracks[0],1);const retry=trackFeedbackValue(s1Playlist.tracks[0]);return {first,retry,score:feedbackScore(s1Playlist.tracks[0]),status:document.getElementById('autoSkipStatus').textContent};});assert.equal(r.first,1);assert.equal(r.retry,1);assert.equal(r.score,108);assert.match(r.status,/Nie zdjęto/);assert.deepEqual(s.errors,[]);}finally{await s.close();}});
 test('S3 unknown playlist is observed but never auto-rated, even with S2 enabled',async()=>{const s=await h.page();try{await setup(s.page);await enable(s.page);await s.page.evaluate(()=>s1State.context='spotify:playlist:external');await start(s.page);await s.page.waitForTimeout(1100);await s.page.evaluate(()=>spotifyPlaybackMonitor.read({fresh:true}));await s.page.waitForFunction(()=>skipJournalController.diagnostics().reason==='observing');await s.page.evaluate(async()=>{s1Set('B');s1State.context='spotify:playlist:external';await spotifyPlaybackMonitor.read({fresh:true});});await s.page.waitForFunction(()=>skipJournalController.diagnostics().recorded===1);const r=await s.page.evaluate(async()=>({events:await skipJournalController.events(),auto:autoTrackFeedback.has('owner')}));assert.equal(r.events[0].playlistId,'external');assert.equal(r.auto,false);assert.deepEqual(s.errors,[]);}finally{await s.close();}});
 test('S3 OMM context with next queued track outside its snapshot is diagnostic only',async()=>{const s=await h.page();try{await setup(s.page);await enable(s.page);await start(s.page);await s.page.waitForTimeout(1100);await s.page.evaluate(()=>spotifyPlaybackMonitor.read({fresh:true}));await s.page.waitForFunction(()=>skipJournalController.diagnostics().reason==='observing');await s.page.evaluate(async()=>{s1Set('outside');await spotifyPlaybackMonitor.read({fresh:true});});await s.page.waitForFunction(()=>skipJournalController.diagnostics().recorded===1);await s.page.waitForTimeout(100);assert.equal(await s.page.evaluate(()=>autoTrackFeedback.has('owner')),false);assert.deepEqual(s.errors,[]);}finally{await s.close();}});
+
+// Stable defaults are initialized only by a verified profile, not the test's manual session fixture.
+test('stable defaults: verified session starts shared observation and only a new OMM skip is rated',async()=>{
+ const s=await h.page();try{
+  await setup(s.page);await s.page.evaluate(()=>refreshSkipDefaults());
+  await s.page.waitForFunction(()=>skipJournalController.diagnostics().reason==='stabilizing');
+  assert.equal(await s.page.evaluate(()=>autoTrackFeedback.enabled()),true);
+  assert.equal(await s.page.evaluate(()=>autoTrackFeedback.has('owner')),false);
+  await transition(s.page);await s.page.waitForFunction(()=>autoTrackFeedback.has('owner'));
+  const r=await s.page.evaluate(()=>({count:Object.keys(autoTrackFeedback.state('owner').events).length,score:autoTrackFeedback.score('A'),calls:s1Calls,armed:spotifyPlaybackMonitor.diagnostics().armed}));
+  assert.equal(r.count,1);assert.ok(r.score<=-99&&r.score>=-100);assert.equal(r.armed,1);
+  assert.ok(r.calls.every(c=>c.method==='GET'&&c.url.includes('/me/player?')));assert.deepEqual(s.errors,[]);
+ }finally{await s.close();}
+});
+test('stable defaults preserve explicit off, initialize per account, and never enable without a verified session',async()=>{
+ const s=await h.page();try{
+  await s.page.evaluate(()=>refreshSkipDefaults());assert.equal(await s.page.evaluate(()=>spotifyPlaybackMonitor.diagnostics().armed),0);
+  await setup(s.page);await s.page.evaluate(async()=>{
+   await OmmLocalState.edit(OfficeAutoTrackFeedback.enabledKey('owner'),null,'0');
+   await OmmLocalState.edit('office_skip_observation_enabled_v1:public-owner',null,'0');
+   await refreshSkipDefaults();
+  });
+  assert.equal(await s.page.evaluate(()=>autoTrackFeedback.enabled()),false);assert.equal(await s.page.evaluate(()=>skipJournalController.diagnostics().active),false);
+  await s.page.evaluate(async()=>{lastFmSpotifyAccount='other-public';autoFeedbackAccount='other';playbackSessionTag='other-login';await refreshSkipDefaults();});
+  assert.equal(await s.page.evaluate(()=>autoTrackFeedback.enabled()),true);assert.equal(await s.page.evaluate(()=>skipJournalController.diagnostics().active),true);
+  assert.equal(await s.page.evaluate(()=>localStorage.getItem(OfficeAutoTrackFeedback.enabledKey('owner'))),'0');assert.deepEqual(s.errors,[]);
+ }finally{await s.close();}
+});
+test('stable defaults: off persists after session revalidation, busy defers startup, regular refresh does not rearm stopped monitor',async()=>{
+ const s=await h.page();try{
+  await setup(s.page);await s.page.evaluate(async()=>{generationInFlight=true;await refreshSkipDefaults();});
+  assert.equal(await s.page.evaluate(()=>skipJournalController.diagnostics().active),false);
+  await s.page.evaluate(async()=>{generationInFlight=false;await refreshSkipDefaults();});
+  await s.page.waitForFunction(()=>skipJournalController.diagnostics().active);
+  await s.page.evaluate(async()=>{skipJournalController.stop('expired');await refreshSkipDefaults();});
+  assert.equal(await s.page.evaluate(()=>skipJournalController.diagnostics().active),false);
+  await s.page.locator('#skipJournalPanel').evaluate(el=>el.open=true);
+  await s.page.locator('#skipJournalEnabled').check();await s.page.waitForFunction(()=>skipJournalController.diagnostics().active);
+  await s.page.locator('#skipJournalEnabled').uncheck();await s.page.waitForFunction(()=>!document.getElementById('skipJournalEnabled').disabled);
+  await s.page.evaluate(async()=>{playbackSessionTag='revalidated';await refreshSkipDefaults();});
+  assert.equal(await s.page.evaluate(()=>skipJournalController.diagnostics().active),false);assert.deepEqual(s.errors,[]);
+ }finally{await s.close();}
+});
+test('stable defaults reject damaged automatic grades without deleting data or starting observation',async()=>{
+ const s=await h.page();try{
+  await setup(s.page);await s.page.evaluate(async()=>{localStorage.setItem(OfficeAutoTrackFeedback.localKey('owner'),'bad');await refreshSkipDefaults();});
+  assert.equal(await s.page.evaluate(()=>autoTrackFeedback.enabled()),false);assert.equal(await s.page.evaluate(()=>skipJournalController.diagnostics().active),false);
+  assert.equal(await s.page.evaluate(()=>localStorage.getItem(OfficeAutoTrackFeedback.localKey('owner'))),'bad');assert.deepEqual(s.errors,[]);
+ }finally{await s.close();}
+});
+test('stable defaults never retroactively rate old diagnostic entries and external playlists remain diagnostic only',async()=>{
+ const s=await h.page();try{
+  await setup(s.page);await start(s.page);await transition(s.page);assert.equal(await s.page.evaluate(()=>autoTrackFeedback.has('owner')),false);
+  await s.page.evaluate(async()=>{skipJournalController.stop();s1Set('A','track',10000);s1State.context='spotify:playlist:external';await refreshSkipDefaults();});
+  await s.page.waitForFunction(()=>skipJournalController.diagnostics().reason==='stabilizing');
+  await s.page.waitForTimeout(1100);await s.page.evaluate(()=>spotifyPlaybackMonitor.read({fresh:true}));
+  await s.page.waitForFunction(()=>skipJournalController.diagnostics().reason==='observing');
+  await s.page.evaluate(async()=>{s1Set('B');s1State.context='spotify:playlist:external';await spotifyPlaybackMonitor.read({fresh:true});});
+  await s.page.waitForFunction(()=>skipJournalController.diagnostics().recorded===2);
+  assert.equal(await s.page.evaluate(()=>autoTrackFeedback.has('owner')),false);assert.deepEqual(s.errors,[]);
+ }finally{await s.close();}
+});
+
+test('stable defaults integrate with real getProfile and restart with fresh anchors after reload',async()=>{
+ const s=await h.page();try{
+  await setup(s.page);await s.page.evaluate(async()=>{
+   const transport=fetch;fetch=(url,opts)=>String(url)==='https://api.spotify.com/v1/me'?Promise.resolve(Response.json({id:'public-owner',account_id:'owner'})):transport(url,opts);
+   await getProfile('old');
+  });
+  await s.page.waitForFunction(()=>skipJournalController.diagnostics().reason==='stabilizing');
+  await transition(s.page);await s.page.waitForFunction(()=>autoTrackFeedback.has('owner'));
+  const before=await s.page.evaluate(()=>localStorage.getItem(OfficeAutoTrackFeedback.localKey('owner')));
+  await s.page.reload();await s.page.waitForFunction(()=>window.ommStorageReady!==false);await setup(s.page);
+  await s.page.evaluate(()=>refreshSkipDefaults());await s.page.waitForFunction(()=>skipJournalController.diagnostics().reason==='stabilizing');
+  assert.equal(await s.page.evaluate(()=>skipJournalController.diagnostics().recorded),0);
+  assert.equal(await s.page.evaluate(()=>localStorage.getItem(OfficeAutoTrackFeedback.localKey('owner'))),before);
+  assert.equal(await s.page.evaluate(()=>autoTrackFeedback.enabled()),true);assert.deepEqual(s.errors,[]);
+ }finally{await s.close();}
+});

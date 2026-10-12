@@ -70,6 +70,14 @@
       }
     }
     return Object.freeze({enabled,state,has:a=>storage.getItem(localKey(a))!==null,
+      async initializeDefault(){
+        const a=getAccount();if(!text(a))return;
+        const key=enabledKey(a);if(storage.getItem(key)!==null)return;
+        state(a); // Validate retained data before enabling its influence.
+        try{await edit(key,null,'1');}catch(error){
+          if(error.name!=='LocalStateConflict' || !['0','1'].includes(storage.getItem(key)))throw error;
+        }
+      },
       async configure(value){const a=getAccount();if(!text(a))throw new Error('Połącz Spotify.');if(value)state(a);const key=enabledKey(a);await edit(key,storage.getItem(key),value?'1':'0');},
       async record(event){const a=getAccount();if(!enabled()||a!==event.account)return false;await update(a,s=>add(s,event,now()));return Object.hasOwn(state(a).events,event.id);},
       async reset(trackId){const a=getAccount();if(!a)return;await update(a,s=>reset(s,trackId,now()));},

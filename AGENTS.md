@@ -1,6 +1,6 @@
 # Office Music Mixer — wskazówki pracy
 
-Stan dokumentacji: 2026-10-12, kandydat po S3.1 (`1.0.12-rc`). Język interfejsu i komunikacji: polski.
+Stan dokumentacji: 2026-10-12, wydanie stabilne `1.0.12` po S3.1 i zatwierdzeniu domyślnych obserwacji/kar. Język interfejsu i komunikacji: polski.
 
 Przed zmianami przeczytaj [architekturę](docs/ARCHITECTURE.md), [roadmapę](docs/ROADMAP.md) i dokument zakresu. Dokumentacja opisuje aktualną implementację; rozbieżności rozstrzygaj przez kod i testy, a następnie zgłaszaj.
 
@@ -12,7 +12,7 @@ Przed zmianami przeczytaj [architekturę](docs/ARCHITECTURE.md), [roadmapę](doc
 - Node 24, `npm ci`, Chromium przez `npx playwright-core install --with-deps chromium` lub `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. `npm test` uruchamia regresje bez produkcyjnych API/D1. Pełne polecenia CI: `.github/workflows/regression.yml`; opis: [TESTING](docs/TESTING.md).
 - Testy zmian funkcjonalnych powinny obejmować granice, awarie i kompatybilność danych. Dla zmian pozyskiwania porównuj identyczne dane, zegar i losowanie; nie traktuj kolejnych generowań live jako izolowanego A/B.
 - Przed scaleniem sprawdź CI i zakres diffu; respektuj aktualną zgodę użytkownika na scalenie/wdrożenie. Main uruchamia automatyczne wdrożenia. Raportuj dokładny SHA i oddziel status platformy od rzeczywistego smoke użytkownika.
-- Numeracja kolejnych wydań aplikacji: `1.0.N-rc`, widoczna w nagłówku. Dokumentacyjny PR nie zmienia wersji aplikacji. Rollback kodu nie cofa danych ani decyzji użytkownika.
+- Numeracja wydania stabilnego: `1.0.12`, widoczna w nagłówku (wcześniejsze kandydaty `1.0.N-rc`). Dokumentacyjny PR nie zmienia wersji aplikacji. Rollback kodu nie cofa danych ani decyzji użytkownika.
 
 ## Dane i niezmienniki
 
