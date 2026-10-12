@@ -73,3 +73,16 @@ test('Q1.8: diagnostic hash failure does not prevent learning; missing identity 
   assert.equal(result.learning, 'saved'); assert.equal(result.changed, 'context-changed'); assert.deepEqual(result.areas, ['unknown']); assert.ok(result.text.includes('nie można ustalić obszaru')); assert.ok(!result.text.includes('PRIVATE')); assert.deepEqual(session.errors, []);
  } finally { await session.close(); }
 });
+test('Q1.8: real LF2 catalog import identifies catalog areas without modifying learning policy', async () => {
+ const session = await harness.page();
+ try {
+  const result = await session.page.evaluate(async () => {
+   getAutoFeedbackAccount = () => 'account'; localStorage.setItem(LASTFM_USER_KEY, 'listener');
+   const selected = selectedProfiles(), rotation = await createSearchRotation(selected);
+   applyLastFmCloudCatalog(OfficeLastFmCloud.compact('listener', [{ artist: 'PrivateArtist', savedAt: Date.now(), tags: ['rock'], sources: ['test'] }], [{ artist: 'PrivateArtist', track: 'PrivateTrack', savedAt: Date.now(), tags: ['rock'], sources: ['test'] }]));
+   const learning = await rememberSearchRotation({ rotation, selected }, { outcome: 'success', searchEffectiveness: { final: true, pages: [] } });
+   return { learning, areas: rotation.changedAreas, saved: localStorage.getItem(OmmSearchRotation.KEY) };
+  });
+  assert.equal(result.learning, 'context-changed'); assert.deepEqual(result.areas, ['lastfmArtists', 'lastfmTracks']); assert.equal(result.saved, null); assert.deepEqual(session.errors, []);
+ } finally { await session.close(); }
+});
