@@ -1,6 +1,6 @@
 # Office Music Mixer — wskazówki pracy
 
-Stan dokumentacji: 2026-10-12, main po Q1.7 (`1.0.6-rc`). Język interfejsu i komunikacji: polski.
+Stan dokumentacji: 2026-10-12, kandydat po S3.1 (`1.0.12-rc`). Język interfejsu i komunikacji: polski.
 
 Przed zmianami przeczytaj [architekturę](docs/ARCHITECTURE.md), [roadmapę](docs/ROADMAP.md) i dokument zakresu. Dokumentacja opisuje aktualną implementację; rozbieżności rozstrzygaj przez kod i testy, a następnie zgłaszaj.
 

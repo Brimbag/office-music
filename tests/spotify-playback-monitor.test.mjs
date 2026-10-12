@@ -75,7 +75,7 @@ test('M session change cancels and ignores late response, and resets fatal state
 test('M shared snapshots are account scoped, fresh, rebuilt from whitelist and never continuous on follower',async()=>{
  const s=setup();const a=await s.core.read();s.core.invalidate('leader');
  assert.equal(s.core.shared({...a,account:'other'}),null);assert.equal(s.core.shared({...a,receivedAt:s.c.wall()-1001}),null);
- const b=s.core.shared({...a,token:'private',device:{...a.device,token:'private'}});assert.equal(b.continuity.reason,'follower');assert.doesNotMatch(JSON.stringify(b),/token|private/);
+ const b=s.core.shared({...a,item:{...a.item,name:'Shared title',artists:['Shared artist'],token:'private'},token:'private',device:{...a.device,token:'private'}});assert.equal(b.item.name,'Shared title');assert.deepEqual(b.item.artists,['Shared artist']);assert.equal(b.continuity.reason,'follower');assert.doesNotMatch(JSON.stringify(b),/token|private/);
  assert.equal(await s.core.read(),b);assert.equal(s.calls(),1);
 });
 function locks() {
@@ -125,4 +125,10 @@ test('M queued background consumer can restart an existing hidden ordinary consu
  const s=pollSetup();s.visible(false);s.m.subscribe('ordinary',()=>{},{active:true});await flush();assert.equal(s.calls(),0);
  const off=s.m.subscribe('rmf-volume',()=>{},{active:true,background:true});await flush();assert.equal(s.calls(),1);
  off();await s.c.advance(60000);assert.equal(s.calls(),1);s.m.dispose();
+});
+test('S3.1 monitor whitelists bounded track labels, never extra fields or podcast labels',()=>{
+ const p=payload({item:{type:'track',id:'track',uri:'spotify:track:track',duration_ms:200000,name:' Song ',artists:[{name:' Artist ',token:'secret'},{name:'bad\nname'}],access_token:'secret'}});
+ const item=M.normalize(p).item;assert.equal(item.name,'Song');assert.deepEqual(item.artists,['Artist']);assert.ok(!JSON.stringify(item).includes('secret'));
+ assert.equal(M.normalize(payload({item:{type:'episode',name:'Episode',artists:[{name:'A'}]}})).item.name,undefined);
+ assert.equal(M.normalize(payload({item:{type:'track',name:'x'.repeat(301)}})).item.name,undefined);
 });
