@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer 1.0.6-rc</title>
+  <title>Office Music Mixer 1.0.7-rc</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -418,7 +418,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">1.0.6-rc</span></h1>
+        <h1>Office Music Mixer <span class="version">1.0.7-rc</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -1542,7 +1542,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer 1.0.6-rc",
+      source: "Office Music Mixer 1.0.7-rc",
       storage: exportedStorageState()
     };
 
@@ -6159,7 +6159,7 @@ function createCandidateAcquisition(selected, blocklists = generationBlocklists(
   return acquisition;
 }
 
-async function searchRotationContext(selected = null) {
+async function searchRotationContext(selected = null, diagnostic = null) {
   // Reuse the verified playback identity. Legacy profile.id may scope derived
   // query memory, but never changes the stricter auto-feedback identity contract.
   const account = getAutoFeedbackAccount() || playbackSession()?.account || "";
@@ -6169,22 +6169,41 @@ async function searchRotationContext(selected = null) {
   const blocks = generationBlocklists(people);
   // Deliberately exclude Search/cache/pool/seed-rotation writes by this generation.
   // Changes to evidence, preferences, history or effective expiring blocks reset learning.
-  const snapshot = JSON.stringify([OfficeGenerationLog.VERSION, account, people, presence,
+  const components = [OfficeGenerationLog.VERSION, account, people, presence,
     [...document.querySelectorAll('input[data-genre-profile-id]')].map(node => [node.dataset.genreProfileId, node.value]),
     Object.keys(profiles).map(id => [localStorage.getItem(`office_seed_${id}`), localStorage.getItem(`office_blocked_${id}`)]),
     [playlistLength.value, discoveryLevel.value, recognizabilityLevel.value, trackBlockDays.value, artistCooldownHours.value, avoidRemixes.checked, avoidNonLatin.checked],
     [TASTE_STORAGE_KEY, FEEDBACK_KEY, HISTORY_KEY, FEEDBACK_BLOCKED_ARTISTS_KEY, OfficeArtistExclusions.KEY, LASTFM_USER_KEY, LASTFM_ARTIST_POOL_KEY, LASTFM_TRACK_POOL_KEY].map(key => localStorage.getItem(key)),
     Object.fromEntries(Object.entries(blocks).map(([key, values]) => [key, [...values].sort()])),
-    autoTrackFeedback?.enabled() ? autoTrackFeedback.state(account) : null]);
+    autoTrackFeedback?.enabled() ? autoTrackFeedback.state(account) : null];
+  const snapshot = JSON.stringify(components);
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(snapshot));
+  if (diagnostic) {
+    // Ephemeral hashes only; the original combined fingerprint above is unchanged.
+    const areas = {
+      version: components[0], account: components[1], profiles: [components[2], components[3]],
+      genres: components[4], artists: components[5], settings: components[6],
+      survey: components[7][0], feedback: [components[7][1], components[7][3]],
+      history: components[7][2], exclusions: components[7][4],
+      lastfmAccount: components[7][5], lastfmArtists: components[7][6], lastfmTracks: components[7][7],
+      effectiveBlocks: components[8], autoFeedback: components[9]
+    };
+    try {
+      diagnostic.hashes = Object.fromEntries(await Promise.all(Object.entries(areas).map(async ([key, value]) => {
+        const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(value)));
+        return [key, [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, "0")).join("")];
+      })));
+    } catch { diagnostic.hashes = null; } // Diagnostics never change the learning decision.
+  }
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function createSearchRotation(selected = null) {
   try {
-    const context = await searchRotationContext(selected);
+    const diagnostic = {};
+    const context = await searchRotationContext(selected, diagnostic);
     if (!context) return null;
-    return { context, memory: OmmSearchRotation.create(localStorage.getItem(OmmSearchRotation.KEY), context), probed: false, deferred: new Set() };
+    return { context, diagnostic, changedAreas: [], memory: OmmSearchRotation.create(localStorage.getItem(OmmSearchRotation.KEY), context), probed: false, deferred: new Set() };
   } catch { return null; } // Optional local optimization must not block generation.
 }
 
@@ -6193,7 +6212,15 @@ async function rememberSearchRotation(acquisition, report) {
     const rotation = acquisition?.rotation;
     if (!rotation) return "off";
     if (report.outcome !== "success" || !report.searchEffectiveness?.final) return "not-run";
-    if (await searchRotationContext(acquisition.selected || null) !== rotation.context) return "context-changed";
+    const diagnostic = {};
+    const context = await searchRotationContext(acquisition.selected || null, diagnostic);
+    if (context !== rotation.context) {
+      rotation.changedAreas = rotation.diagnostic?.hashes && diagnostic.hashes
+        ? Object.keys(rotation.diagnostic.hashes).filter(key => rotation.diagnostic.hashes[key] !== diagnostic.hashes[key])
+        : ["unknown"];
+      if (!rotation.changedAreas.length) rotation.changedAreas = ["unknown"];
+      return "context-changed";
+    }
     rotation.memory.observe(report.searchEffectiveness.pages);
     const raw = rotation.memory.serialize(localStorage.getItem(OmmSearchRotation.KEY));
     // No eviction, preference writes, export or D1 for this derived memory.
@@ -6547,9 +6574,11 @@ async function generateOfficePlaylist() {
     for (const [name, original] of originals) window[name] = original;
     activeGenerationProgress = null;
     const learning = await rememberSearchRotation(acquisition, lastGenerationReport);
-    progress.searchRotation?.({ learning }, true);
+    const changedAreas = acquisition?.rotation?.changedAreas || [];
+    progress.searchRotation?.({ learning, changedAreas }, true);
     lastGenerationReport.searchRotation ||= { deferred: 0, probes: 0 };
     lastGenerationReport.searchRotation.learning = learning;
+    lastGenerationReport.searchRotation.changedAreas = [...changedAreas];
     try {
       if (!window.OfficeGenerationLog) throw new Error("Moduł dziennika niedostępny.");
       appendLastFmCloudDiagnostic(logContext.cloud);
@@ -6820,9 +6849,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy 1.0.6-rc: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy 1.0.7-rc: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.6-rc koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.7-rc koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
