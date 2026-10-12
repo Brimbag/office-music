@@ -56,7 +56,7 @@
     function stop(why='stopped'){active=false;epoch++;anchor=null;selection=null;device='';lastObservation='';clearTimer(timer);timer=null;unsubscribe?.();unsubscribe=null;status=why;reason='';report();}
     function qualified(s){return s?.available && s.status==='ok' && text(s.observationId) && same(selection,s) && s.isPlaying===true &&
       s.device?.active===true && text(s.device.id) && s.item?.type==='track' && id(s.item.id) && s.item.uri===`spotify:track:${s.item.id}` &&
-      selection.uri===s.contextUri && selection.tracks.has(s.item.id) && finite(s.progressMs) && s.item.durationMs>30000 &&
+      (selection.auto ? /^spotify:playlist:[A-Za-z0-9]{1,64}$/.test(s.contextUri || '') : selection.uri===s.contextUri && selection.tracks.has(s.item.id)) && finite(s.progressMs) && s.item.durationMs>30000 &&
       finite(s.item.durationMs) && s.progressMs<=s.item.durationMs && finite(s.receivedAt) && wall()>=s.receivedAt && wall()-s.receivedAt<=1000 &&
       finite(s.receivedMono) && finite(s.requestStartedMono) && s.receivedMono>=s.requestStartedMono && s.receivedMono-s.requestStartedMono<=5000 &&
       Math.abs(mono()-s.receivedMono)<=1000;}
@@ -67,9 +67,11 @@
       if(wall()>=until){stop('expired');return;}
       if(busy()){reset('busy');return;}
       if(!meta?.leader){reset('leader');return;}
-      if(!qualified(s)){reset(!s?.available?'api':s?.item?.type==='episode'?'podcast':!s?.isPlaying?'paused':'outside');return;}
+      if(!qualified(s)){if(selection.auto)status='waiting';reset(!s?.available?'api':s?.item?.type==='episode'?'podcast':!s?.isPlaying?'paused':'outside');return;}
       if(s.observationId===lastObservation)return;lastObservation=s.observationId;
-      if(device && device!==s.device.id){stop('device');return;}device=s.device.id;status='watching';
+      if(device && device!==s.device.id){if(!selection.auto){stop('device');return;}reset('device');}
+      if(selection.auto && selection.uri!==s.contextUri){reset('context');selection.uri=s.contextUri;selection.id=s.contextUri.slice('spotify:playlist:'.length);}
+      device=s.device.id;status='watching';
       if(!anchor){anchor=newAnchor(s);reason='stabilizing';report();return;}
       const prev=anchor.sample,elapsed=s.receivedMono-prev.receivedMono;
       if(s.continuity?.continuous!==true || s.continuity.reason!=='observed' || elapsed<0 || elapsed>10000 ||
@@ -103,8 +105,26 @@
       timer=setTimer(()=>stop('expired'),SESSION_MS);
       unsubscribe=monitor.subscribe('skip-journal',receive,{active:true,background:true});report();
     }
+    function armAll(){
+      stop();const scope=getSession();
+      if(!scope || !text(scope.account) || !text(scope.session))throw new Error('session');
+      selection={...scope,auto:true,id:'',uri:''};active=true;status='waiting';until=wall()+SESSION_MS;
+      timer=setTimer(()=>stop('expired'),SESSION_MS);unsubscribe=monitor.subscribe('skip-journal',receive,{active:true,background:true});report();
+    }
+    function pause(){
+      if(!active)return;
+      if(!selection?.auto){stop('generation');return;}
+      active=false;epoch++;anchor=null;lastObservation='';unsubscribe?.();unsubscribe=null;status='generation';reason='';report();
+    }
+    function resume(){
+      if(status!=='generation' || !selection?.auto)return;
+      if(wall()>=until){stop('expired');return;}
+      if(!same(selection,getSession())){stop('session');return;}
+      active=true;epoch++;anchor=null;device='';lastObservation='';status='waiting';reason='';
+      unsubscribe=monitor.subscribe('skip-journal',receive,{active:true,background:true});report();
+    }
     async function events(){const scope=getSession();if(!scope)return [];return store('list',scope.account);}
-    return Object.freeze({arm,stop,events,receive,diagnostics:()=>({active,status,reason,recorded,duplicates,ignored:{...ignored}})});
+    return Object.freeze({arm,armAll,pause,resume,stop,events,receive,diagnostics:()=>({active,status,reason,playlistId:selection?.id || "",recorded,duplicates,ignored:{...ignored}})});
   }
   root.OfficeSkipJournal=Object.freeze({classify,validEvent,createStore,create,MAX_EVENTS,RETENTION_MS,SESSION_MS});
 })(globalThis);

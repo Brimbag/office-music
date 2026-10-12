@@ -60,3 +60,7 @@ Zatwierdzony `1.0.9-rc`: opis nieaktualnej obserwacji Last.fm z ostatnim potwier
 ## U4 — uporządkowanie diagnostyki
 
 Zatwierdzone `1.0.10-rc`: jeden panel/5 sekcji, kopiowanie raportu, bez zmian rekomendacji i danych. [Opis](GENERATOR_UX_U4.md). Następnie smoke i decyzja o stabilnym wydaniu. Przygotowano wyłącznie plan [obserwacji wszystkich playlist](SKIP_MONITOR_ALL_PLAYLISTS_PLAN.md); rozszerzenie monitora i ocen nie jest wdrażane w U4.
+
+## S3 — obserwacja bez wyboru playlisty
+
+Zatwierdzone `1.0.11-rc`: jeden przełącznik, automatyczne konteksty wszystkich playlist, reset na zmianie playlisty/device, pauza/wznowienie po generowaniu bez wydłużenia8h, off po reload. Kary wyłącznie dla potwierdzonych TrackID z zapisanych snapshotów OMM, opt-in nadal osobny. [Zakres i smoke](SKIP_MONITOR_S3.md). Naprawa separatorów kopiowanego raportu U4 w tym samym PR. Plan trwałego uzbrajania z poprzedniego dokumentu pozostaje odłożony, nie jest częścią pierwszego S3.

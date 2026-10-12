@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer 1.0.10-rc</title>
+  <title>Office Music Mixer 1.0.11-rc</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -418,7 +418,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">1.0.10-rc</span></h1>
+        <h1>Office Music Mixer <span class="version">1.0.11-rc</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -578,15 +578,13 @@
     </details>
     <details id="skipJournalPanel">
       <summary>Prawdopodobne pominięcia — diagnostyka</summary>
-      <p class="small">Dziennik zapisuje zdarzenia lokalnie. Kary są osobną, domyślnie wyłączoną funkcją i dotyczą wyłącznie nowych pominięć po jej włączeniu. Wybierz zapisaną playlistę OMM i rozpocznij obserwację jej odtwarzania w Spotify. Samo kliknięcie „Dalej” nie zawsze da się rozpoznać jednoznacznie.</p>
-      <label>Playlista OMM <select id="skipJournalPlaylist"><option value="">Wybierz playlistę</option></select></label>
+      <p class="small">Dziennik zapisuje zdarzenia lokalnie. Kary są osobną, domyślnie wyłączoną funkcją i dotyczą wyłącznie nowych pominięć po jej włączeniu. Włącz obserwację dowolnej playlisty Spotify. Kontekst playlisty jest rozpoznawany automatycznie; albumy, radio i odtwarzanie bez kontekstu playlisty są pomijane. Samo kliknięcie „Dalej” nie zawsze da się rozpoznać jednoznacznie.</p>
+      <label><input id="skipJournalEnabled" type="checkbox"> Obserwuj pominięcia na playlistach</label>
       <div class="settings-row">
-        <button id="skipJournalStart" type="button">Rozpocznij obserwację</button>
-        <button id="skipJournalStop" type="button" disabled>Zakończ obserwację</button>
         <button id="skipJournalRefresh" type="button">Odśwież dziennik</button>
       </div>
       <p class="small">Obserwacja działa także w tle, do zatrzymania lub maks. 8 godzin; po ponownym otwarciu strony jest wyłączona. Luki, pauza, podcasty i niejednoznaczne przejścia nie tworzą zdarzeń. Dziennik pokazuje maks. 100 wpisów z ostatnich 30 dni; pozostaje na tym komputerze, poza synchronizacją i eksportem.</p>
-      <label><input id="autoSkipEnabled" type="checkbox"> Naliczaj automatyczne kary za nowe pominięcia</label>
+      <label><input id="autoSkipEnabled" type="checkbox"> Naliczaj automatyczne kary za nowe pominięcia na playlistach OMM</label>
       <p class="small">Domyślnie wyłączone. Pierwsze wczesne pominięcie −100, następne −50; środkowe −50, od 70% bez kary. Suma do −250, wpływ maleje o połowę przez 30 dni i wygasa po 90 dniach. Ręczne oceny mają pierwszeństwo; 👍 zeruje stare kary. Zapisane wcześniej testy S1 nigdy nie są oceniane. Włączenie kar nie uruchamia obserwacji; po otwarciu strony uruchom ją osobno.</p>
       <p id="autoSkipStatus" class="small" role="status">Automatyczne kary: wyłączone.</p>
       <p id="skipJournalStatus" class="small" role="status">Pominięcia: obserwacja wyłączona.</p>
@@ -1544,7 +1542,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer 1.0.10-rc",
+      source: "Office Music Mixer 1.0.11-rc",
       storage: exportedStorageState()
     };
 
@@ -6469,7 +6467,7 @@ async function generateOfficePlaylist() {
   const logContext = { id: null, requested: total, profiles: [], group: null, cloud: { state: "not_run", lastfm: { status: "not_run", artists: null, tracks: null, bytes: null, written: false } } };
   try {
     generateButton.disabled = true;
-    skipJournalController?.stop("generation");
+    skipJournalController?.pause();
     if (rmfVolumeController) await rmfVolumeController.suspend("generation");
     await Promise.all([...localPreferenceFields.values()].map(field => field.queue));
     newSearchesThisGeneration = 0;
@@ -6632,6 +6630,7 @@ async function generateOfficePlaylist() {
       });
     } catch {} // Optional presentation never changes generator completion.
     generationInFlight = false;
+    skipJournalController?.resume();
     spotifyPlaybackMonitor?.wake("generation");
     generateButton.disabled = false;
   }
@@ -6896,9 +6895,9 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy 1.0.10-rc: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy 1.0.11-rc: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.10-rc koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.11-rc koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
     `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
@@ -7259,19 +7258,12 @@ if (window.OfficeSkipJournal && window.OfficeAutoTrackFeedback && spotifyPlaybac
     finally{autoEnabled.disabled=false;}
   });
   refreshAutoSkip=refreshAuto;refreshAuto();
-  const choice=document.getElementById("skipJournalPlaylist"), start=document.getElementById("skipJournalStart"), stop=document.getElementById("skipJournalStop");
+  const enabled=document.getElementById("skipJournalEnabled");
   const status=document.getElementById("skipJournalStatus"), rows=document.getElementById("skipJournalEntries");
-  let readTurn=0;
-  refreshSkipPlaylistChoices=()=>{
-    if(skipJournalController?.diagnostics().active)return;
-    const selected=choice.value;choice.textContent="";
-    choice.add(new Option("Wybierz playlistę", ""));
-    for(const playlist of loadRecentPlaylists())if(/^[A-Za-z0-9]{1,64}$/.test(playlist.id||"") && playlist.uri===`spotify:playlist:${playlist.id}` && playlist.tracks?.length)
-      choice.add(new Option(`${playlist.name || "OMM"} · ${playlist.tracks.length} utworów`,playlist.id));
-    choice.value=selected;
-  };
-  const descriptions={off:"obserwacja wyłączona",stopped:"obserwacja zakończona",waiting:"czekam na odtwarzanie wybranej playlisty",watching:"obserwuję wybraną playlistę",session:"sesja Spotify zmieniła się; rozpocznij ponownie",device:"urządzenie zmieniło się; rozpocznij ponownie",expired:"upłynął limit 8 godzin",storage:"nie udało się bezpiecznie zapisać dziennika; obserwacja zatrzymana",generation:"obserwacja zakończona na czas generowania",pagehide:"karta została zamknięta lub uśpiona"};
-  const reasons={stabilizing:"czekam na stabilne odczyty",observing:"ciągłość potwierdzona",recorded:"zapisano prawdopodobne pominięcie",busy:"trwa generowanie lub operacja danych",leader:"ta karta nie prowadzi monitora",api:"przerwa w odczycie Spotify",podcast:"podcast — pomijam",paused:"pauza — pomijam",outside:"poza wybraną playlistą lub niepełny odczyt",seek:"przewinięcie — reset obserwacji",gap:"przerwa w ciągłości — reset obserwacji",unstable:"za mało stabilnych odczytów",end_or_boundary:"możliwy naturalny koniec, crossfade lub granica przedziału",next_progress:"niejednoznaczny początek kolejnego utworu",retention:"zdarzenie poza zakresem zachowanej historii"};
+  let readTurn=0,armTurn=0;
+  refreshSkipPlaylistChoices=()=>{}; // Legacy callback: no playlist selection is required.
+  const descriptions={off:"obserwacja wyłączona",stopped:"obserwacja zakończona",waiting:"czekam na odtwarzanie playlisty Spotify",watching:"obserwuję playlistę Spotify",session:"sesja Spotify zmieniła się; rozpocznij ponownie",device:"urządzenie zmieniło się; rozpocznij ponownie",expired:"upłynął limit 8 godzin",storage:"nie udało się bezpiecznie zapisać dziennika; obserwacja zatrzymana",generation:"obserwacja wstrzymana na czas generowania",pagehide:"karta została zamknięta lub uśpiona"};
+  const reasons={context:"nowa playlista — reset obserwacji",device:"nowe urządzenie — reset obserwacji",stabilizing:"czekam na stabilne odczyty",observing:"ciągłość potwierdzona",recorded:"zapisano prawdopodobne pominięcie",busy:"trwa generowanie lub operacja danych",leader:"ta karta nie prowadzi monitora",api:"przerwa w odczycie Spotify",podcast:"podcast — pomijam",paused:"pauza — pomijam",outside:"poza playlistą lub niepełny odczyt",seek:"przewinięcie — reset obserwacji",gap:"przerwa w ciągłości — reset obserwacji",unstable:"za mało stabilnych odczytów",end_or_boundary:"możliwy naturalny koniec, crossfade lub granica przedziału",next_progress:"niejednoznaczny początek kolejnego utworu",retention:"zdarzenie poza zakresem zachowanej historii"};
   async function refreshRows(){
     const scope=playbackSession(),turn=++readTurn;rows.textContent="";
     if(!scope){rows.textContent="Połącz Spotify, aby odczytać dziennik tego konta.";return;}
@@ -7295,27 +7287,29 @@ if (window.OfficeSkipJournal && window.OfficeAutoTrackFeedback && spotifyPlaybac
   skipJournalController=OfficeSkipJournal.create({monitor:spotifyPlaybackMonitor,getSession:playbackSession,
     busy:()=>generationInFlight || OmmLocalState.blocked,onEvent:event=>{
       void refreshRows();const gate=autoSkipGate;
-      if(gate && gate.account===event.account && event.at>=gate.since && event.kind!=="late")void autoTrackFeedback.record({...event,account:gate.autoAccount}).then(applied=>{if(applied && autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){void refreshRows();autoStatus.textContent="Zapisano nową automatyczną ocenę dla dokładnego Spotify Track ID. Bez kary wykonawcy.";scheduleAutomaticCloudSync();}}).catch(()=>{if(autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){skipJournalController.stop("storage");autoStatus.textContent="Nie zapisano automatycznej kary; poprzednie dane zachowano. Obserwacja zatrzymana.";}});
+      if(loadRecentPlaylists().some(p=>p.id===event.playlistId && p.uri===`spotify:playlist:${p.id}` && p.tracks?.some(t=>t.id===event.trackId && t.uri===`spotify:track:${t.id}`)) && gate && gate.account===event.account && event.at>=gate.since && event.kind!=="late")void autoTrackFeedback.record({...event,account:gate.autoAccount}).then(applied=>{if(applied && autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){void refreshRows();autoStatus.textContent="Zapisano nową automatyczną ocenę dla dokładnego Spotify Track ID. Bez kary wykonawcy.";scheduleAutomaticCloudSync();}}).catch(()=>{if(autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){skipJournalController.stop("storage");autoStatus.textContent="Nie zapisano automatycznej kary; poprzednie dane zachowano. Obserwacja zatrzymana.";}});
     },onStatus:info=>{
-      if(!info.active)autoSkipGate=null;
-      start.disabled=info.active;stop.disabled=!info.active;choice.disabled=info.active;
+      if(!info.active && info.status!=="generation")autoSkipGate=null;
+      enabled.checked=info.active || info.status==="generation";
       if(info.status==="session"){readTurn++;rows.textContent="";}
-      status.textContent=`Pominięcia: ${descriptions[info.status] || "obserwacja wstrzymana"}${info.reason?`; ${reasons[info.reason]||"niejednoznaczny odczyt"}`:""}. Zapisane w tej sesji strony: ${info.recorded}. Pominięte obserwacje: ${Object.values(info.ignored).reduce((a,b)=>a+b,0)}. ${autoTrackFeedback.enabled()?"Automatyczne kary działają oddzielnie dla nowych zdarzeń.":"Bez kar."}`;
+      status.textContent=`Pominięcia: ${descriptions[info.status] || "obserwacja wstrzymana"}${info.reason?`; ${reasons[info.reason]||"niejednoznaczny odczyt"}`:""}. Kontekst: ${info.playlistId || "oczekuje"}. Zapisane w tej sesji strony: ${info.recorded}. Pominięte obserwacje: ${Object.values(info.ignored).reduce((a,b)=>a+b,0)}. ${autoTrackFeedback.enabled()?"Automatyczne kary działają oddzielnie dla nowych zdarzeń.":"Bez kar."}`;
     }});
-  start.addEventListener("click",async()=>{
-    start.disabled=true;
+  enabled.addEventListener("change",async()=>{
+    const turn=++armTurn,wanted=enabled.checked;
+    if(!wanted){skipJournalController.stop();return;}
+    enabled.disabled=true;
     try{
       if(!playbackSession()){const token=await getValidAccessToken();if(token)await getProfile(token);}
-      const playlist=loadRecentPlaylists().find(p=>p.id===choice.value);
-      skipJournalController.arm(playlist);autoSkipGate=autoTrackFeedback.enabled()?{account:playbackSession().account,autoAccount:getAutoFeedbackAccount(),since:Date.now()}:null;refreshAuto();await refreshRows();
-    }catch{start.disabled=false;status.textContent="Wybierz zapisaną playlistę OMM i połącz Spotify. Obserwacja nie została uruchomiona.";}
+      if(turn!==armTurn || generationInFlight || OmmLocalState.blocked)throw new Error('busy');
+      skipJournalController.armAll();autoSkipGate=autoTrackFeedback.enabled()?{account:playbackSession().account,autoAccount:getAutoFeedbackAccount(),since:Date.now()}:null;refreshAuto();await refreshRows();
+    }catch{if(turn===armTurn){skipJournalController.stop();status.textContent="Połącz Spotify i poczekaj na zakończenie generowania. Obserwacja nie została uruchomiona.";}}
+    finally{if(turn===armTurn)enabled.disabled=false;}
   });
-  stop.addEventListener("click",()=>{skipJournalController.stop();refreshSkipPlaylistChoices();});
   document.getElementById("skipJournalRefresh").addEventListener("click",async()=>{
     if(!playbackSession()){try{const token=await getValidAccessToken();if(token)await getProfile(token);}catch{}}
     refreshSkipPlaylistChoices();await refreshRows();
   });
-  window.addEventListener("pagehide",()=>skipJournalController.stop("pagehide"));
+  window.addEventListener("pagehide",()=>{armTurn++;skipJournalController.stop("pagehide");});
   refreshSkipPlaylistChoices();
 }
 if (window.OfficeGenerationHistory) {

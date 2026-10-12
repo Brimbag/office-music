@@ -24,7 +24,7 @@
   const data=document.createElement('p');data.textContent=context.data;sections.data.prepend(data);
   const copy=document.createElement('button');copy.type='button';copy.className='secondary';copy.textContent='Kopiuj raport diagnostyczny';
   const status=document.createElement('p');status.className='small';status.setAttribute('role','status');
-  const report=()=>[context.header,summary?.textContent||'',progress.querySelectorAll('p')[1]?.textContent||'',...Object.entries(sections).map(([key,node])=>titles[key]+'\n'+[...node.children].filter(child=>child.tagName!=='SUMMARY').map(child=>child.textContent).join('\n'))].filter(Boolean).join('\n\n');
+  const report=()=>[context.header,summary?.textContent||'',progress.querySelectorAll('p')[1]?.textContent||'',...Object.entries(sections).map(([key,node])=>titles[key]+'\n'+[...node.children].filter(child=>child.tagName!=='SUMMARY').map(child=>child.tagName==='OL'?[...child.children].map(row=>row.textContent).join('\n'):child.tagName==='DETAILS'?[...child.children].map(row=>row.textContent).join('\n'):child.textContent).join('\n'))].filter(Boolean).join('\n\n');
   copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(report());status.textContent='Raport skopiowany.';}catch{status.textContent='Nie udało się skopiować. Zaznacz raport poniżej i skopiuj ręcznie.';const text=document.createElement('textarea');text.readOnly=true;text.value=report();text.setAttribute('aria-label','Raport diagnostyczny do ręcznego skopiowania');status.append(text);text.focus();text.select();}});
   panel.insertBefore(copy,panel.children[1]);panel.insertBefore(status,panel.children[2]);
   return panel;
