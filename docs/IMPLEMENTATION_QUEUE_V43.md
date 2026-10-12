@@ -1,3 +1,5 @@
+> Bieżące statusy i kolejność: [ROADMAP.md](ROADMAP.md). Poniżej historia decyzji; starsze propozycje są zastępowane późniejszymi wpisami.
+
 # Kolejka OMM po v43.24.P4
 
 Stan: 9 października 2026. Baza main `4c6e127`. Ta kolejka zastępuje historyczne statusy kolejki po v43.18.C. Każdy zakres ma osobny PR od aktualnego main, testy i CI, nową wersję nagłówka oraz zgodę przed scaleniem i wdrożeniem. Propozycje poniżej nie oznaczają zgody na implementację. Nie zwiększamy limitów pul, budżetu API ani limitu dwóch utworów wykonawcy.
