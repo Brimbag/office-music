@@ -21,7 +21,7 @@
     const lf=entry.cloud.lastfm;
     const status={not_run:'nie wykonano',success:lf.written?'potwierdzono zapis':'zakończono odczyt',skipped:'poprzednie potwierdzenie, bez nowego zapisu',error:'błąd, dane lokalne zachowano'};
     line(article,`Preferencje w chmurze: ${{not_run:'nie wykonano',success:'sukces',error:'błąd'}[entry.cloud.state]} · Last.fm: ${status[lf.status]}${lf.artists===null?'':` · ${lf.artists} wykonawców, ${lf.tracks ?? '?'} utworów, ${lf.bytes ?? '?'} bajtów`}`);
-    const details=document.createElement('details'),summary=document.createElement('summary'); summary.textContent='Etapy, filtry i szczegóły techniczne'; details.append(summary);
+    const details=document.createElement('details'),summary=document.createElement('summary'); summary.textContent='Szczegóły wpisu historii'; details.append(summary);
     const list=document.createElement('ol'); entry.stages.forEach((s,i)=>{const li=document.createElement('li');li.textContent=`${stages[i]}: ${{done:'zakończono',waiting:'nie rozpoczęto',error:'błąd'}[s.status]} · ${seconds(s.ms)}`;list.append(li);}); details.append(list);
     const technical=document.createElement('pre'); technical.className='generation-history-technical';
     technical.textContent=`Bilans: praca ${seconds(entry.accounting.syncMs)}, oczekiwanie ${seconds(entry.accounting.waitMs)}, pozostałe ${seconds(entry.accounting.otherMs)}, w tle ${seconds(entry.accounting.hiddenMs)}\n`+
