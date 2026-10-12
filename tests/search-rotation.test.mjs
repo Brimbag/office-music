@@ -155,6 +155,6 @@ test('trzy pełne generowania rzeczywiście zapisują uczenie i przekierowują t
    return Response.json({id:'made',name:'Made',uri:'spotify:playlist:made'});
   };
   const results=[];for(let i=0;i<3;i++){await generateOfficePlaylist();results.push({outcome:lastGenerationReport.outcome,length:lastGenerationReport.length,rotation:lastGenerationReport.searchRotation,message:progressBox.querySelectorAll('p')[1]?.textContent,raw:localStorage.getItem(OmmSearchRotation.KEY)});now+=1000;}
-  return {searches,results,text:progressBox.textContent};
+  return {searches,results,text:playlistResult.querySelector("#playlistDiagnostics")?.textContent};
  });assert.deepEqual(r.searches,['genre:"rock"','genre:"rock"','genre:"pop"'],JSON.stringify(r.results));assert.ok(r.results.every(x=>x.outcome==='success'&&x.rotation.learning==='saved'));assert.deepEqual(r.results.map(x=>x.length),[6,6,8]);assert.equal(JSON.parse(r.results[1].raw).entries[0].misses,2);assert.equal(r.results[2].rotation.deferred,1);assert.match(r.text,/uczenie: zapisano lokalnie/);
 });

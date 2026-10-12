@@ -56,3 +56,7 @@ Zatwierdzony zakres `1.0.8-rc`: odtworzony import własnego katalogu usuwa puste
 ## Q1.10 — świeżość i usunięcia cache
 
 Zatwierdzony `1.0.9-rc`: opis nieaktualnej obserwacji Last.fm z ostatnim potwierdzonym wynikiem oraz lokalne liczniki usunięć cache (TTL/quota/invalid/migration/import). Bez zmian reguł cleanup i algorytmu. [Testy, ograniczenia i rollback](Q1_10_CACHE_DIAGNOSTICS.md). Następnie smoke i decyzja o wydaniu stabilnym.
+
+## U4 — uporządkowanie diagnostyki
+
+Zatwierdzone `1.0.10-rc`: jeden panel/5 sekcji, kopiowanie raportu, bez zmian rekomendacji i danych. [Opis](GENERATOR_UX_U4.md). Następnie smoke i decyzja o stabilnym wydaniu. Przygotowano wyłącznie plan [obserwacji wszystkich playlist](SKIP_MONITOR_ALL_PLAYLISTS_PLAN.md); rozszerzenie monitora i ocen nie jest wdrażane w U4.
