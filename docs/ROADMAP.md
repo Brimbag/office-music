@@ -48,3 +48,7 @@ Dla każdego przyszłego PR: aktualny main, jeden zakres, testy graniczne i peł
 ## Q1.8 — zatwierdzona diagnostyka kontekstu
 
 Użytkownik zatwierdził Q1.8 (`1.0.7-rc`) oraz scalenie/wdrożenie po udanych testach. Lokalnie pokazuje obszary zmiany fingerprintu, bez zmiany jego pól, selekcji ani uczenia. [Zakres, testy i rollback](Q1_8_CONTEXT_DIAGNOSTICS.md). Następnie smoke i diagnoza źródła zmian; P5 nadal warunkowy, Q1.6 anulowany.
+
+## Q1.9 — fałszywa invalidacja po LF2
+
+Zatwierdzony zakres `1.0.8-rc`: odtworzony import własnego katalogu usuwa puste opcjonalne pola dowodów, bez zmiany analizy. Normalizacja tylko reprezentacji katalogu utworów w kontekście; istotne pola/kolejności nadal chronione. [Diagnoza, testy i rollback](Q1_9_LASTFM_CONTEXT.md). Następnie smoke uczenia i dalsza stabilizacja, P5 nadal warunkowy.
