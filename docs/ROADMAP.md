@@ -44,3 +44,7 @@ Q1.7: regresje wydania 937/937 i CI main zakończone sukcesem. Smoke użytkownik
 Porównania między kolejnymi raportami nie izolują efektu wersji od wzrostu puli i zmian historii. Mock testy nie potwierdzają rzeczywistych capabilities Spotify ani dostępności produkcji.
 
 Dla każdego przyszłego PR: aktualny main, jeden zakres, testy graniczne i pełne CI, wpływ na długość/jakość, rollback. Migrowanie D1 jest odrębnym autoryzowanym działaniem. Numeracja wydań aplikacji pozostaje `1.0.N-rc`; ten PR dokumentacyjny nie zmienia nagłówka ani produkcji.
+
+## Q1.8 — zatwierdzona diagnostyka kontekstu
+
+Użytkownik zatwierdził Q1.8 (`1.0.7-rc`) oraz scalenie/wdrożenie po udanych testach. Lokalnie pokazuje obszary zmiany fingerprintu, bez zmiany jego pól, selekcji ani uczenia. [Zakres, testy i rollback](Q1_8_CONTEXT_DIAGNOSTICS.md). Następnie smoke i diagnoza źródła zmian; P5 nadal warunkowy, Q1.6 anulowany.
