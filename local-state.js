@@ -23,7 +23,7 @@
     try { localStorage.setItem(key,value); root.dispatchEvent(new CustomEvent("omm-state-change",{detail:{key}})); }
     catch (error) {
       if (quota(error)) {
-        for (const candidate of Object.keys(snapshot())) if (/^office_(?:search|lastfm)_cache_v1:/.test(candidate)) localStorage.removeItem(candidate);
+        for (const candidate of Object.keys(snapshot())) if (/^office_(?:search|lastfm)_cache_v1:/.test(candidate)) root.OmmCacheDiagnostics ? root.OmmCacheDiagnostics.remove(localStorage,candidate,'quota') : localStorage.removeItem(candidate);
         try { localStorage.setItem(key,value); root.dispatchEvent(new CustomEvent("omm-state-change",{detail:{key}})); return; } catch (retry) { error=retry; }
       }
       message('Nie zapisano zmiany. Dotychczasowe dane pozostały zapisane. Zwolnij miejsce lub sprawdź dostęp do pamięci przeglądarki i spróbuj ponownie.');
@@ -153,7 +153,7 @@
     return Object.fromEntries(entries);
   }
   function replace(state) {
-    for (const key of Object.keys(snapshot())) localStorage.removeItem(key);
+    for (const key of Object.keys(snapshot())) root.OmmCacheDiagnostics ? root.OmmCacheDiagnostics.remove(localStorage,key,'import') : localStorage.removeItem(key);
     for (const [key,value] of Object.entries(state)) localStorage.setItem(key,value);
   }
   async function importState(incoming) {
