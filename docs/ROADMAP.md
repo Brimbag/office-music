@@ -1,6 +1,6 @@
 # Roadmapa i zaparkowane zakresy
 
-Stan: 2026-10-12, produkcja `1.0.11-rc` po S3 (#52), kandydat `1.0.12-rc` w S3.1. Źródło aktualnych statusów; [IMPLEMENTATION_QUEUE_V43](IMPLEMENTATION_QUEUE_V43.md) jest chronologiczną historią, nie bieżącą listą zadań. Poniższe propozycje nie upoważniają do implementacji/scalenia.
+Stan: 2026-10-12, zatwierdzone wydanie stabilne `1.0.12`; smoke S3.1 (#53) pozytywny. Źródło aktualnych statusów; [IMPLEMENTATION_QUEUE_V43](IMPLEMENTATION_QUEUE_V43.md) jest chronologiczną historią, nie bieżącą listą zadań. Poniższe propozycje nie upoważniają do implementacji/scalenia.
 
 ## Stan pierwotnych punktów
 
@@ -43,7 +43,7 @@ Q1.7: regresje wydania 937/937 i CI main zakończone sukcesem. Smoke użytkownik
 
 Porównania między kolejnymi raportami nie izolują efektu wersji od wzrostu puli i zmian historii. Mock testy nie potwierdzają rzeczywistych capabilities Spotify ani dostępności produkcji.
 
-Dla każdego przyszłego PR: aktualny main, jeden zakres, testy graniczne i pełne CI, wpływ na długość/jakość, rollback. Migrowanie D1 jest odrębnym autoryzowanym działaniem. Numeracja wydań aplikacji pozostaje `1.0.N-rc`; ten PR dokumentacyjny nie zmienia nagłówka ani produkcji.
+Dla każdego przyszłego PR: aktualny main, jeden zakres, testy graniczne i pełne CI, wpływ na długość/jakość, rollback. Migrowanie D1 jest odrębnym autoryzowanym działaniem. Użytkownik zatwierdził przejście z RC do stabilnego `1.0.12`; wcześniejsze wpisy poniżej dokumentują historię kandydatów.
 
 ## Q1.8 — zatwierdzona diagnostyka kontekstu
 
@@ -68,3 +68,7 @@ Zatwierdzone `1.0.11-rc`: jeden przełącznik, automatyczne konteksty wszystkich
 ## S3.1 — kandydat przed wydaniem stabilnym
 
 Zatwierdzony PR stabilizacyjny `1.0.12-rc`: opcjonalne nazwy nowych zdarzeń z istniejącego monitora, zgodność starych rekordów i aktualne dokumenty. [Smoke, ograniczenia i rollback](JOURNAL_NAMES_S3_1.md). Po pozytywnym krótkim smoke decyzja o wydaniu stabilnym; nie wdrażamy zaparkowanych P5/T1/F4/E.2 ani trwałego uzbrajania/kar obcych playlist.
+
+## Wydanie stabilne 1.0.12
+
+Użytkownik potwierdził działanie S3.1 i zatwierdził stabilne wydanie z domyślną obserwacją i karami po weryfikacji Spotify. Zachowujemy wcześniejsze wyłączenia; obce playlisty i historyczne/testowe wpisy nie są oceniane. [Zakres i rollback](STABLE_1_0_12.md). Następnie krótki smoke ustawień/startu po reload; P5/T1/F4/E.2 pozostają zaparkowane. Nie wykonujemy migracji D1.

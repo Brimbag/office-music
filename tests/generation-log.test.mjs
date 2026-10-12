@@ -20,7 +20,7 @@ test('LOG1 reports actual Last.fm write/read/skip/error separately from preferen
  assert.equal(log.cloudResult({catalog:{skipped:true,artists:1,tracks:2,bytes:100,written:false}}).lastfm.status,'skipped');
 });
 
-test('LOG1 release candidate version preserves legacy cloud log compatibility',()=>{
- for(const version of ['v43.41.S2','v43.25.U1','v1.0.0-rc.1','1.0.3-rc','1.0.4-rc','1.0.5-rc','1.0.6-rc','1.0.7-rc','1.0.8-rc','1.0.9-rc','1.0.10-rc','1.0.11-rc','1.0.12-rc']){const e=entry();e.version=version;assert.equal(log.valid(e),true);}
- for(const version of ['v1.0.0-rc.1 token','v1.0.0-rc.','v1.0.0-rc.1234','secret']){const e=entry();e.version=version;assert.equal(log.valid(e),false);}
+test('LOG1 stable version preserves release candidate and legacy cloud log compatibility',()=>{
+ for(const version of ['v43.41.S2','v43.25.U1','v1.0.0-rc.1','1.0.3-rc','1.0.4-rc','1.0.5-rc','1.0.6-rc','1.0.7-rc','1.0.8-rc','1.0.9-rc','1.0.10-rc','1.0.11-rc','1.0.12-rc','1.0.12']){const e=entry();e.version=version;assert.equal(log.valid(e),true);}
+ for(const version of ['v1.0.0-rc.1 token','v1.0.0-rc.','v1.0.0-rc.1234','1.0.12-rc.1','1.0.12 private','1.0.1234','1.0.12-beta','secret']){const e=entry();e.version=version;assert.equal(log.valid(e),false);}
 });

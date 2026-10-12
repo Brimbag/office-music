@@ -25,3 +25,19 @@ test('S2 up on a clean client persists a reset before later cloud import, even w
 test('S2 expiry of the first early skip cannot promote a surviving later skip or increase penalty',()=>{let s=add(A.empty('owner'),'first','early',N);s=add(s,'later','early',N+89*A.DAY);const before=A.score(s,'A',N+90*A.DAY-1),after=A.score(s,'A',N+90*A.DAY);assert.ok(after>=before);assert.ok(after>-50&&after<-48);const clean=A.normalize(s,N+90*A.DAY);assert.equal(clean.events.later.weight,50);assert.equal(A.score(clean,'A',N+90*A.DAY),after);});
 test('S2 concurrent first early skips converge to one first and one subsequent contribution',()=>{const a=add(A.empty('owner'),'a'),b=add(A.empty('owner'),'b');const m=A.merge(a,b,'owner',N);assert.equal(m.events.a.weight,100);assert.equal(m.events.b.weight,50);assert.equal(A.score(m,'A',N),-150);assert.deepEqual(A.merge(m,b,'owner',N),m);});
 test('S2 unsupported stored schema can always be disabled without deleting data',async()=>{const f=local();await f.c.configure(true);f.rows.set(A.localKey('owner'),'{"version":2}');await f.c.configure(false);assert.equal(f.c.enabled(),false);assert.equal(f.rows.get(A.localKey('owner')),'{"version":2}');await assert.rejects(()=>f.c.configure(true));assert.equal(f.c.enabled(),false);});
+
+test('stable default initialization preserves explicit choices, validates state and does not backfill events',async()=>{
+ const f=local();await f.c.initializeDefault();assert.equal(f.c.enabled(),true);assert.equal(f.c.has('owner'),false);
+ await f.c.configure(false);await f.c.initializeDefault();assert.equal(f.c.enabled(),false);
+ f.account('other');await f.c.initializeDefault();assert.equal(f.c.enabled(),true);assert.equal(f.c.score('A'),0);
+ f.account('broken');f.rows.set(A.localKey('broken'),'{"version":2}');await assert.rejects(()=>f.c.initializeDefault());
+ assert.equal(f.c.enabled(),false);assert.equal(f.rows.get(A.localKey('broken')),'{"version":2}');
+});
+test('stable default CAS never overwrites a concurrent explicit disable; storage errors remain failures',async()=>{
+ const rows=new Map(),storage={getItem:k=>rows.get(k)??null};
+ const c=A.create({getAccount:()=> 'owner',storage,edit:async(key,base)=>{
+  assert.equal(base,null);rows.set(key,'0');const e=new Error('conflict');e.name='LocalStateConflict';throw e;
+ }});
+ await c.initializeDefault();assert.equal(c.enabled(),false);
+ const f=local();f.fail();await assert.rejects(()=>f.c.initializeDefault());assert.equal(f.c.enabled(),false);
+});
