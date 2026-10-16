@@ -72,3 +72,7 @@ Zatwierdzony PR stabilizacyjny `1.0.12-rc`: opcjonalne nazwy nowych zdarzeń z i
 ## Wydanie stabilne 1.0.12
 
 Użytkownik potwierdził działanie S3.1 i zatwierdził stabilne wydanie z domyślną obserwacją i karami po weryfikacji Spotify. Zachowujemy wcześniejsze wyłączenia; obce playlisty i historyczne/testowe wpisy nie są oceniane. [Zakres i rollback](STABLE_1_0_12.md). Następnie krótki smoke ustawień/startu po reload; P5/T1/F4/E.2 pozostają zaparkowane. Nie wykonujemy migracji D1.
+
+## 1.0.13 — blokada po pominięciu
+
+Użytkownik zatwierdził implementację, scalenie i wdrożenie twardej blokady dokładnego Track ID na 14 dni oraz ustalił jej pierwszeństwo przed 👍 i wyłączeniem kar. [Kontrakt i regresje](TRACK_COOLDOWN_1_0_13.md). Poprzednia specyfikacja S2 opisywała wyłącznie punktację; audyt pozostaje historycznym opisem 1.0.12.

@@ -58,13 +58,16 @@
   }
   const localKey=account=>KEY+':'+encodeURIComponent(account);
   const enabledKey=account=>KEY+'_enabled:'+encodeURIComponent(account);
-  function create({getAccount,storage=root.localStorage,edit,now=()=>Date.now(),onError=()=>{}}){
+  function create({getAccount,storage=root.localStorage,edit,now=()=>Date.now(),onError=()=>{},preserve=async()=>{}}){
     const enabled=()=>{const a=getAccount();return Boolean(a&&storage.getItem(enabledKey(a))==='1');};
     let memo=null;
     const state=a=>{const raw=storage.getItem(localKey(a));if(memo?.a===a&&memo.raw===raw)return memo.s;const s=parse(raw,a);memo={a,raw,s};return s;};
     async function update(account,fn){
       for(let attempt=0;attempt<3;attempt++){
-        const key=localKey(account),base=storage.getItem(key),next=JSON.stringify(fn(parse(base,account)));
+        const key=localKey(account),base=storage.getItem(key),previous=parse(base,account),updated=fn(previous);
+        // Preserve before reset/pruning as well as after recording a new event.
+        await preserve(account,previous);await preserve(account,updated);
+        const next=JSON.stringify(updated);
         if(base===next)return;
         try{await edit(key,base,next);return;}catch(e){if(e.name!=='LocalStateConflict'||attempt===2)throw e;}
       }

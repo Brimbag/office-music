@@ -157,6 +157,7 @@ test('pełna ścieżka generowania: źródła, selekcja, kolejność, zapis i di
     const originals = [getValidAccessToken, cleanupOldOfficePlaylists, selectedProfiles, refreshLastFmBeforeGeneration, syncSpotifyRecentHistory, searchTracks, createPlaylist, addItemsToPlaylist, uploadCloudStateIfChanged];
     let written = [], covers = []; const originalCover = OfficePlaylistCover.apply;
     OfficePlaylistCover.apply = args => { covers.push({ ids: args.tracks.map(t => t.id), scores: args.tracks.map(t => args.details.get(t.id)?.final) }); return new Promise(() => {}); };
+    syncTrackCooldown = async () => ({saved:1});
     getValidAccessToken = async () => 'test'; cleanupOldOfficePlaylists = async () => ({ found: 0, removed: 0, remaining: 0 });
     selectedProfiles = () => selected; refreshLastFmBeforeGeneration = async () => {}; syncSpotifyRecentHistory = async () => {};
     searchTracks = async (_token, query) => {
@@ -178,7 +179,7 @@ test('pełna ścieżka generowania: źródła, selekcja, kolejność, zapis i di
   }, { ids });
   assert.equal(result.covers.length, 1); assert.deepEqual(result.covers[0].ids, result.snapshot); assert.ok(result.covers[0].scores.every(Number.isFinite));
   assert.equal(result.written.length, 4); assert.ok(result.written.every(uri => !uri.includes(':B')));
-  assert.equal(result.snapshot.length, 4); assert.match(result.text, /Pozyskiwanie: kwalifikowalni wykonawcy/); assert.match(result.text, /1.0.12/); assert.equal(result.disabled, false);
+  assert.equal(result.snapshot.length, 4); assert.match(result.text, /Pozyskiwanie: kwalifikowalni wykonawcy/); assert.match(result.text, /1.0.13/); assert.equal(result.disabled, false);
 });
 
 test('istniejące blokady historii, duplikaty i wersje nie są liczone jako kwalifikowalna różnorodność', async () => {

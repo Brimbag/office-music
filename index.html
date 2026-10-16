@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer 1.0.12</title>
+  <title>Office Music Mixer 1.0.13</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -418,7 +418,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">1.0.12</span></h1>
+        <h1>Office Music Mixer <span class="version">1.0.13</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -470,11 +470,8 @@
 
         <label>
           Nie powtarzaj utworu przez
-          <select id="trackBlockDays">
-            <option value="3">3 dni</option>
-            <option value="7">7 dni</option>
+          <select id="trackBlockDays" disabled title="Stała blokada po odtworzeniu lub kwalifikującym pominięciu">
             <option value="14" selected>14 dni</option>
-            <option value="30">30 dni</option>
           </select>
         </label>
 
@@ -585,7 +582,7 @@
       </div>
       <p class="small">Obserwacja działa także w tle, do zatrzymania lub maks. 8 godzin; po ponownym otwarciu strony uruchamia się automatycznie, jeśli nie została wyłączona. Luki, pauza, podcasty i niejednoznaczne przejścia nie tworzą zdarzeń. Dziennik pokazuje maks. 100 wpisów z ostatnich 30 dni; pozostaje na tym komputerze, poza synchronizacją i eksportem.</p>
       <label><input id="autoSkipEnabled" type="checkbox"> Naliczaj automatyczne kary za nowe pominięcia na playlistach OMM</label>
-      <p class="small">Domyślnie włączone; zapisane wyłączenie pozostaje zachowane. Pierwsze wczesne pominięcie −100, następne −50; środkowe −50, od 70% bez kary. Suma do −250, wpływ maleje o połowę przez 30 dni i wygasa po 90 dniach. Ręczne oceny mają pierwszeństwo; 👍 zeruje stare kary. Zapisane wcześniej testy S1 nigdy nie są oceniane. Obserwację można niezależnie wyłączyć. Zmiana ustawienia kar zatrzymuje obserwację; włącz ją ponownie, aby rozpocząć od nowych odczytów.</p>
+      <p class="small">Domyślnie włączone; zapisane wyłączenie pozostaje zachowane. Pierwsze wczesne pominięcie −100, następne −50; środkowe −50, od 70% bez kary. Suma do −250, wpływ maleje o połowę przez 30 dni i wygasa po 90 dniach. Ręczne oceny mają pierwszeństwo; 👍 zeruje stare kary. Zapisane wcześniej testy S1 nigdy nie są oceniane. Obserwację można niezależnie wyłączyć. Zmiana ustawienia kar rozpoczyna aktywną obserwację od świeżych odczytów. Wczesne i środkowe pominięcia na OMM blokują dokładny utwór przez 14 dni od ostatniego pominięcia. Blokada działa również przy wyłączonych karach punktowych i mimo 👍; polubienie jej nie skraca.</p>
       <p id="autoSkipStatus" class="small" role="status">Automatyczne kary: wyłączone.</p>
       <p id="skipJournalStatus" class="small" role="status">Pominięcia: obserwacja wyłączona.</p>
       <div id="skipJournalEntries" class="small"></div>
@@ -678,6 +675,7 @@
 <script src="rmf-volume-session.js"></script>
 <script src="spotify-skip-journal.js"></script>
 <script src="auto-track-feedback.js"></script>
+<script src="track-cooldown.js"></script>
 <script src="playlist-cover.js"></script>
 <script>
 const clientId = "d207523201ce4426923cda4cc893f76f";
@@ -1005,6 +1003,7 @@ let spotifyPlaybackMonitor = null;
 let rmfVolumeController = null;
 let skipJournalController = null;
 let autoTrackFeedback = null;
+let trackCooldown = null;
 let autoSkipGate = null;
 let autoFeedbackAccount = "";
 let refreshAutoSkip = () => {};
@@ -1412,12 +1411,57 @@ async function syncAutoTrackFeedbackSafely(token,options){
   try{return await syncAutoTrackFeedback(token,options);}catch(error){if(account && getAutoFeedbackAccount()===account && !(autoFeedbackSyncBackoff?.account===account && autoFeedbackSyncBackoff.until>Date.now()))autoFeedbackSyncBackoff={account,until:Date.now()+(error.retryAfterMs||120000)};document.getElementById("autoSkipStatus").textContent=`Nie udało się zsynchronizować automatycznych ocen${error.status?` (HTTP ${error.status})`:""}; dane lokalne zachowano. Ponów synchronizację później.`;return {error:true};}
 }
 
+let cooldownSyncFlight = null, cooldownSyncMemo = null, cooldownSyncBackoff = null;
+async function syncTrackCooldown(token, {force=false,required=false}={}) {
+  const account=getAutoFeedbackAccount();
+  if(!account || !trackCooldown){if(required)throw new Error("Brak zweryfikowanego account_id dla blokad 14 dni. Połącz Spotify ponownie.");return {skipped:true};}
+  if(OmmLocalState.blocked)throw new Error("Najpierw zakończ odzyskiwanie danych lokalnych.");
+  if(cooldownSyncFlight){if(cooldownSyncFlight.account!==account)throw new Error("Zmieniono konto; ponów generowanie.");return cooldownSyncFlight.promise;}
+  if(cooldownSyncBackoff?.account===account && Date.now()<cooldownSyncBackoff.until)throw new Error("Odczekaj przed ponowną synchronizacją blokad 14 dni.");
+  const fingerprint=JSON.stringify(trackCooldown.combined());
+  if(!force && cooldownSyncMemo?.account===account && cooldownSyncMemo.fingerprint===fingerprint && Date.now()-cooldownSyncMemo.at<600000)return {skipped:true};
+  async function request(options){
+    if(getAutoFeedbackAccount()!==account)throw new Error("Zmieniono konto blokad.");
+    cloudRequestsInFlight++;
+    try{
+      const send=active=>generationCloudRequest(active,"/api/track-cooldown",{...options,signal:AbortSignal.timeout(10000),headers:{"Content-Type":"application/json"}});
+      let response=await send(token);
+      if(response.status===401){const active=await refreshAccessToken(localStorage.getItem("spotify_access_token")||token);if(!active)throw new Error("Połącz Spotify ponownie.");response=await send(active);}
+      if(!response.ok){const error=new Error("Nie potwierdzono blokad 14 dni w chmurze. Ponów synchronizację przed generowaniem.");error.status=response.status;const retry=Number(response.headers.get("Retry-After"));error.retryAfterMs=Number.isFinite(retry)&&retry>0?Math.min(3600000,Math.max(1000,retry*1000)):120000;throw error;}
+      const data=await response.json();
+      if(getAutoFeedbackAccount()!==account)throw new Error("Zmieniono konto blokad.");
+      return data;
+    }finally{cloudRequestsInFlight--;}
+  }
+  const flight={account};
+  flight.promise=(async()=>{
+    for(let attempt=0;attempt<3;attempt++){
+      const remote=await request({method:"GET"});
+      if(!remote || !(remote.base===null||typeof remote.base==='string'))throw new Error("Nieobsługiwane dane blokad 14 dni.");
+      await trackCooldown.accept(account,remote.state);
+      const state=trackCooldown.combined();
+      await trackCooldown.accept(account,state);
+      try{
+        const saved=await request({method:"PUT",body:JSON.stringify({state,base:remote.base})});
+        await trackCooldown.accept(account,saved.state);
+        cooldownSyncMemo={account,fingerprint:JSON.stringify(trackCooldown.combined()),at:Date.now()};return {saved:1};
+      }catch(error){if(error.status!==409 || attempt===2)throw error;}
+    }
+  })();
+  cooldownSyncFlight=flight;
+  try{const result=await flight.promise;cooldownSyncBackoff=null;return result;}catch(error){cooldownSyncBackoff={account,until:Date.now()+(error.retryAfterMs||120000)};throw error;}finally{if(cooldownSyncFlight===flight)cooldownSyncFlight=null;}
+}
+async function syncTrackCooldownSafely(token, options) {
+  try{return await syncTrackCooldown(token,options);}catch{document.getElementById("autoSkipStatus").textContent="Nie zsynchronizowano blokad 14 dni; dane lokalne zachowano. Ponów synchronizację.";return {error:true};}
+}
+
 async function uploadCloudStateIfChanged(token, { force = false, status = true } = {}) {
   if (OmmLocalState.blocked) throw new Error("Stan lokalny wymaga odzyskania.");
   if (!force && cloudStateFingerprint() === lastCloudFingerprint) {
     const catalog = await syncLastFmCloudSafely(token);
-    const autoFeedback=await syncAutoTrackFeedbackSafely(token, {force});
-    return { saved: 0, skipped: true, catalog, autoFeedback };
+    const cooldown=await syncTrackCooldownSafely(token, {force});
+  const autoFeedback=cooldown.error?{error:true}:await syncAutoTrackFeedbackSafely(token, {force});
+    return { saved: 0, skipped: true, catalog, cooldown, autoFeedback };
   }
   if (status) setCloudStatus("zapisuję…");
   let result, state, fingerprint;
@@ -1442,8 +1486,9 @@ async function uploadCloudStateIfChanged(token, { force = false, status = true }
   const poolCount = candidatePoolSize();
   if (status) setCloudStatus(`zsynchronizowano ${result?.saved ?? Object.keys(state).length} kluczy · pula Spotify ${poolCount}`, "ok");
   const catalog = await syncLastFmCloudSafely(token, { force });
-  const autoFeedback=await syncAutoTrackFeedbackSafely(token, {force});
-  return { ...result, catalog, autoFeedback };
+  const cooldown=await syncTrackCooldownSafely(token, {force});
+  const autoFeedback=cooldown.error?{error:true}:await syncAutoTrackFeedbackSafely(token, {force});
+  return { ...result, catalog, cooldown, autoFeedback };
 }
 
 function scheduleAutomaticCloudSync(delay = CLOUD_AUTO_SYNC_DEBOUNCE_MS) {
@@ -1543,7 +1588,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer 1.0.12",
+      source: "Office Music Mixer 1.0.13",
       storage: exportedStorageState()
     };
 
@@ -3797,7 +3842,7 @@ async function checkLastFmSync(token, force = false) {
 function buildHistoryBlocklists() {
   const history = loadHistory();
   const now = Date.now();
-  const trackCutoff = now - Number(trackBlockDays.value) * 24 * 60 * 60 * 1000;
+  const trackCutoff = now - OfficeTrackCooldown.WINDOW;
   const artistCutoff = now - Number(artistCooldownHours.value) * 60 * 60 * 1000;
 
   const blockedTracks = new Set();
@@ -3807,13 +3852,13 @@ function buildHistoryBlocklists() {
 
   for (const item of history) {
     const time = new Date(item.playedAt || 0).getTime();
-    if (!Number.isFinite(time)) continue;
+    if (!Number.isFinite(time) || time > now) continue;
 
     const playedSource = item.source === "spotify" || item.source === "lastfm";
     const signature = item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames);
 
     // Do blokad liczą się wyłącznie faktyczne odsłuchania.
-    if (playedSource && time >= trackCutoff) {
+    if (playedSource && time > trackCutoff) {
       if (item.trackId) blockedTracks.add(item.trackId);
       if (signature) blockedTrackSignatures.add(signature);
       for (const duplicateSignature of historyDuplicateSignatures(item)) {
@@ -4682,6 +4727,7 @@ async function collectFromQueries(
   } = options;
   const uniqueQueries = [...new Set(queries)];
   const artistFeedback = feedbackArtistStats();
+  const cooldownIds = trackCooldown?.blocked() || new Set();
   const discovery = Number(discoveryLevel.value);
   const perSearchCap = discovery >= 60 ? 3 : 2;
 
@@ -4731,7 +4777,7 @@ async function collectFromQueries(
       if (usedTracks.has(track.id)) continue;
       if (signature && usedTrackSignatures.has(signature)) continue;
       if (duplicateSignatures.some(key => usedTrackSignatures.has(key))) continue;
-      if (blockedTracks.has(track.id)) continue;
+      if (blockedTracks.has(track.id) || cooldownIds.has(track.id)) continue;
       if (signature && blockedTrackSignatures.has(signature)) continue;
       if (duplicateSignatures.some(key => blockedTrackSignatures.has(key))) continue;
       if (artistIds.some(key => blockedArtists.has(key))) continue;
@@ -5536,6 +5582,7 @@ function newRejectionStats(rawPoolCount = 0) {
     strongNegativeArtistFeedback: 0,
     artistCooldown: 0,
     recentTrack: 0,
+    skipCooldown: 0,
     recognizability: 0,
     lowGroupFit: 0,
     lowIndividualFit: 0,
@@ -5634,6 +5681,9 @@ function eligibleGroupCandidates(selected, blocklists, ctx, rows = loadCandidate
       continue;
     }
     seenIds.add(track.id);
+    if (blocklists.skipBlockedTracks?.has(track.id)) {
+      stats.skipCooldown++; audit?.observe(track, "skipCooldown"); continue;
+    }
 
     if (trackHasArtistExclusion(track)) {
       stats.artistIdExcluded++;
@@ -5864,7 +5914,11 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
   // Recheck at selection entry: cached/static candidates and direct callers
   // must obey the same per-artist rule in every normal/fallback branch.
   const artistFeedback = feedbackArtistStats();
+  const freshBlocks = generationBlocklists(ctx.selected || []);
   const remaining = eligible.filter(item => {
+    if (freshBlocks.skipBlockedTracks.has(item.track.id)) { stats.skipCooldown=(stats.skipCooldown||0)+1; return false; }
+    const signatures=[trackSignature(item.track),...trackDuplicateSignatures(item.track)];
+    if (freshBlocks.blockedTracks.has(item.track.id) || signatures.some(s=>freshBlocks.blockedTrackSignatures.has(s))) { stats.recentTrack=(stats.recentTrack||0)+1; return false; }
     if (trackHasArtistExclusion(item.track)) { stats.artistIdExcluded = (stats.artistIdExcluded || 0) + 1; return false; }
     if (hasStrongNegativeArtistFeedback(item.track, artistFeedback)) {
       stats.strongNegativeArtistFeedback = (stats.strongNegativeArtistFeedback || 0) + 1;
@@ -6074,6 +6128,7 @@ function generationBlocklists(selected) {
   const history = buildHistoryBlocklists();
   return {
     blockedTracks: history.blockedTracks,
+    skipBlockedTracks: trackCooldown?.blocked() || new Set(),
     blockedTrackSignatures: history.blockedTrackSignatures,
     blockedArtists: history.blockedArtists,
     historyBlockedNames: new Set(history.blockedArtistNamesFromHistory),
@@ -6124,7 +6179,8 @@ function acquisitionCoverageInputs(acquisition) {
       autoTrackFeedback?.enabled() ? JSON.stringify(autoTrackFeedback.state(getAutoFeedbackAccount())) : "auto-off",
       JSON.stringify(acquisition.selected),
       JSON.stringify(Object.fromEntries(Object.entries(acquisition.blocklists).map(([key, values]) => [key, [...values]]))),
-      JSON.stringify([discoveryLevel.value, recognizabilityLevel.value, trackBlockDays.value, artistCooldownHours.value, avoidRemixes.checked, avoidNonLatin.checked])
+      JSON.stringify([discoveryLevel.value, recognizabilityLevel.value, trackBlockDays.value, artistCooldownHours.value, avoidRemixes.checked, avoidNonLatin.checked]),
+      JSON.stringify(trackCooldown?.combined() || null)
     ]);
 }
 
@@ -6141,8 +6197,9 @@ function acquisitionCoverageExpiry(inputs, now) {
   }
   for (const row of rows(3)) {
     const at = new Date(row?.playedAt || 0).getTime();
-    for (const age of [Number(trackBlockDays.value) * 86400000, Number(artistCooldownHours.value) * 3600000, HISTORY_MAX_AGE_DAYS * 86400000]) boundary(at + age + 1);
+    for (const age of [OfficeTrackCooldown.WINDOW, Number(artistCooldownHours.value) * 3600000 + 1, HISTORY_MAX_AGE_DAYS * 86400000 + 1]) boundary(at + age);
   }
+  for (const at of Object.values(trackCooldown?.combined()?.tracks || {})) { boundary(at); boundary(at + OfficeTrackCooldown.WINDOW); }
   if (autoTrackFeedback?.enabled()) {
     // Decay can improve eligibility between calls; bound cache staleness without
     // forcing a full pool scan for every millisecond. Final selection is fresh.
@@ -6450,7 +6507,7 @@ async function generateOfficePlaylist() {
   generationInFlight = true;
   spotifyPlaybackMonitor?.wake("generation");
   const total = Number(playlistLength.value);
-  const diagnosticSettings = `discovery: ${discoveryLevel.value}% · rozpoznawalność: ${recognizabilityLevel.value} · blokada utworu: ${trackBlockDays.value} dni · cooldown wykonawcy: ${artistCooldownHours.value} h · filtr wersji: ${avoidRemixes.checked} · filtr alfabetu: ${avoidNonLatin.checked}`;
+  const diagnosticSettings = `discovery: ${discoveryLevel.value}% · rozpoznawalność: ${recognizabilityLevel.value} · blokada utworu: 14 dni · cooldown wykonawcy: ${artistCooldownHours.value} h · filtr wersji: ${avoidRemixes.checked} · filtr alfabetu: ${avoidNonLatin.checked}`;
   const progress = OmmGenerationProgress.create(progressBox, total);
   activeGenerationProgress = progress;
   const originals = new Map();
@@ -6485,6 +6542,7 @@ async function generateOfficePlaylist() {
     if (!token) throw new Error("Brak aktywnej sesji Spotify.");
 
 
+    await syncTrackCooldown(token, {force:true,required:true});
     generationStage(1);
     const playlistCleanupResult = await cleanupOldOfficePlaylists(token);
 
@@ -6551,6 +6609,7 @@ async function generateOfficePlaylist() {
 
     const playlist = await createPlaylist(token, selected, finalTracks.length);
     createdPlaylist = playlist; progress.created();
+    if(finalTracks.some(track=>trackCooldown?.blocked().has(track.id)))throw new Error("Blokady zmieniły się podczas tworzenia playlisty. Wygeneruj ją ponownie.");
     await addItemsToPlaylist(
       token,
       playlist.id,
@@ -6898,11 +6957,11 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy 1.0.12: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy 1.0.13: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
-    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.12 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
+    `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.13 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
-    `Blokada powtórek: faktycznie odtworzony utwór ${trackBlockDays.value} dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. ` +
+    `Blokada powtórek: faktycznie odtworzony utwór 14 dni, wykonawca ${artistCooldownHours.value} godz. Samo wygenerowanie playlisty nie blokuje utworu. Pominięcie early/middle na OMM blokuje dokładny Track ID przez 14 dni, również mimo 👍 i wyłączenia kar punktowych. ` +
     `Odkrycia: cel ${discoveryPercent}% z tolerancją ±5 p.p. (poza skrajnymi 0/100); normalna selekcja pilnuje quota względem faktycznej długości wyniku, końcowa korekta również w fallbacku egzekwuje górny limit dla faktycznej długości: najpierw uzupełnia lub zastępuje kandydatów, a skraca wynik dopiero przy braku bezpiecznych zamienników. Dolna granica pozostaje celem, bez skracania bezpiecznych list. Górny limit jest zaokrąglany w dół; tryb 0% oznacza wyłącznie znane utwory, a 100% wyłącznie odkrycia. Genre query Spotify jest tylko słabą wskazówką gatunkową; mocniejsze dowody pochodzą z tagów Last.fm. Ten sam wykonawca może pojawić się maks. 2 razy i nie powinien wystąpić bezpośrednio po sobie. ` +
     (groupResult?.acquisition ? `Pozyskiwanie: kwalifikowalni wykonawcy ${groupResult.acquisition.before} → ${groupResult.acquisition.after}; ponownie użyte strony cache ${groupResult.acquisition.cachedPages}; nowe wyszukiwania ${groupResult.acquisition.newSearches}. ` : "") +
     `Wyszukiwania Spotify są buforowane przez 24 h, lokalna pula żyje 30 dni (maks. ${CANDIDATE_POOL_MAX_ITEMS}), a budżet tego generowania wynosił maks. ${maxNewSearchesThisGeneration} nowych wyszukiwań. ` +
@@ -6985,7 +7044,7 @@ function renderPlaylistResult(
       `Odrzucono: 👎 utwór ${r.feedbackTrack || 0}, wariant/live/remix ${r.unwantedVariant || 0}, ` +
       `jawnie blokowany wykonawca ${r.explicitBlockedArtist || 0}, 🚫 wykonawca z feedbacku ${r.feedbackBlockedArtist || 0}, ` +
       `blokada konkretnego Spotify wykonawcy ${r.artistIdExcluded || 0}, kara wykonawcy <= -40 ${r.strongNegativeArtistFeedback || 0}, ` +
-      `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, ` +
+      `cooldown wykonawcy ${r.artistCooldown || 0}, utwór słuchany w oknie blokady ${r.recentTrack || 0}, blokada po pominięciu ${r.skipCooldown || 0}, ` +
       `wynik obecnej osoby <35 lub brak poprawnej oceny ${r.lowIndividualFit || 0}, ` +
       `znany utwór przy trybie 100% discovery ${r.discoveryModeExcluded || 0}, ` +
       `filtr rozpoznawalności ${r.recognizability || 0}, zbyt słabe dopasowanie grupowe ${r.lowGroupFit || 0}, ` +
@@ -7249,14 +7308,16 @@ if (window.OfficeRmfVolumeSession && spotifyPlaybackMonitor) {
   window.addEventListener("storage", event=>{ if (event.storageArea === localStorage && (event.key === null || event.key === "spotify_access_token")) void rmfVolumeController.suspend("session"); });
 }
 // Local skip journal and separate exact-track penalties share the playback monitor.
-if (window.OfficeSkipJournal && window.OfficeAutoTrackFeedback && spotifyPlaybackMonitor) {
-  autoTrackFeedback=OfficeAutoTrackFeedback.create({getAccount:getAutoFeedbackAccount,edit:(key,base,value)=>OmmLocalState.edit(key,base,value),onError:()=>document.getElementById("autoSkipStatus").textContent="Nieobsługiwane dane automatycznych ocen; wpływ wyłączony, dane zachowano."});
+if (window.OfficeSkipJournal && window.OfficeAutoTrackFeedback && window.OfficeTrackCooldown && spotifyPlaybackMonitor) {
+  trackCooldown=OfficeTrackCooldown.create({getAccount:getAutoFeedbackAccount,edit:(key,base,value)=>OmmLocalState.edit(key,base,value),legacy:account=>autoTrackFeedback?.state(account)});
+  autoTrackFeedback=OfficeAutoTrackFeedback.create({getAccount:getAutoFeedbackAccount,preserve:(account,state)=>trackCooldown.preserve(account,state),edit:(key,base,value)=>OmmLocalState.edit(key,base,value),onError:()=>document.getElementById("autoSkipStatus").textContent="Nieobsługiwane dane automatycznych ocen; wpływ wyłączony, dane zachowano."});
   const autoEnabled=document.getElementById("autoSkipEnabled"), autoStatus=document.getElementById("autoSkipStatus");
   const refreshAuto=()=>{autoEnabled.checked=autoTrackFeedback.enabled();autoStatus.textContent=autoEnabled.checked?"Automatyczne kary: włączone dla tego konta. Tylko nowe obserwacje; bez oceniania dawnych wpisów S1.":"Automatyczne kary: wyłączone; zachowane dane nie wpływają na punktację.";};
-  OmmLocalState.subscribe(()=>{if(autoSkipGate && !autoTrackFeedback.enabled())skipJournalController?.stop();refreshAuto();});
+  OmmLocalState.subscribe(()=>{refreshAuto();});
   autoEnabled.addEventListener("change",async()=>{
+    const observing=skipJournalController?.diagnostics().active;
     skipJournalController?.stop();autoSkipGate=null;autoEnabled.disabled=true;const wanted=autoEnabled.checked;
-    try {if(!playbackSession()){const token=await getValidAccessToken();if(token)await getProfile(token);}await autoTrackFeedback.configure(wanted);refreshAuto();scheduleAutomaticCloudSync();}
+    try {if(!playbackSession()){const token=await getValidAccessToken();if(token)await getProfile(token);}await autoTrackFeedback.configure(wanted);refreshAuto();if(observing && playbackSession() && !generationInFlight)armObservation();scheduleAutomaticCloudSync();}
     catch{refreshAuto();autoStatus.textContent="Nie zapisano ustawienia kar. Połącz Spotify i sprawdź pamięć przeglądarki.";}
     finally{autoEnabled.disabled=false;}
   });
@@ -7267,7 +7328,7 @@ if (window.OfficeSkipJournal && window.OfficeAutoTrackFeedback && spotifyPlaybac
   const observationKey=account=>"office_skip_observation_enabled_v1:"+encodeURIComponent(account);
   const armObservation=()=>{
     skipJournalController.armAll();
-    autoSkipGate=autoTrackFeedback.enabled()?{account:playbackSession().account,autoAccount:getAutoFeedbackAccount(),since:Date.now()}:null;
+    autoSkipGate={account:playbackSession().account,autoAccount:getAutoFeedbackAccount(),since:Date.now()};
   };
   refreshSkipDefaults=async()=>{
     const scope=playbackSession();
@@ -7327,12 +7388,12 @@ if (window.OfficeSkipJournal && window.OfficeAutoTrackFeedback && spotifyPlaybac
   skipJournalController=OfficeSkipJournal.create({monitor:spotifyPlaybackMonitor,getSession:playbackSession,
     busy:()=>generationInFlight || OmmLocalState.blocked,onEvent:(event,transition)=>{
       void refreshRows();const gate=autoSkipGate;
-      if(loadRecentPlaylists().some(p=>p.id===event.playlistId && p.uri===`spotify:playlist:${p.id}` && p.tracks?.some(t=>t.id===event.trackId && t.uri===`spotify:track:${t.id}`) && p.tracks?.some(t=>t.id===transition?.nextTrackId && t.uri===`spotify:track:${t.id}`)) && gate && gate.account===event.account && event.at>=gate.since && event.kind!=="late")void autoTrackFeedback.record({...event,account:gate.autoAccount}).then(applied=>{if(applied && autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){void refreshRows();autoStatus.textContent="Zapisano nową automatyczną ocenę dla dokładnego Spotify Track ID. Bez kary wykonawcy.";scheduleAutomaticCloudSync();}}).catch(()=>{if(autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){skipJournalController.stop("storage");autoStatus.textContent="Nie zapisano automatycznej kary; poprzednie dane zachowano. Obserwacja zatrzymana.";}});
+      if(loadRecentPlaylists().some(p=>p.id===event.playlistId && p.uri===`spotify:playlist:${p.id}` && p.tracks?.some(t=>t.id===event.trackId && t.uri===`spotify:track:${t.id}`) && p.tracks?.some(t=>t.id===transition?.nextTrackId && t.uri===`spotify:track:${t.id}`)) && gate && gate.autoAccount && gate.account===event.account && event.at>=gate.since && event.kind!=="late")void (async()=>{await trackCooldown.record({...event,account:gate.autoAccount});scheduleAutomaticCloudSync();return autoTrackFeedback.record({...event,account:gate.autoAccount});})().then(applied=>{if(applied && autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){void refreshRows();autoStatus.textContent="Zapisano nową automatyczną ocenę dla dokładnego Spotify Track ID. Bez kary wykonawcy.";scheduleAutomaticCloudSync();}}).catch(()=>{if(autoSkipGate===gate && getAutoFeedbackAccount()===gate.autoAccount){skipJournalController.stop("storage");autoStatus.textContent="Nie zapisano blokady lub automatycznej kary; poprzednie dane zachowano. Obserwacja zatrzymana.";}});
     },onStatus:info=>{
       if(!info.active && info.status!=="generation")autoSkipGate=null;
       enabled.checked=info.active || info.status==="generation";
       if(info.status==="session"){readTurn++;rows.textContent="";}
-      status.textContent=`Pominięcia: ${descriptions[info.status] || "obserwacja wstrzymana"}${info.reason?`; ${reasons[info.reason]||"niejednoznaczny odczyt"}`:""}. Kontekst: ${info.playlistId || "oczekuje"}. Zapisane w tej sesji strony: ${info.recorded}. Pominięte obserwacje: ${Object.values(info.ignored).reduce((a,b)=>a+b,0)}. ${autoTrackFeedback.enabled()?"Automatyczne kary działają oddzielnie dla nowych zdarzeń.":"Bez kar."}`;
+      status.textContent=`Pominięcia: ${descriptions[info.status] || "obserwacja wstrzymana"}${info.reason?`; ${reasons[info.reason]||"niejednoznaczny odczyt"}`:""}. Kontekst: ${info.playlistId || "oczekuje"}. Zapisane w tej sesji strony: ${info.recorded}. Pominięte obserwacje: ${Object.values(info.ignored).reduce((a,b)=>a+b,0)}. ${autoTrackFeedback.enabled()?"Automatyczne kary działają oddzielnie dla nowych zdarzeń.":"Bez kar punktowych."} Blokada pominiętego Track ID przez 14 dni działa również bez kar punktowych i mimo 👍.`;
     }});
   enabled.addEventListener("change",async()=>{
     const turn=++armTurn,wanted=enabled.checked;

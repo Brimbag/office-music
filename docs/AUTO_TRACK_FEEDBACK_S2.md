@@ -1,5 +1,7 @@
 # S2 — v43.41.S2: opcjonalne automatyczne kary za nowe pominięcia
 
+**Aktualizacja 1.0.13:** poniższy dokument opisuje kontrakt punktacji S2. Niezależny rejestr blokuje pominięty Track ID przez 14 dni mimo 👍 i wyłączenia punktacji. [Aktualny kontrakt](TRACK_COOLDOWN_1_0_13.md). Reset S2 nie usuwa nowej blokady.
+
 ## Zgoda i zakres
 
 Pozytywny smoke S1 od użytkownika 2026-10-11: cztery prawdopodobne pominięcia, trzy wczesne i jedno środkowe, bez ocen. Użytkownik zatwierdził kolejny etap oraz scalenie/wdrożenie po testach, wyraźnie zakazując oceniania testowych pominięć. **Nie czytamy dziennika S1 do naliczania ocen, nie wykonujemy backfillu ani migracji tych czterech wpisów.** Dotychczasowa diagnostyka pozostaje nietknięta. S2 przyjmuje tylko nowy callback aktywnej obserwacji rozpoczętej po opt-in.
