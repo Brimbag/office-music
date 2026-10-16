@@ -89,6 +89,12 @@ for (const history of [false, true]) test(`reload + Search cache reuse: history=
       saveCandidatePool([]);
       return localStorage.getItem(OfficeAutoTrackFeedback.localKey('mock-owner'));
     }, { first: FIRST, history });
+    // Freeze before startup cleanup runs: a CI host clock must not expire
+    // this fixture's Search cache between navigation and setup().
+    await s.page.addInitScript(at => {
+      window.auditNow = at;
+      Date.now = () => auditNow;
+    }, SECOND);
     await s.page.reload(); await s.page.waitForFunction(() => window.ommStorageReady !== false);
     await setup(s.page, SECOND);
     const r = await s.page.evaluate(async () => {
