@@ -1,7 +1,8 @@
 # Wspólny rejestr blokad odtworzeń
 
-Zakres zatwierdzony po audycie playlisty wygenerowanej na innym komputerze
-niż eksport historii. Przygotowanie PR nie oznacza zgody na merge/wdrożenie.
+Wydanie 1.0.14. Zakres zatwierdzony po audycie playlisty wygenerowanej na
+innym komputerze niż eksport historii. Użytkownik zatwierdził scalenie
+i wdrożenie PR #57 dnia 16.10.2026.
 Baza: main `93844ad` (1.0.13). PR #56 naprawia osobno odczyt historii;
 ten zakres jest niezależny, nie zawiera prywatnego backupu ani raportu.
 
@@ -142,3 +143,13 @@ przeglądarki, D1 w SQLite w pamięci, zero produkcyjnych API i danych.
 Istniejące fixture'y generatora/benchmarku dopisują atrapę nowego endpointu.
 Wyniki pełnej walidacji w PR. Rollback: revert kodu, bez usuwania D1 lub
 lokalnego rejestru; stary klient przestaje egzekwować wspólne odtworzenia.
+
+## Odłożona weryfikacja użytkownika
+
+Dostęp do komputera z historią: 18.10.2026 (czas polski). Użytkownik
+polecił zaparkować dalszą weryfikację do tego czasu. Po powrocie: odświeżyć
+OMM 1.0.14 na A, potwierdzić chmurę, następnie generować na B i porównać
+wynik. Nie wykonywać teraz importu prywatnego backupu ani generowania
+playlist w imieniu użytkownika. PR #56 pozostaje osobnym, niescalonym
+audytem/poprawką czytnika. Potwierdzenie platformy wdrożeniowej nie
+zastępuje tego rzeczywistego testu dwóch komputerów.
