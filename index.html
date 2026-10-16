@@ -3572,16 +3572,20 @@ async function refreshLastFmBeforeGeneration(selected, total) {
 
 
 function compactPlayedHistoryItem(item) {
+  const text = value => typeof value === "string" ? value : "";
+  const strings = value => Array.isArray(value) ? value.filter(v => typeof v === "string" && v) : [];
+  const trackName = text(item?.trackName), artistNames = strings(item?.artistNames);
+  const duration = typeof item?.durationMs === "number" || typeof item?.durationMs === "string" ? Number(item.durationMs) : 0;
   return {
-    trackId: item.trackId || "",
-    trackName: item.trackName || "",
-    artistIds: Array.isArray(item.artistIds) ? item.artistIds.filter(Boolean) : [],
-    artistNames: Array.isArray(item.artistNames) ? item.artistNames.filter(Boolean) : [],
-    trackSignature: item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames),
-    playedAt: item.playedAt || "",
-    source: item.source || "",
-    sourceAccount: String(item.sourceAccount || ""),
-    durationMs: Number(item.durationMs) || 0
+    trackId: text(item?.trackId),
+    trackName,
+    artistIds: strings(item?.artistIds),
+    artistNames,
+    trackSignature: text(item?.trackSignature) || trackSignatureFromParts(trackName, artistNames),
+    playedAt: typeof item?.playedAt === "string" || typeof item?.playedAt === "number" ? item.playedAt : "",
+    source: text(item?.source),
+    sourceAccount: text(item?.sourceAccount),
+    durationMs: Number.isFinite(duration) && duration > 0 ? duration : 0
   };
 }
 
@@ -3591,17 +3595,19 @@ function isActualPlayHistoryItem(item, cutoff = 0) {
   return Number.isFinite(time) && time >= cutoff && (item.trackId || item.trackSignature);
 }
 
-function loadHistory() {
+function loadHistory({ strict = false } = {}) {
   try {
     const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) throw new Error("Nieprawidłowy format historii odsłuchów.");
 
     const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    // Derive a safe signature before validating legacy Last.fm rows without ID.
     return parsed
-      .filter(item => isActualPlayHistoryItem(item, cutoff))
-      .map(compactPlayedHistoryItem);
+      .map(compactPlayedHistoryItem)
+      .filter(item => isActualPlayHistoryItem(item, cutoff));
   } catch (error) {
     console.warn("Nie udało się odczytać historii:", error);
+    if (strict) throw new Error("Nie można potwierdzić historii odsłuchów. Przywróć poprawną historię przed generowaniem.");
     return [];
   }
 }
@@ -3609,8 +3615,8 @@ function loadHistory() {
 function saveHistory(history) {
   const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
   const cleaned = history
-    .filter(item => isActualPlayHistoryItem(item, cutoff))
     .map(compactPlayedHistoryItem)
+    .filter(item => isActualPlayHistoryItem(item, cutoff))
     .sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
 
   // Historia ma przechowywać wyłącznie faktyczne odsłuchania. W razie presji
@@ -3722,10 +3728,10 @@ function purgeExpiredCaches() {
 }
 
 function mergeHistoryEntries(entries) {
-  const existing = loadHistory();
+  const existing = loadHistory({ strict: true });
   const map = new Map();
 
-  for (const item of [...entries, ...existing]) {
+  for (const item of [...entries, ...existing].map(compactPlayedHistoryItem)) {
     const timestamp = item.playedAt || item.generatedAt;
     const key = `${item.trackId || item.trackSignature || "unknown"}|${timestamp}|${item.source || "unknown"}`;
     if (!map.has(key)) map.set(key, item);
@@ -3840,7 +3846,7 @@ async function checkLastFmSync(token, force = false) {
 }
 
 function buildHistoryBlocklists() {
-  const history = loadHistory();
+  const history = loadHistory({ strict: true });
   const now = Date.now();
   const trackCutoff = now - OfficeTrackCooldown.WINDOW;
   const artistCutoff = now - Number(artistCooldownHours.value) * 60 * 60 * 1000;
@@ -3876,6 +3882,13 @@ function buildHistoryBlocklists() {
   }
 
   return { blockedTracks, blockedTrackSignatures, blockedArtists, blockedArtistNamesFromHistory };
+}
+
+
+function historyBlocksTrack(track, blocks) {
+  return blocks.blockedTracks.has(track.id) ||
+    [trackSignature(track), ...trackDuplicateSignatures(track)]
+      .some(signature => signature && blocks.blockedTrackSignatures.has(signature));
 }
 
 function renderHistorySummary() {
@@ -5917,8 +5930,7 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
   const freshBlocks = generationBlocklists(ctx.selected || []);
   const remaining = eligible.filter(item => {
     if (freshBlocks.skipBlockedTracks.has(item.track.id)) { stats.skipCooldown=(stats.skipCooldown||0)+1; return false; }
-    const signatures=[trackSignature(item.track),...trackDuplicateSignatures(item.track)];
-    if (freshBlocks.blockedTracks.has(item.track.id) || signatures.some(s=>freshBlocks.blockedTrackSignatures.has(s))) { stats.recentTrack=(stats.recentTrack||0)+1; return false; }
+    if (historyBlocksTrack(item.track, freshBlocks)) { stats.recentTrack=(stats.recentTrack||0)+1; return false; }
     if (trackHasArtistExclusion(item.track)) { stats.artistIdExcluded = (stats.artistIdExcluded || 0) + 1; return false; }
     if (hasStrongNegativeArtistFeedback(item.track, artistFeedback)) {
       stats.strongNegativeArtistFeedback = (stats.strongNegativeArtistFeedback || 0) + 1;
@@ -6542,6 +6554,7 @@ async function generateOfficePlaylist() {
     if (!token) throw new Error("Brak aktywnej sesji Spotify.");
 
 
+    loadHistory({ strict: true });
     await syncTrackCooldown(token, {force:true,required:true});
     generationStage(1);
     const playlistCleanupResult = await cleanupOldOfficePlaylists(token);
@@ -6609,7 +6622,11 @@ async function generateOfficePlaylist() {
 
     const playlist = await createPlaylist(token, selected, finalTracks.length);
     createdPlaylist = playlist; progress.created();
-    if(finalTracks.some(track=>trackCooldown?.blocked().has(track.id)))throw new Error("Blokady zmieniły się podczas tworzenia playlisty. Wygeneruj ją ponownie.");
+    const writeHistoryBlocks = buildHistoryBlocklists();
+    const writeSkipBlocks = trackCooldown?.blocked() || new Set();
+    if (finalTracks.some(track => writeSkipBlocks.has(track.id) || historyBlocksTrack(track, writeHistoryBlocks))) {
+      throw new Error("Blokady zmieniły się podczas tworzenia playlisty. Wygeneruj ją ponownie.");
+    }
     await addItemsToPlaylist(
       token,
       playlist.id,
