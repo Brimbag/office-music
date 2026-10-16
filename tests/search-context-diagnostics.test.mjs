@@ -14,7 +14,7 @@ for (const area of cases) test(`Q1.8: reports only area names for ${area}, witho
    let expired = false;
    if (area === 'effectiveBlocks') generationBlocklists = () => ({ artists: new Set(expired ? [] : ['PRIVATE_ARTIST']), tracks: new Set() });
    const rotation = await createSearchRotation(selected);
-   if (area === 'history') localStorage.setItem(HISTORY_KEY, 'PRIVATE_HISTORY');
+   if (area === 'history') localStorage.setItem(HISTORY_KEY, JSON.stringify([{source:'spotify',trackId:'PRIVATE_HISTORY',playedAt:new Date(Date.now()-91*86400000).toISOString()}]));
    if (area === 'lastfmArtists') localStorage.setItem(LASTFM_ARTIST_POOL_KEY, 'PRIVATE_ARTIST_CATALOG');
    if (area === 'lastfmTracks') localStorage.setItem(LASTFM_TRACK_POOL_KEY, 'PRIVATE_TRACK_CATALOG');
    if (area === 'feedback') localStorage.setItem(FEEDBACK_KEY, 'PRIVATE_FEEDBACK');
