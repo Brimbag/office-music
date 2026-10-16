@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer 1.0.13</title>
+  <title>Office Music Mixer 1.0.14</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -418,7 +418,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">1.0.13</span></h1>
+        <h1>Office Music Mixer <span class="version">1.0.14</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -621,8 +621,9 @@
       <input id="importStateFile" type="file" accept="application/json,.json" style="display:none;">
     </div>
     <div class="small lastfm-note">Eksport obejmuje lokalną bazę, cache, historię, feedback, blokady, profile i ustawienia RMF. Tokeny logowania Spotify nie są eksportowane.</div>
-    <div class="small lastfm-note">Cloudflare D1 synchronizuje trwałe preferencje oraz skompaktowaną pulę kandydatów Spotify (maks. 2000 utworów). Surowe cache Spotify/Last.fm, baza rekomendacyjna Last.fm i historia odsłuchań pozostają lokalne. Synchronizacja chmury działa automatycznie; przyciski ręczne zostają jako awaryjne.</div>
+    <div class="small lastfm-note">Cloudflare D1 synchronizuje trwałe preferencje oraz skompaktowaną pulę kandydatów Spotify (maks. 2000 utworów). Surowe cache Spotify/Last.fm, baza rekomendacyjna Last.fm i szczegółowa historia odsłuchań pozostają lokalne. Rejestr 14-dniowych blokad odtworzeń i pominięć jest współdzielony w chmurze dla tego samego konta Spotify. Synchronizacja chmury działa automatycznie; przyciski ręczne zostają jako awaryjne.</div>
     <div id="historySummary" class="history-summary"></div>
+    <div id="playCooldownStatus" class="small">Blokady odtworzeń: wymagają potwierdzenia w chmurze przed generowaniem.</div>
     </details>
     <div id="progress" class="progress"></div>
   </div>
@@ -676,6 +677,7 @@
 <script src="spotify-skip-journal.js"></script>
 <script src="auto-track-feedback.js"></script>
 <script src="track-cooldown.js"></script>
+<script src="play-cooldown.js"></script>
 <script src="playlist-cover.js"></script>
 <script>
 const clientId = "d207523201ce4426923cda4cc893f76f";
@@ -1004,6 +1006,7 @@ let rmfVolumeController = null;
 let skipJournalController = null;
 let autoTrackFeedback = null;
 let trackCooldown = null;
+let playCooldown = null;
 let autoSkipGate = null;
 let autoFeedbackAccount = "";
 let refreshAutoSkip = () => {};
@@ -1455,13 +1458,109 @@ async function syncTrackCooldownSafely(token, options) {
   try{return await syncTrackCooldown(token,options);}catch{document.getElementById("autoSkipStatus").textContent="Nie zsynchronizowano blokad 14 dni; dane lokalne zachowano. Ponów synchronizację.";return {error:true};}
 }
 
+const playCapturePending = new Map();
+function readPlayedHistory() {
+  let rows;
+  try { rows=JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]"); } catch {}
+  if (!Array.isArray(rows)) throw new Error("Nie można odczytać historii odtworzeń; przywróć poprawną kopię przed synchronizacją.");
+  return rows;
+}
+async function capturePlayedHistory(rows, owner=getAutoFeedbackAccount()) {
+  if (!owner || !playCooldown) return;
+  if (getAutoFeedbackAccount()!==owner) throw new Error("Zmieniono konto odtworzeń.");
+  const lastfm=String(localStorage.getItem(LASTFM_USER_KEY)||"").trim().toLowerCase();
+  const plays=[];
+  for (const row of rows) {
+    // Legacy history is shared locally: never assign another account's plays
+    // (or rows with unknown provenance) to the currently authenticated owner.
+    const owned=row?.source==="spotify"
+      ? typeof row.sourceAccount==="string" && [lastFmSpotifyAccount,owner].includes(row.sourceAccount) && Boolean(row.sourceAccount)
+      : row?.source==="lastfm" && lastfm && typeof row.sourceAccount==="string" && row.sourceAccount.toLowerCase()===lastfm;
+    if (!owned) continue;
+    const safe={trackName:typeof row.trackName==="string"?row.trackName:"",
+      artistNames:Array.isArray(row.artistNames)?row.artistNames.filter(name=>typeof name==="string"):[]};
+    const at=typeof row.playedAt==="number" || typeof row.playedAt==="string" ? new Date(row.playedAt).getTime() : NaN;
+    const signatures=[trackSignatureFromParts(safe.trackName,safe.artistNames),...historyDuplicateSignatures(safe),
+      typeof row.trackSignature==="string"?row.trackSignature:""];
+    plays.push({trackId:typeof row.trackId==="string"?row.trackId:"",at,signatures:[...new Set(signatures.filter(Boolean))]});
+  }
+  const pending=[...new Map([...(playCapturePending.get(owner)||[]),...plays].map(play=>[JSON.stringify(play),play])).values()];
+  playCapturePending.set(owner,pending);
+  try {
+    await playCooldown.record(owner,pending);
+    if (playCapturePending.get(owner)===pending) playCapturePending.delete(owner);
+  } catch (error) {
+    // Retain the batch for retry, and require source refresh after a restart.
+    localStorage.removeItem(RECENT_HISTORY_SYNC_KEY);
+    localStorage.removeItem(LASTFM_AUTO_RECENT_SYNC_KEY);
+    error.playCooldownCapture=true;
+    throw error;
+  }
+}
+
+let playCooldownSyncFlight = null, playCooldownSyncMemo = null, playCooldownSyncBackoff = null;
+async function syncPlayCooldown(token, {force=false,required=false}={}) {
+  const account=getAutoFeedbackAccount();
+  if(!account || !playCooldown){if(required)throw new Error("Brak zweryfikowanego account_id dla blokad 14 dni. Połącz Spotify ponownie.");return {skipped:true};}
+  if(OmmLocalState.blocked)throw new Error("Najpierw zakończ odzyskiwanie danych lokalnych.");
+  if(playCooldownSyncFlight){
+    if(playCooldownSyncFlight.account!==account)throw new Error("Zmieniono konto; ponów generowanie.");
+    const result=await playCooldownSyncFlight.promise;
+    return force?syncPlayCooldown(token,{force,required}):result;
+  }
+  if(playCooldownSyncBackoff?.account===account && Date.now()<playCooldownSyncBackoff.until)throw new Error("Odczekaj przed ponowną synchronizacją blokad 14 dni.");
+  await capturePlayedHistory(readPlayedHistory(), account);
+  if(playCooldownSyncFlight)return syncPlayCooldown(token,{force,required});
+  const fingerprint=JSON.stringify(playCooldown.state(account));
+  if(!force && playCooldownSyncMemo?.account===account && playCooldownSyncMemo.fingerprint===fingerprint && Date.now()-playCooldownSyncMemo.at<600000)return {skipped:true};
+  async function request(options){
+    if(getAutoFeedbackAccount()!==account)throw new Error("Zmieniono konto blokad.");
+    cloudRequestsInFlight++;
+    try{
+      const send=active=>generationCloudRequest(active,"/api/play-cooldown",{...options,signal:AbortSignal.timeout(10000),headers:{"Content-Type":"application/json"}});
+      let response=await send(token);
+      if(response.status===401){const active=await refreshAccessToken(localStorage.getItem("spotify_access_token")||token);if(!active)throw new Error("Połącz Spotify ponownie.");response=await send(active);}
+      if(!response.ok){const error=new Error("Nie potwierdzono blokad 14 dni w chmurze. Ponów synchronizację przed generowaniem.");error.status=response.status;const retry=Number(response.headers.get("Retry-After"));error.retryAfterMs=Number.isFinite(retry)&&retry>0?Math.min(3600000,Math.max(1000,retry*1000)):120000;throw error;}
+      const data=await response.json();
+      if(getAutoFeedbackAccount()!==account)throw new Error("Zmieniono konto blokad.");
+      return data;
+    }catch(error){
+      const safe=new Error("Nie potwierdzono blokad odtworzeń w chmurze. Ponów synchronizację przed generowaniem.");
+      safe.status=error.status;safe.retryAfterMs=error.retryAfterMs;throw safe;
+    }finally{cloudRequestsInFlight--;}
+  }
+  const flight={account};
+  flight.promise=(async()=>{
+    for(let attempt=0;attempt<3;attempt++){
+      const remote=await request({method:"GET"});
+      if(!remote || !(remote.base===null||typeof remote.base==='string'))throw new Error("Nieobsługiwane dane blokad 14 dni.");
+      await playCooldown.accept(account,remote.state);
+      await capturePlayedHistory(readPlayedHistory(), account);
+      const state=playCooldown.state(account);
+      await playCooldown.accept(account,state);
+      try{
+        const saved=await request({method:"PUT",body:JSON.stringify({state,base:remote.base})});
+        await playCooldown.accept(account,saved.state);
+        playCooldownSyncMemo={account,fingerprint:JSON.stringify(state),at:Date.now()};
+        document.getElementById("playCooldownStatus").textContent="Blokady odtworzeń: potwierdzono wspólny rejestr w chmurze.";return {saved:1};
+      }catch(error){if(error.status!==409 || attempt===2)throw error;}
+    }
+  })();
+  playCooldownSyncFlight=flight;
+  try{const result=await flight.promise;playCooldownSyncBackoff=null;return result;}catch(error){playCooldownSyncBackoff={account,until:Date.now()+(error.retryAfterMs||120000)};throw error;}finally{if(playCooldownSyncFlight===flight)playCooldownSyncFlight=null;}
+}
+async function syncPlayCooldownSafely(token, options) {
+  try{return await syncPlayCooldown(token,options);}catch{document.getElementById("playCooldownStatus").textContent="Blokady odtworzeń: brak potwierdzenia chmury; generowanie wymaga udanej synchronizacji.";return {error:true};}
+}
+
 async function uploadCloudStateIfChanged(token, { force = false, status = true } = {}) {
   if (OmmLocalState.blocked) throw new Error("Stan lokalny wymaga odzyskania.");
   if (!force && cloudStateFingerprint() === lastCloudFingerprint) {
     const catalog = await syncLastFmCloudSafely(token);
-    const cooldown=await syncTrackCooldownSafely(token, {force});
-  const autoFeedback=cooldown.error?{error:true}:await syncAutoTrackFeedbackSafely(token, {force});
-    return { saved: 0, skipped: true, catalog, cooldown, autoFeedback };
+    const plays=await syncPlayCooldownSafely(token, {force});
+  const cooldown=await syncTrackCooldownSafely(token, {force});
+    const autoFeedback=cooldown.error?{error:true}:await syncAutoTrackFeedbackSafely(token, {force});
+    return { saved: 0, skipped: true, catalog, plays, cooldown, autoFeedback };
   }
   if (status) setCloudStatus("zapisuję…");
   let result, state, fingerprint;
@@ -1486,9 +1585,10 @@ async function uploadCloudStateIfChanged(token, { force = false, status = true }
   const poolCount = candidatePoolSize();
   if (status) setCloudStatus(`zsynchronizowano ${result?.saved ?? Object.keys(state).length} kluczy · pula Spotify ${poolCount}`, "ok");
   const catalog = await syncLastFmCloudSafely(token, { force });
+  const plays=await syncPlayCooldownSafely(token, {force});
   const cooldown=await syncTrackCooldownSafely(token, {force});
   const autoFeedback=cooldown.error?{error:true}:await syncAutoTrackFeedbackSafely(token, {force});
-  return { ...result, catalog, cooldown, autoFeedback };
+  return { ...result, catalog, plays, cooldown, autoFeedback };
 }
 
 function scheduleAutomaticCloudSync(delay = CLOUD_AUTO_SYNC_DEBOUNCE_MS) {
@@ -1588,7 +1688,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer 1.0.13",
+      source: "Office Music Mixer 1.0.14",
       storage: exportedStorageState()
     };
 
@@ -3368,6 +3468,7 @@ async function syncLastFmSources(
     preserveTagBudget = false
   } = {}
 ) {
+  const playOwner = getAutoFeedbackAccount();
   if (!preserveTagBudget) {
     lastFmCallsThisSync = 0;
     lastFmTagCallBudgetThisSync = Math.max(2, Number(maxTagCalls || LASTFM_MAX_TAG_CALLS_PER_SYNC));
@@ -3512,7 +3613,11 @@ async function syncLastFmSources(
       let latestObservation;
       try { latestObservation = JSON.parse(localStorage.getItem(LASTFM_RECENT_OBSERVATION_KEY) || "null"); } catch {}
       if (latestObservation?.user === user.toLowerCase() && Number(latestObservation.observedAt) > observedAt) throw new Error("nowsza obserwacja historii jest już zapisana");
-      if (historyEntries.length) mergeHistoryEntries(historyEntries);
+      if (historyEntries.length) {
+        if (playOwner && getAutoFeedbackAccount() !== playOwner) throw new Error("Zmieniono konto odtworzeń.");
+        await capturePlayedHistory(historyEntries, playOwner);
+        mergeHistoryEntries(historyEntries);
+      }
       if (recentPoolItems.length) addLastFmTracks(recentPoolItems, { source: "recent" });
       // Do not publish an observation if the account changed while awaiting the API.
       const complete = validPagination && page > totalPages;
@@ -3524,6 +3629,7 @@ async function syncLastFmSources(
       recentOk = true;
     } catch (err) {
       console.warn("Last.fm recent tracks:", err);
+      if (err.playCooldownCapture) throw err;
       if (forceStatus) lastFmStatus.textContent = `Last.fm: nie udało się pobrać scrobbli z ostatnich ${LASTFM_HISTORY_WINDOW_DAYS} dni (${err.message}).`;
     }
   } else if (includeRecent && !user) {
@@ -3743,6 +3849,7 @@ async function syncSpotifyRecentHistory(token, force = false) {
 }
 
 async function syncSpotifyRecentHistoryOnce(token, force, account) {
+  const playOwner = getAutoFeedbackAccount();
   const lastSync = Number(localStorage.getItem(RECENT_HISTORY_SYNC_KEY) || 0);
   const observation = syncMonitorRead(SPOTIFY_HISTORY_OBSERVATION_KEY);
   if (!force && observation?.account === account && observation.error && Date.now() - observation.observedAt < LASTFM_RETRY_BACKOFF_MS) return 0;
@@ -3777,7 +3884,11 @@ async function syncSpotifyRecentHistoryOnce(token, force, account) {
       }));
 
     if (lastFmSpotifyAccount !== account) return 0;
-    if (entries.length) mergeHistoryEntries(entries);
+    if (entries.length) {
+      if (playOwner && getAutoFeedbackAccount() !== playOwner) return 0;
+      await capturePlayedHistory(entries, playOwner);
+      mergeHistoryEntries(entries);
+    }
     safeSetSmallStorageItem(SPOTIFY_HISTORY_OBSERVATION_KEY, JSON.stringify({ account, observedAt: Date.now(), oldest: entries.length ? Math.min(...entries.map(r => Date.parse(r.playedAt))) : null }), "obserwacji Spotify");
     safeSetSmallStorageItem(
       RECENT_HISTORY_SYNC_KEY,
@@ -3785,7 +3896,8 @@ async function syncSpotifyRecentHistoryOnce(token, force, account) {
       "znacznika synchronizacji historii Spotify"
     );
     return entries.length;
-  } catch {
+  } catch (error) {
+    if (error.playCooldownCapture) throw error;
     if (lastFmSpotifyAccount === account) safeSetSmallStorageItem(SPOTIFY_HISTORY_OBSERVATION_KEY, JSON.stringify({account, observedAt: Date.now(), error: true}), "wyniku historii Spotify");
     return 0;
   } finally { renderLastFmSync(); }
@@ -3875,6 +3987,9 @@ function buildHistoryBlocklists() {
     }
   }
 
+  const shared = playCooldown?.blocked();
+  for (const id of shared?.tracks || []) blockedTracks.add(id);
+  for (const signature of shared?.signatures || []) blockedTrackSignatures.add(signature);
   return { blockedTracks, blockedTrackSignatures, blockedArtists, blockedArtistNamesFromHistory };
 }
 
@@ -3898,7 +4013,7 @@ function clearAppHistory() {
   localStorage.removeItem(HISTORY_KEY);
   renderHistorySummary();
   progressBox.textContent =
-    "Historia aplikacji wyczyszczona. Przy następnym generowaniu ostatnie odtworzenia ze Spotify zostaną pobrane ponownie.";
+    "Historia lokalna wyczyszczona. Aktywne blokady odtworzeń i pominięć pozostają do upływu 14 dni. Przy następnym generowaniu historia Spotify zostanie pobrana ponownie.";
 }
 
 function shuffle(array) {
@@ -6180,7 +6295,8 @@ function acquisitionCoverageInputs(acquisition) {
       JSON.stringify(acquisition.selected),
       JSON.stringify(Object.fromEntries(Object.entries(acquisition.blocklists).map(([key, values]) => [key, [...values]]))),
       JSON.stringify([discoveryLevel.value, recognizabilityLevel.value, trackBlockDays.value, artistCooldownHours.value, avoidRemixes.checked, avoidNonLatin.checked]),
-      JSON.stringify(trackCooldown?.combined() || null)
+      JSON.stringify(trackCooldown?.combined() || null),
+      JSON.stringify(getAutoFeedbackAccount() && playCooldown?.state(getAutoFeedbackAccount()) || null)
     ]);
 }
 
@@ -6200,6 +6316,10 @@ function acquisitionCoverageExpiry(inputs, now) {
     for (const age of [OfficeTrackCooldown.WINDOW, Number(artistCooldownHours.value) * 3600000 + 1, HISTORY_MAX_AGE_DAYS * 86400000 + 1]) boundary(at + age);
   }
   for (const at of Object.values(trackCooldown?.combined()?.tracks || {})) { boundary(at); boundary(at + OfficeTrackCooldown.WINDOW); }
+  if (getAutoFeedbackAccount() && playCooldown) {
+    const shared=playCooldown.state(getAutoFeedbackAccount());
+    for (const at of [...Object.values(shared.tracks),...Object.values(shared.signatures)]) { boundary(at); boundary(at + OfficePlayCooldown.WINDOW); }
+  }
   if (autoTrackFeedback?.enabled()) {
     // Decay can improve eligibility between calls; bound cache staleness without
     // forcing a full pool scan for every millisecond. Final selection is fresh.
@@ -6543,6 +6663,7 @@ async function generateOfficePlaylist() {
 
 
     await syncTrackCooldown(token, {force:true,required:true});
+    await syncPlayCooldown(token, {force:true,required:true});
     generationStage(1);
     const playlistCleanupResult = await cleanupOldOfficePlaylists(token);
 
@@ -6564,6 +6685,7 @@ async function generateOfficePlaylist() {
 
     generationStage(3);
     await syncSpotifyRecentHistory(token);
+    await syncPlayCooldown(token, {force:true,required:true});
     renderLastFmSync();
     generationStage(4);
     if (!document.hidden && globalThis.scheduler?.yield) await scheduler.yield();
@@ -6609,7 +6731,9 @@ async function generateOfficePlaylist() {
 
     const playlist = await createPlaylist(token, selected, finalTracks.length);
     createdPlaylist = playlist; progress.created();
-    if(finalTracks.some(track=>trackCooldown?.blocked().has(track.id)))throw new Error("Blokady zmieniły się podczas tworzenia playlisty. Wygeneruj ją ponownie.");
+    await syncPlayCooldown(token, {force:true,required:true});
+    const writePlayBlocks = buildHistoryBlocklists();
+    if(finalTracks.some(track=>trackCooldown?.blocked().has(track.id) || writePlayBlocks.blockedTracks.has(track.id) || [trackSignature(track),...trackDuplicateSignatures(track)].some(key=>writePlayBlocks.blockedTrackSignatures.has(key))))throw new Error("Blokady zmieniły się podczas tworzenia playlisty. Wygeneruj ją ponownie.");
     await addItemsToPlaylist(
       token,
       playlist.id,
@@ -6687,7 +6811,7 @@ async function generateOfficePlaylist() {
     try {
       OmmGenerationDiagnostics?.finish(progressBox, playlistResult, {
         header: `Office Music Mixer ${OfficeGenerationLog.VERSION} · profile: ${logContext.profiles.join(", ")} · cel: ${total} · ustawienia na rozpoczęcie: ${diagnosticSettings}`,
-        data: historySummary.textContent
+        data: historySummary.textContent + " " + document.getElementById("playCooldownStatus").textContent
       });
     } catch {} // Optional presentation never changes generator completion.
     generationInFlight = false;
@@ -6957,7 +7081,7 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy 1.0.13: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy 1.0.14: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
     `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.13 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
@@ -7308,6 +7432,8 @@ if (window.OfficeRmfVolumeSession && spotifyPlaybackMonitor) {
   window.addEventListener("storage", event=>{ if (event.storageArea === localStorage && (event.key === null || event.key === "spotify_access_token")) void rmfVolumeController.suspend("session"); });
 }
 // Local skip journal and separate exact-track penalties share the playback monitor.
+if (window.OfficePlayCooldown) playCooldown=OfficePlayCooldown.create({getAccount:getAutoFeedbackAccount,edit:(key,base,value)=>OmmLocalState.edit(key,base,value)});
+
 if (window.OfficeSkipJournal && window.OfficeAutoTrackFeedback && window.OfficeTrackCooldown && spotifyPlaybackMonitor) {
   trackCooldown=OfficeTrackCooldown.create({getAccount:getAutoFeedbackAccount,edit:(key,base,value)=>OmmLocalState.edit(key,base,value),legacy:account=>autoTrackFeedback?.state(account)});
   autoTrackFeedback=OfficeAutoTrackFeedback.create({getAccount:getAutoFeedbackAccount,preserve:(account,state)=>trackCooldown.preserve(account,state),edit:(key,base,value)=>OmmLocalState.edit(key,base,value),onError:()=>document.getElementById("autoSkipStatus").textContent="Nieobsługiwane dane automatycznych ocen; wpływ wyłączony, dane zachowano."});

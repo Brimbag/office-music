@@ -184,7 +184,7 @@ test('generowanie tworzy nowy snapshot po pozyskiwaniu i po await zapisu; kolejn
       localStorage.setItem(LASTFM_TRACK_POOL_KEY, JSON.stringify(tracks.map(t => ({ artist: t.artists[0].name, track: t.name, tags: ['rock'], savedAt: now }))));
     };
     const selected = ['bartek', 'asia'].map(id => ({ id, name: profiles[id].name, artists: [], genres: ['rock'], manualGenres: [], blockedArtists: [], taste: { hasSurvey: true, likedGenres: ['Rock'] } }));
-    syncTrackCooldown = async () => ({saved:1});
+    syncTrackCooldown = syncPlayCooldown = async () => ({saved:1});
     getValidAccessToken = async () => 'mock'; selectedProfiles = () => selected;
     cleanupOldOfficePlaylists = async () => ({}); refreshLastFmBeforeGeneration = async () => {}; syncSpotifyRecentHistory = async () => {};
     primeManualSeedArtists = async () => {}; primeProfileGenres = async () => {};

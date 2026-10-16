@@ -76,3 +76,12 @@ Użytkownik potwierdził działanie S3.1 i zatwierdził stabilne wydanie z domy�
 ## 1.0.13 — blokada po pominięciu
 
 Użytkownik zatwierdził implementację, scalenie i wdrożenie twardej blokady dokładnego Track ID na 14 dni oraz ustalił jej pierwszeństwo przed 👍 i wyłączeniem kar. [Kontrakt i regresje](TRACK_COOLDOWN_1_0_13.md). Poprzednia specyfikacja S2 opisywała wyłącznie punktację; audyt pozostaje historycznym opisem 1.0.12.
+
+## 1.0.14 — wspólne blokady odtworzeń
+
+16.10.2026 użytkownik zatwierdził scalenie i wdrożenie PR #57. Rejestr
+blokad odtworzeń współdzielony per account_id, bez zmian rekomendacji
+i reguł pominięć. [Kontrakt i procedura](CLOUD_PLAY_COOLDOWN.md).
+Rzeczywisty test A→B i synchronizacja komputera z historią **zaparkowane
+do 18.10.2026** — użytkownik nie ma do niego wcześniej dostępu. Bez
+automatycznego importu backupu/generowania playlist. PR #56 osobno.

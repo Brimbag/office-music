@@ -141,6 +141,7 @@ test('trzy pełne generowania rzeczywiście zapisują uczenie i przekierowują t
   addLastFmTracks([...existing,...newTracks].map(t=>({name:t.name,artist:{name:t.artists[0].name}})),{tags:['rock']});
   localStorage.setItem('spotify_access_token','mock-token');localStorage.setItem('spotify_token_expires',String(now+3600000));
   selectedProfiles=()=>selected;getAutoFeedbackAccount=()=> 'mock-account';playlistLength.value='30';
+  playCooldown=OfficePlayCooldown.create({getAccount:()=>getAutoFeedbackAccount(),edit:(key,base,value)=>OmmLocalState.edit(key,base,value)});
   cleanupOldOfficePlaylists=async()=>({});refreshLastFmBeforeGeneration=async()=>{};syncSpotifyRecentHistory=async()=>{};uploadCloudStateIfChanged=async()=>({});OfficePlaylistCover.apply=async()=>false;waitForSearchSlot=async()=>{};
   primeManualSeedArtists=async(token,_selected,_budget,acquisition)=>primeDiverseQueries(token,[{query:'genre:"rock"'},{query:'genre:"pop"'}],1,acquisition);
   primeProfileGenres=async()=>{};primeCommonGroupQueries=async()=>{};
@@ -151,6 +152,7 @@ test('trzy pełne generowania rzeczywiście zapisują uczenie i przekierowują t
     return Response.json({tracks:{items:tracks,total:100}});
    }
    if(u.pathname==='/api/track-cooldown')return options.method==='GET'?Response.json({base:null,state:OfficeTrackCooldown.empty('mock-account')}):Response.json({state:JSON.parse(options.body).state});
+   if(u.pathname==='/api/play-cooldown')return options.method==='GET'?Response.json({base:null,state:OfficePlayCooldown.empty('mock-account')}):Response.json({state:JSON.parse(options.body).state});
    if(u.pathname==='/api/generations')return Response.json({ok:true,saved:true});
    if(u.pathname.endsWith('/items'))return Response.json({snapshot_id:'done'});
    return Response.json({id:'made',name:'Made',uri:'spotify:playlist:made'});
