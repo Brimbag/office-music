@@ -142,6 +142,10 @@
         try { root.OfficeTrackCooldown.parse(value,decodeURIComponent(key.slice(root.OfficeTrackCooldown.KEY.length+1))); }
         catch { throw new Error('Nieprawidłowe dane blokad 14 dni w kopii.'); }
       }
+      if (root.OfficePlayCooldown && key.startsWith(root.OfficePlayCooldown.KEY+':')) {
+        try { root.OfficePlayCooldown.parse(value,decodeURIComponent(key.slice(root.OfficePlayCooldown.KEY.length+1))); }
+        catch { throw new Error('Nieprawidłowy rejestr odtworzeń w kopii.'); }
+      }
       if (root.OfficeAutoTrackFeedback && key.startsWith(root.OfficeAutoTrackFeedback.KEY+':')) {
         let account; try { account=decodeURIComponent(key.slice(root.OfficeAutoTrackFeedback.KEY.length+1)); root.OfficeAutoTrackFeedback.parse(value,account); }
         catch { throw new Error('Nieprawidłowe automatyczne oceny w kopii; import przerwany.'); }
@@ -164,7 +168,14 @@
     incoming=validate({format:FORMAT,version:1,storage:incoming});
     const operation=async()=>{
       if (blocked) throw new Error('Najpierw odzyskaj poprzedni stan.');
-      const before=snapshot(); blocked=true;
+      const before=snapshot();
+      // An old backup cannot erase a newer, still active replay exclusion.
+      if (root.OfficePlayCooldown) for (const key of new Set([...Object.keys(before),...Object.keys(incoming)])) {
+        if (!key.startsWith(root.OfficePlayCooldown.KEY+':')) continue;
+        const owner=decodeURIComponent(key.slice(root.OfficePlayCooldown.KEY.length+1));
+        incoming[key]=JSON.stringify(root.OfficePlayCooldown.merge(before[key],incoming[key],owner));
+      }
+      blocked=true;
       const backup={format:FORMAT,version:1,storage:before,pending:true,savedAt:new Date().toISOString()};
       try {
         await record(backup); // Transaction completion precedes any destructive write.

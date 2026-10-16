@@ -47,6 +47,14 @@ Aktualny UX: [U4](GENERATOR_UX_U4.md), jeden panel i kopiowanie raportu. Odtwarz
 
 Wydanie stabilne: [domyślne ustawienia i rollback](STABLE_1_0_12.md). Obserwacja jest pamiętana lokalnie per konto; kary per niezmienny account_id. Ponowne otwarcie strony rozpoczyna nową obserwację z czystą kotwicą. Zwykłe odświeżenia profilu nie odnawiają limitu8h. Generowanie wstrzymuje istniejącą obserwację, a pierwsza weryfikacja sesji podczas generowania odkłada start do jego zakończenia.
 
+## Wspólny rejestr odtworzeń — przygotowany zakres
+
+Przygotowany osobno zakres współdzielonych odtworzeń: `play-cooldown.js`,
+`/api/play-cooldown`, union ID/sygnatur i max timestamp per account_id.
+Szczegółowa historia pozostaje lokalna, rejestr blokad jest synchronizowany
+przed generowaniem i końcowym zapisem. Nie zmienia mechanizmu pominięć.
+[Kontrakt, wdrożenie obu komputerów i ograniczenia](CLOUD_PLAY_COOLDOWN.md).
+
 ## Blokada pominiętego Track ID — 1.0.13
 
 `track-cooldown.js` i `/api/track-cooldown` przechowują osobny rejestr ostatnich pominięć early/middle na OMM. Okno 14 × 24 h nie zależy od 👍, resetów S2, przełącznika kar ani dopasowania. Świeże blokady są sprawdzane przy kwalifikacji i w selektorze, przed fallbackiem/naprawą discovery. Przed generowaniem wymagane jest potwierdzenie synchronizacji rejestru; błąd zatrzymuje generowanie. [Kontrakt, dane i rollback](TRACK_COOLDOWN_1_0_13.md).

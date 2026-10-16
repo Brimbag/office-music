@@ -157,7 +157,7 @@ test('pełna ścieżka generowania: źródła, selekcja, kolejność, zapis i di
     const originals = [getValidAccessToken, cleanupOldOfficePlaylists, selectedProfiles, refreshLastFmBeforeGeneration, syncSpotifyRecentHistory, searchTracks, createPlaylist, addItemsToPlaylist, uploadCloudStateIfChanged];
     let written = [], covers = []; const originalCover = OfficePlaylistCover.apply;
     OfficePlaylistCover.apply = args => { covers.push({ ids: args.tracks.map(t => t.id), scores: args.tracks.map(t => args.details.get(t.id)?.final) }); return new Promise(() => {}); };
-    syncTrackCooldown = async () => ({saved:1});
+    syncTrackCooldown = syncPlayCooldown = async () => ({saved:1});
     getValidAccessToken = async () => 'test'; cleanupOldOfficePlaylists = async () => ({ found: 0, removed: 0, remaining: 0 });
     selectedProfiles = () => selected; refreshLastFmBeforeGeneration = async () => {}; syncSpotifyRecentHistory = async () => {};
     searchTracks = async (_token, query) => {

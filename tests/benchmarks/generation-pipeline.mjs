@@ -118,6 +118,7 @@ try {
           selectedProfiles = () => selected;
           getValidAccessToken = async () => 'mock-token';
           getAutoFeedbackAccount = () => 'mock-owner';
+          playCooldown = OfficePlayCooldown.create({getAccount:()=>getAutoFeedbackAccount(),edit:(key,base,value)=>OmmLocalState.edit(key,base,value)});
           playlistLength.value = String(target); discoveryLevel.value = '30';
           // Warm means fresh history/tag TTLs plus every page of the actual queries
           // this fixture will consider. Empty cached pages are valid negative cache.
@@ -189,6 +190,9 @@ try {
             }
             if (url.pathname === '/api/track-cooldown') return options.method==='GET'
               ? Response.json({base:null,state:OfficeTrackCooldown.empty('mock-owner')})
+              : Response.json({state:JSON.parse(options.body).state});
+            if (url.pathname === '/api/play-cooldown') return options.method==='GET'
+              ? Response.json({base:null,state:OfficePlayCooldown.empty('mock-owner')})
               : Response.json({state:JSON.parse(options.body).state});
             if (url.pathname === '/api/auto-feedback') {
               if(method==='PUT'){remoteAuto=JSON.parse(options.body).state;return Response.json({ok:true,state:remoteAuto});}
