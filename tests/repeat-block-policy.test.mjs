@@ -131,7 +131,7 @@ for (const offset of [DAY, 14 * DAY - 1, 14 * DAY, 14 * DAY + 1]) {
         auditNow = first + offset;
         return { ...auditGenerate(), penalty: autoTrackFeedback.score(auditTrack.id) };
       }, { first: FIRST, offset });
-      const blocked = offset <= 14 * DAY; // Existing inclusive >= cutoff comparison.
+      const blocked = offset < 14 * DAY; // Both sources expire exactly after 14 days.
       assert.deepEqual(r.ids, blocked ? [] : [TRACK]);
       assert.equal(r.recent + r.skip, blocked ? 1 : 0); assert.ok(r.penalty < 0);
       assert.deepEqual(s.errors, []);
@@ -305,5 +305,25 @@ test('failed cloud confirmation stops generation before creating a Spotify playl
     });
     assert.equal(r.calls,1);assert.equal(r.creates,0);assert.equal(r.remaining,60000);assert.doesNotMatch(r.text,/private marker/);
     assert.deepEqual(s.errors,[]);
+  }finally{await s.close();}
+});
+
+for(const source of ['spotify','lastfm'])test(`14 days after ${source} play cannot be shortened by 👍, scoring off or a legacy duration`,async()=>{
+  const s=await harness.page();
+  try{
+    await setup(s.page);await seed(s.page);
+    const r=await s.page.evaluate(async({first,source})=>{
+      saveHistory([{trackId:source==='spotify'?auditTrack.id:'',trackName:auditTrack.name,artistNames:['ADÉLA'],
+        trackSignature:trackSignature(auditTrack),playedAt:new Date(first).toISOString(),source}]);
+      await setTrackFeedback(auditTrack,1);await autoTrackFeedback.configure(false);
+      const fixedUi=trackBlockDays.disabled && trackBlockDays.options.length===1 && trackBlockDays.value==='14';
+      // A stale client/DOM value is not the authority for the lock duration.
+      trackBlockDays.add(new Option('3 days','3'));trackBlockDays.value='3';
+      auditNow=first+7*86400000;const seventhDay=auditGenerate();
+      auditNow=first+OfficeTrackCooldown.WINDOW-1;const finalMillisecond=auditGenerate();auditNow++;
+      return {fixedUi,seventhDay,finalMillisecond,expired:auditGenerate()};
+    },{first:FIRST,source});
+    assert.equal(r.fixedUi,true);assert.deepEqual(r.seventhDay.ids,[]);assert.deepEqual(r.finalMillisecond.ids,[]);
+    assert.deepEqual(r.expired.ids,[TRACK]);assert.deepEqual(s.errors,[]);
   }finally{await s.close();}
 });

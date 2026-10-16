@@ -6,6 +6,8 @@ To jawna zmiana wcześniejszego kontraktu S2, nie naprawa wag rekomendacji.
 
 ## Zachowanie
 
+Blokada po faktycznym odtworzeniu Spotify/Last.fm również wynosi stałe 14 × 24 h, wygasa dokładnie na granicy i nie zależy od 👍 ani przełącznika kar. Dawny wybór 3/7/14/30 dni jest zastąpiony stałym wskazaniem 14 dni. Przyszłe daty historii nie uruchamiają blokady.
+
 - Nowe potwierdzone przez monitor prawdopodobne pominięcie early/middle na
   OMM wyklucza **dokładny Spotify Track ID** przez 14 × 24 h od `event.at`.
   Kolejne takie pominięcie odnawia termin. W chwili `at + 14 dni` ta blokada
