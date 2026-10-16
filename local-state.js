@@ -138,6 +138,10 @@
     if ((!allowEmpty && !entries.length) || entries.length>20000 || new TextEncoder().encode(JSON.stringify(payload.storage)).byteLength>32*1024*1024) throw new Error('Kopia jest pusta albo przekracza limit rozmiaru.');
     for (const [key,value] of entries) {
       if (!key.startsWith(PREFIX) || key.length>2048 || /[\x00-\x1f]/.test(key) || typeof value !== 'string') throw new Error('Kopia zawiera nieprawidłowy klucz lub wartość.');
+      if (root.OfficeTrackCooldown && key.startsWith(root.OfficeTrackCooldown.KEY+':')) {
+        try { root.OfficeTrackCooldown.parse(value,decodeURIComponent(key.slice(root.OfficeTrackCooldown.KEY.length+1))); }
+        catch { throw new Error('Nieprawidłowe dane blokad 14 dni w kopii.'); }
+      }
       if (root.OfficeAutoTrackFeedback && key.startsWith(root.OfficeAutoTrackFeedback.KEY+':')) {
         let account; try { account=decodeURIComponent(key.slice(root.OfficeAutoTrackFeedback.KEY.length+1)); root.OfficeAutoTrackFeedback.parse(value,account); }
         catch { throw new Error('Nieprawidłowe automatyczne oceny w kopii; import przerwany.'); }

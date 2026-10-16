@@ -95,6 +95,7 @@ for (const outcome of ['cloud-error','write-error','search-error','logger-missin
     selectedProfiles = () => selected; cleanupOldOfficePlaylists = async () => ({}); refreshLastFmBeforeGeneration = async () => {}; syncSpotifyRecentHistory = async () => {};
     waitForSearchSlot = async () => {}; primeProfileGenres = async () => {}; primeCommonGroupQueries = async () => {};
     let release, signalEntered; const enteredPromise = new Promise(resolve => { signalEntered = resolve; });
+    syncTrackCooldown = async () => ({saved:1});
     let entered = false, startCount = 0, refreshes = 0, searches = 0, creates = 0, adds = 0, logs = 0;
     primeManualSeedArtists = async () => { startCount++; entered = true; signalEntered(); await new Promise(resolve => { release=resolve; }); if (outcome==='search-error') throw new Error('Próba wyszukiwania przerwana'); await searchTracks('old','genre:"rock"'); };
     window.fetch = async (url, options) => {

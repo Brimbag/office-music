@@ -144,12 +144,13 @@ test('trzy pełne generowania rzeczywiście zapisują uczenie i przekierowują t
   cleanupOldOfficePlaylists=async()=>({});refreshLastFmBeforeGeneration=async()=>{};syncSpotifyRecentHistory=async()=>{};uploadCloudStateIfChanged=async()=>({});OfficePlaylistCover.apply=async()=>false;waitForSearchSlot=async()=>{};
   primeManualSeedArtists=async(token,_selected,_budget,acquisition)=>primeDiverseQueries(token,[{query:'genre:"rock"'},{query:'genre:"pop"'}],1,acquisition);
   primeProfileGenres=async()=>{};primeCommonGroupQueries=async()=>{};
-  const searches=[];fetch=async input=>{
+  const searches=[];fetch=async (input,options={})=>{
    const u=new URL(input,location.href);if(u.pathname==='/v1/search'){
     const query=u.searchParams.get('q');searches.push(query);
     const tracks=query==='genre:"rock"'?Array.from({length:10},(_,i)=>({...make(`bad${i}`,'Bad'),name:`Bad ${i} - Live`})):newTracks;
     return Response.json({tracks:{items:tracks,total:100}});
    }
+   if(u.pathname==='/api/track-cooldown')return options.method==='GET'?Response.json({base:null,state:OfficeTrackCooldown.empty('mock-account')}):Response.json({state:JSON.parse(options.body).state});
    if(u.pathname==='/api/generations')return Response.json({ok:true,saved:true});
    if(u.pathname.endsWith('/items'))return Response.json({snapshot_id:'done'});
    return Response.json({id:'made',name:'Made',uri:'spotify:playlist:made'});

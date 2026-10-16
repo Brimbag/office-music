@@ -1,5 +1,7 @@
 # Audyt blokady powtórek 1.0.12 — 2026-10-16
 
+**Dokument historyczny.** Po audycie użytkownik zatwierdził zmianę semantyki w 1.0.13 i ustalił pierwszeństwo blokady przed 👍 oraz wyłączeniem kar. Aktualny kontrakt: [TRACK_COOLDOWN_1_0_13](TRACK_COOLDOWN_1_0_13.md). Poniższy opis dotyczy kodu 1.0.12; testy zostały następnie zaktualizowane do 1.0.13.
+
 Baza: `f8d5c1c9ac351238537cd66ad2e7257e7f1677b9` (stabilne 1.0.12,
 main potwierdzony przez GitHub API). Zakres PR: audyt i regresje obecnego
 kontraktu. Bez zmiany algorytmu, wersji, produkcyjnych danych, migracji,

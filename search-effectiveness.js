@@ -1,6 +1,6 @@
 /* Q1.4: ephemeral, bounded Search diagnostics. No persistence or extra scoring. */
 (function (root) {
-  const reasons = { invalid: 'nieprawidłowy rekord', artistIdExcluded: 'wykluczone ID wykonawcy', feedbackTrack: 'ujemna ocena utworu', unwantedVariant: 'wersja alternatywna', explicitBlockedArtist: 'blokada wykonawcy', feedbackBlockedArtist: 'blokada feedbacku', strongNegativeArtistFeedback: 'silnie ujemny feedback wykonawcy', artistCooldown: 'cooldown wykonawcy', recentTrack: 'ostatnio odtwarzany', lowIndividualFit: 'minimum osoby', recognizability: 'rozpoznawalność', lowGroupFit: 'dopasowanie grupy', belowSafe: 'próg bezpiecznej selekcji' };
+  const reasons = { invalid: 'nieprawidłowy rekord', artistIdExcluded: 'wykluczone ID wykonawcy', feedbackTrack: 'ujemna ocena utworu', unwantedVariant: 'wersja alternatywna', explicitBlockedArtist: 'blokada wykonawcy', feedbackBlockedArtist: 'blokada feedbacku', strongNegativeArtistFeedback: 'silnie ujemny feedback wykonawcy', artistCooldown: 'cooldown wykonawcy', recentTrack: 'ostatnio odtwarzany', skipCooldown: 'blokada 14 dni po pominięciu', lowIndividualFit: 'minimum osoby', recognizability: 'rozpoznawalność', lowGroupFit: 'dopasowanie grupy', belowSafe: 'próg bezpiecznej selekcji' };
   const count = value => Number.isInteger(value) && value >= 0 ? value : null;
   root.OmmSearchEffectiveness = { create() {
     const pages = [], outcomes = new Map(), initialArtists = new Set(); let omitted = 0, final = false;
