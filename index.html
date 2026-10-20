@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Music Mixer 1.0.14</title>
+  <title>Office Music Mixer 1.0.15</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231ed760%27/%3E%3Cpath d=%27M39 13v28.5a9.5 9.5 0 1 1-5-8.4V20l18-4v20.5a9.5 9.5 0 1 1-5-8.4V13z%27 fill=%27%23121915%27/%3E%3C/svg%3E">
   <style>
     .generation-stages { padding-left: 1.5rem; }
@@ -418,7 +418,7 @@
   <div class="connection-card">
     <div>
       <div class="connection-title-row">
-        <h1>Office Music Mixer <span class="version">1.0.14</span></h1>
+        <h1>Office Music Mixer <span class="version">1.0.15</span></h1>
       </div>
       <p class="connection-subtitle">Playlista z Bartkiem jako głównym profilem, dopasowana do osób obecnych w biurze.</p>
       <div class="connection-meta">
@@ -1688,7 +1688,7 @@ function exportLocalState() {
       format: STATE_EXPORT_FORMAT,
       version: STATE_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      source: "Office Music Mixer 1.0.14",
+      source: "Office Music Mixer 1.0.15",
       storage: exportedStorageState()
     };
 
@@ -3678,16 +3678,20 @@ async function refreshLastFmBeforeGeneration(selected, total) {
 
 
 function compactPlayedHistoryItem(item) {
+  const text = value => typeof value === "string" ? value : "";
+  const strings = value => Array.isArray(value) ? value.filter(v => typeof v === "string" && v) : [];
+  const trackName = text(item?.trackName), artistNames = strings(item?.artistNames);
+  const duration = typeof item?.durationMs === "number" || typeof item?.durationMs === "string" ? Number(item.durationMs) : 0;
   return {
-    trackId: item.trackId || "",
-    trackName: item.trackName || "",
-    artistIds: Array.isArray(item.artistIds) ? item.artistIds.filter(Boolean) : [],
-    artistNames: Array.isArray(item.artistNames) ? item.artistNames.filter(Boolean) : [],
-    trackSignature: item.trackSignature || trackSignatureFromParts(item.trackName, item.artistNames),
-    playedAt: item.playedAt || "",
-    source: item.source || "",
-    sourceAccount: String(item.sourceAccount || ""),
-    durationMs: Number(item.durationMs) || 0
+    trackId: text(item?.trackId),
+    trackName,
+    artistIds: strings(item?.artistIds),
+    artistNames,
+    trackSignature: text(item?.trackSignature) || trackSignatureFromParts(trackName, artistNames),
+    playedAt: typeof item?.playedAt === "string" || typeof item?.playedAt === "number" ? item.playedAt : "",
+    source: text(item?.source),
+    sourceAccount: text(item?.sourceAccount),
+    durationMs: Number.isFinite(duration) && duration > 0 ? duration : 0
   };
 }
 
@@ -3697,17 +3701,19 @@ function isActualPlayHistoryItem(item, cutoff = 0) {
   return Number.isFinite(time) && time >= cutoff && (item.trackId || item.trackSignature);
 }
 
-function loadHistory() {
+function loadHistory({ strict = false } = {}) {
   try {
     const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) throw new Error("Nieprawidłowy format historii odsłuchów.");
 
     const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    // Derive a safe signature before validating legacy Last.fm rows without ID.
     return parsed
-      .filter(item => isActualPlayHistoryItem(item, cutoff))
-      .map(compactPlayedHistoryItem);
+      .map(compactPlayedHistoryItem)
+      .filter(item => isActualPlayHistoryItem(item, cutoff));
   } catch (error) {
     console.warn("Nie udało się odczytać historii:", error);
+    if (strict) throw new Error("Nie można potwierdzić historii odsłuchów. Przywróć poprawną historię przed generowaniem.");
     return [];
   }
 }
@@ -3715,8 +3721,8 @@ function loadHistory() {
 function saveHistory(history) {
   const cutoff = Date.now() - HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
   const cleaned = history
-    .filter(item => isActualPlayHistoryItem(item, cutoff))
     .map(compactPlayedHistoryItem)
+    .filter(item => isActualPlayHistoryItem(item, cutoff))
     .sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
 
   // Historia ma przechowywać wyłącznie faktyczne odsłuchania. W razie presji
@@ -3828,10 +3834,10 @@ function purgeExpiredCaches() {
 }
 
 function mergeHistoryEntries(entries) {
-  const existing = loadHistory();
+  const existing = loadHistory({ strict: true });
   const map = new Map();
 
-  for (const item of [...entries, ...existing]) {
+  for (const item of [...entries, ...existing].map(compactPlayedHistoryItem)) {
     const timestamp = item.playedAt || item.generatedAt;
     const key = `${item.trackId || item.trackSignature || "unknown"}|${timestamp}|${item.source || "unknown"}`;
     if (!map.has(key)) map.set(key, item);
@@ -3952,7 +3958,7 @@ async function checkLastFmSync(token, force = false) {
 }
 
 function buildHistoryBlocklists() {
-  const history = loadHistory();
+  const history = loadHistory({ strict: true });
   const now = Date.now();
   const trackCutoff = now - OfficeTrackCooldown.WINDOW;
   const artistCutoff = now - Number(artistCooldownHours.value) * 60 * 60 * 1000;
@@ -3991,6 +3997,13 @@ function buildHistoryBlocklists() {
   for (const id of shared?.tracks || []) blockedTracks.add(id);
   for (const signature of shared?.signatures || []) blockedTrackSignatures.add(signature);
   return { blockedTracks, blockedTrackSignatures, blockedArtists, blockedArtistNamesFromHistory };
+}
+
+
+function historyBlocksTrack(track, blocks) {
+  return blocks.blockedTracks.has(track.id) ||
+    [trackSignature(track), ...trackDuplicateSignatures(track)]
+      .some(signature => signature && blocks.blockedTrackSignatures.has(signature));
 }
 
 function renderHistorySummary() {
@@ -6032,8 +6045,7 @@ function selectGroupPlaylist(eligible, total, ctx, stats) {
   const freshBlocks = generationBlocklists(ctx.selected || []);
   const remaining = eligible.filter(item => {
     if (freshBlocks.skipBlockedTracks.has(item.track.id)) { stats.skipCooldown=(stats.skipCooldown||0)+1; return false; }
-    const signatures=[trackSignature(item.track),...trackDuplicateSignatures(item.track)];
-    if (freshBlocks.blockedTracks.has(item.track.id) || signatures.some(s=>freshBlocks.blockedTrackSignatures.has(s))) { stats.recentTrack=(stats.recentTrack||0)+1; return false; }
+    if (historyBlocksTrack(item.track, freshBlocks)) { stats.recentTrack=(stats.recentTrack||0)+1; return false; }
     if (trackHasArtistExclusion(item.track)) { stats.artistIdExcluded = (stats.artistIdExcluded || 0) + 1; return false; }
     if (hasStrongNegativeArtistFeedback(item.track, artistFeedback)) {
       stats.strongNegativeArtistFeedback = (stats.strongNegativeArtistFeedback || 0) + 1;
@@ -6662,6 +6674,7 @@ async function generateOfficePlaylist() {
     if (!token) throw new Error("Brak aktywnej sesji Spotify.");
 
 
+    loadHistory({ strict: true });
     await syncTrackCooldown(token, {force:true,required:true});
     await syncPlayCooldown(token, {force:true,required:true});
     generationStage(1);
@@ -6732,8 +6745,11 @@ async function generateOfficePlaylist() {
     const playlist = await createPlaylist(token, selected, finalTracks.length);
     createdPlaylist = playlist; progress.created();
     await syncPlayCooldown(token, {force:true,required:true});
-    const writePlayBlocks = buildHistoryBlocklists();
-    if(finalTracks.some(track=>trackCooldown?.blocked().has(track.id) || writePlayBlocks.blockedTracks.has(track.id) || [trackSignature(track),...trackDuplicateSignatures(track)].some(key=>writePlayBlocks.blockedTrackSignatures.has(key))))throw new Error("Blokady zmieniły się podczas tworzenia playlisty. Wygeneruj ją ponownie.");
+    const writeHistoryBlocks = buildHistoryBlocklists();
+    const writeSkipBlocks = trackCooldown?.blocked() || new Set();
+    if (finalTracks.some(track => writeSkipBlocks.has(track.id) || historyBlocksTrack(track, writeHistoryBlocks))) {
+      throw new Error("Blokady zmieniły się podczas tworzenia playlisty. Wygeneruj ją ponownie.");
+    }
     await addItemsToPlaylist(
       token,
       playlist.id,
@@ -7081,7 +7097,7 @@ function renderPlaylistResult(
   const model = document.createElement("p");
   model.className = "small";
   model.textContent =
-    `Model grupowy 1.0.14: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
+    `Model grupowy 1.0.15: każdy kandydat dostaje osobny wynik dopasowania dla każdej obecnej osoby na podstawie ankiety, artystów wzorcowych i źródeł Last.fm/Spotify. ` +
     `Wynik grupy łączy ważoną średnią z zasadą least misery; Bartek pozostaje profilem głównym (waga 1,3), ale nie ma już sztywnego celu 75%. ` +
     `Fairness mocniej podbija utwory pomagające osobie dotąd słabiej reprezentowanej, xQuAD pilnuje pokrycia różnych lubianych gatunków, a MMR wspiera różnorodność zestawu. Po wyborze zestawu kolejność jest losowana ponownie, z docelowym odstępem co najmniej 5 utworów między tym samym wykonawcą. v36 dodatkowo kanonizuje tytuły przed deduplikacją i mocniej odrzuca wersje live/remix/acoustic/instrumental/edit/version; remaster jest odrzucany, gdy w puli istnieje zwykłe wydanie. v37 dodał awaryjny próg jakości i Polish boost, a v38 pokazał, że końcówkę blokowały głównie dynamiczna quota discovery i zbyt wysoki warunek max profilu. v39 po wyczerpaniu normalnych kandydatów dopuszcza bazowy wynik od 35, jeśli żadna obecna osoba nie ma wyniku poniżej 35; nie wymaga już max profilu ≥65. Wstępny fallback może korzystać z quota docelowej, a 1.0.13 koryguje końcowy zestaw do górnego limitu faktycznej długości bez obniżania progów jakości. v43 wyklucza utwór we wszystkich ścieżkach, gdy przynajmniej jeden wykonawca ma karę feedbacku <= -40. Ocena utworu ani dodatni feedback współwykonawcy nie omijają tego warunku; wykluczenie nie tworzy trwałej blokady i nie przenosi kary na pozostałych wykonawców. Reguła PR B wymaga wyniku co najmniej 35 dla każdej obecnej osoby przed bonusami grupowymi, zarówno w normalnej selekcji, jak i fallbacku. Polska muzyka zgodna z gustami nadal dostaje malejący bonus na podstawie tagów Last.fm, bez minimalnej kwoty PL. ` +
     `🚫 dla gatunku obniża satysfakcję danej osoby, ale nie blokuje automatycznie całego wykonawcy; jawnie zablokowany wykonawca nadal jest twardym wykluczeniem. ` +
