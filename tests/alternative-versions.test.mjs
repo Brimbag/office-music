@@ -127,8 +127,8 @@ test('obie strony pokazują dokładną wersję wdrożenia w nagłówku i tytule'
   for (const path of ['/', '/taste.html']) {
     const session = await harness.page(path);
     try {
-      assert.match(await session.page.title(), /1\.0\.13(?![-\d])/);
-      assert.match(await session.page.locator('h1').textContent(), /1\.0\.13(?![-\d])/);
+      assert.match(await session.page.title(), /1\.0\.14(?![-\d])/);
+      assert.match(await session.page.locator('h1').textContent(), /1\.0\.14(?![-\d])/);
       assert.deepEqual(session.errors, []);
     } finally { await session.close(); }
   }

@@ -196,6 +196,9 @@ test('16 Oct generator excludes penalized Track ID and writes a safe alternative
       primeManualSeedArtists = primeProfileGenres = primeCommonGroupQueries = async () => {};
       window.auditWrites = [];
       fetch = async (url, options={}) => {
+        if(String(url)==='/api/play-cooldown')return options.method==='GET'
+          ? Response.json({base:null,state:OfficePlayCooldown.empty('mock-owner')})
+          : Response.json({state:JSON.parse(options.body).state});
         if(String(url)==='/api/track-cooldown')return options.method==='GET'
           ? Response.json({base:null,state:OfficeTrackCooldown.empty('mock-owner')})
           : Response.json({state:JSON.parse(options.body).state});

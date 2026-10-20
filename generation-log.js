@@ -1,6 +1,6 @@
 /* LOG1 aggregate diagnostics: explicit fields only, no queries, tracks or credentials. */
 (function(root) {
-  const MAX_BYTES = 16384, VERSION = '1.0.13';
+  const MAX_BYTES = 16384, VERSION = '1.0.14';
   const PEOPLE = ['bartek','edyta','asia','monika'];
   const FILTERS = ['rawPool','invalid','feedbackTrack','unwantedVariant','explicitBlockedArtist','feedbackBlockedArtist','artistIdExcluded','strongNegativeArtistFeedback','artistCooldown','recentTrack','skipCooldown','recognizability','lowGroupFit','lowIndividualFit','discoveryModeExcluded','eligible','artistLimitDuringSelection','duplicateDuringSelection','fallbackSelections','lowFinalScoreStop'];
   const STOP = ['remaining','duplicateBlocked','artistLimitBlocked','discoveryQuotaBlockedCurrent','discoveryQuotaBlockedTarget','selectableAtTargetQuota','base44Plus','base40to43','base35to39','baseBelow35','fallbackRange','fallbackFailMinUser','fallbackStrongNegativeFeedback','fallbackSafe','targetQuotaMax'];

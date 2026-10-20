@@ -1,6 +1,6 @@
 # Aktualna architektura OMM
 
-Stan: 2026-10-16, `1.0.13`; bazowy audyt `1.0.12`: `f8d5c1c`. Ten dokument zastępuje opis v42 z historycznego handoffu; szczegółowe dokumenty PR pozostają historią decyzji.
+Stan: 2026-10-16, `1.0.14`; bazowy audyt `1.0.12`: `f8d5c1c`. Ten dokument zastępuje opis v42 z historycznego handoffu; szczegółowe dokumenty PR pozostają historią decyzji.
 
 ## Aplikacja i integracje
 
@@ -46,6 +46,14 @@ Q1.2–Q1.7 poprawiają wykorzystanie istniejącego budżetu: ukierunkowane pozy
 Aktualny UX: [U4](GENERATOR_UX_U4.md), jeden panel i kopiowanie raportu. Odtwarzanie: [S3](SKIP_MONITOR_S3.md), jeden przełącznik, pause/resume generowania (historycznie off po reload, zastąpione automatycznym startem w wydaniu stabilnym); [S3.1](JOURNAL_NAMES_S3_1.md), kompatybilne nazwy w dzienniku.
 
 Wydanie stabilne: [domyślne ustawienia i rollback](STABLE_1_0_12.md). Obserwacja jest pamiętana lokalnie per konto; kary per niezmienny account_id. Ponowne otwarcie strony rozpoczyna nową obserwację z czystą kotwicą. Zwykłe odświeżenia profilu nie odnawiają limitu8h. Generowanie wstrzymuje istniejącą obserwację, a pierwsza weryfikacja sesji podczas generowania odkłada start do jego zakończenia.
+
+## Wspólny rejestr odtworzeń — 1.0.14
+
+Współdzielone odtworzenia: `play-cooldown.js`,
+`/api/play-cooldown`, union ID/sygnatur i max timestamp per account_id.
+Szczegółowa historia pozostaje lokalna, rejestr blokad jest synchronizowany
+przed generowaniem i końcowym zapisem. Nie zmienia mechanizmu pominięć.
+[Kontrakt, wdrożenie obu komputerów i ograniczenia](CLOUD_PLAY_COOLDOWN.md).
 
 ## Blokada pominiętego Track ID — 1.0.13
 
