@@ -31,6 +31,8 @@ test('text report parser verifies count, resolves artist credits without inventi
 test('ambiguous Warsaw DST time requires an explicit offset; never guesses the generation clock',()=>{
   const text='1.0.13 · 1/150 utworów\nkoniec: 25.10.2026, 02:30:00\nFixture Artist - Fixture Song\nSpotify: rock';
   assert.throws(()=>parsePlaylistText(text,backup([])),/Niejednoznaczny/);
+  const p=parsePlaylistText(text,backup([]),{generatedAt:'2026-10-25T02:30:00+01:00'});
+  assert.equal(p.generatedAt,'2026-10-25T02:30:00+01:00');assert.equal(p.reportedGeneratedAt,null);
 });
 test('playlist selection never assumes an added_at timestamp is generation time or silently chooses a snapshot',()=>{
   const recent=[{id:'one',generatedAt:AT,tracks:[track]},{id:'two',generatedAt:AT,tracks:[track]}];
@@ -45,4 +47,28 @@ test('audit normalizes missing signatures, retains valid rows next to corrupt da
     playlist:{generatedAt:AT,tracks:[track]},rulesHtml});
   assert.equal(r.summary.expectedExclusions,1);assert.equal(r.rows[0].currentFilterExcludes,true);
   assert.match(csv([{position:1,title:'A "quote"\nsecond line'}]),/"A ""quote""\nsecond line"/);
+});
+function withRegister(history=[],at=Date.parse(AT)-2*DAY){
+  const b=backup(history);
+  b.storage[OfficePlayCooldown.localKey('fixtureOwner')]=JSON.stringify({version:1,account:'fixtureOwner',
+    tracks:{same:at},signatures:{'fixture artist|fixture song':at}});
+  return b;
+}
+test('audit includes shared play IDs and signatures even without local history',()=>{
+  const r=auditBackup({backup:withRegister(),playlist:{generatedAt:AT,tracks:[track,{...track,id:'edition'}]},rulesHtml});
+  assert.equal(r.summary.playRegisters,1);assert.equal(r.summary.expectedExclusions,2);
+  assert.deepEqual(r.rows[0].registryMethods,['id','signature']);assert.deepEqual(r.rows[1].registryMethods,['signature']);
+  assert.ok(r.rows.every(row=>row.currentFilterExcludes&&row.finding==='active_play_registry_block'));
+});
+for(const age of [14*DAY-1,14*DAY,14*DAY+1,-DAY])test(`registry audit respects exact age ${age} and ignores later plays`,()=>{
+  const r=auditBackup({backup:withRegister([],Date.parse(AT)-age),playlist:{generatedAt:AT,tracks:[track]},rulesHtml});
+  assert.equal(r.rows[0].shouldExclude,age>=0&&age<14*DAY);
+  assert.equal(r.rows[0].currentFilterExcludes,age>=0&&age<14*DAY);
+  assert.equal(r.warnings.includes('registry_contains_later_timestamps_earlier_plays_cannot_be_reconstructed'),age<0);
+});
+test('audit rejects malformed or ambiguous account registers instead of ignoring cloud blocks',()=>{
+  const b=withRegister();b.storage[OfficePlayCooldown.localKey('otherOwner')]=JSON.stringify(OfficePlayCooldown.empty('otherOwner'));
+  assert.throws(()=>auditBackup({backup:b,playlist:{generatedAt:AT,tracks:[track]},rulesHtml}),/wielu kont/);
+  delete b.storage[OfficePlayCooldown.localKey('otherOwner')];b.storage[OfficePlayCooldown.localKey('fixtureOwner')]='{broken';
+  assert.throws(()=>auditBackup({backup:b,playlist:{generatedAt:AT,tracks:[track]},rulesHtml}));
 });

@@ -3,6 +3,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {resolve,dirname,basename} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
+import '../play-cooldown.js';
 
 const HISTORY='office_music_history_v1',RECENT='office_recent_playlists_v1',WINDOW=14*86400000;
 const decode=value=>typeof value==='string'?JSON.parse(value):value;
@@ -17,11 +18,12 @@ function section(source,start,end){
   if(a<0||b<0)throw new Error('Nie rozpoznano funkcji historii w kodzie aplikacji.');
   return source.slice(a,b);
 }
-export function loadRules(source,history,at){
+export function loadRules(source,history,at,sharedBlocks=null){
   const warnings=[];
   const context=vm.createContext({Date:class extends Date{static now(){return at;}},
     localStorage:{getItem:key=>key===HISTORY?JSON.stringify(history):null},
     HISTORY_KEY:HISTORY,HISTORY_MAX_AGE_DAYS:90,OfficeTrackCooldown:{WINDOW},artistCooldownHours:{value:0},
+    playCooldown:sharedBlocks?{blocked:()=>sharedBlocks}:null,
     console:{warn:()=>warnings.push('history_reader_warning')}});
   // Execute only trusted functions from the local application revision, never
   // JavaScript from a backup or playlist. No fetch/network globals are exposed.
@@ -60,7 +62,8 @@ export function parsePlaylistText(text,backup,{generatedAt}={}){
   const expected=text.match(/·\s*(\d+)\/\d+ utworów/);
   if(!tracks.length||expected&&Number(expected[1])!==tracks.length)throw new Error('Liczba odczytanych utworów nie zgadza się z raportem.');
   const time=text.match(/koniec:\s*(\d{2})\.(\d{2})\.(\d{4}),?\s*(\d{2}):(\d{2}):(\d{2})/);
-  const reportAt=time?polishTime(...time.slice(1)):null;
+  let reportAt=null;
+  if(time){try{reportAt=polishTime(...time.slice(1));}catch(error){if(!generatedAt)throw error;}}
   const historyCounts=text.match(/Historia lokalna:\s*(\d+) wpisów \((\d+) z Last\.fm, (\d+) ze Spotify/);
   return {tracks,generatedAt:generatedAt??reportAt,reportedGeneratedAt:reportAt,
     timeSource:generatedAt?'explicit_override':'report_completion_time',
@@ -100,8 +103,18 @@ function safeHistoryRow(raw,rules){
 export function auditBackup({backup,playlist,rulesHtml,baselineHtml}){
   const raw=decode(storageOf(backup)[HISTORY]??'[]');
   if(!Array.isArray(raw))throw new Error('Historia w backupie nie jest tablicą.');
-  const at=instant(playlist.generatedAt,'Czas generowania'),rules=loadRules(rulesHtml,raw,at);
-  const baseline=baselineHtml?loadRules(baselineHtml,raw,at):null;
+  const at=instant(playlist.generatedAt,'Czas generowania');
+  const registers=Object.entries(storageOf(backup)).filter(([key])=>key.startsWith(OfficePlayCooldown.KEY+':'))
+    .map(([key,value])=>OfficePlayCooldown.parse(value,decodeURIComponent(key.slice(OfficePlayCooldown.KEY.length+1))));
+  if(registers.length>1)throw new Error('Backup zawiera rejestry wielu kont; audyt wymaga kopii dla jednego konta.');
+  const sharedBlocks={tracks:new Set(),signatures:new Set()};
+  for(const register of registers){
+    const blocked=OfficePlayCooldown.blocked(register,at);
+    for(const key of blocked.tracks)sharedBlocks.tracks.add(key);
+    for(const key of blocked.signatures)sharedBlocks.signatures.add(key);
+  }
+  const rules=loadRules(rulesHtml,raw,at,sharedBlocks);
+  const baseline=baselineHtml?loadRules(baselineHtml,raw,at,sharedBlocks):null;
   const history=raw.map(r=>safeHistoryRow(r,rules)).filter(Boolean);
   const warnings=[...rules.warnings];
   const backupHistoryCounts={total:raw.length,lastfm:raw.filter(r=>r?.source==='lastfm').length,spotify:raw.filter(r=>r?.source==='spotify').length};
@@ -109,6 +122,9 @@ export function auditBackup({backup,playlist,rulesHtml,baselineHtml}){
   if(backup.exportedAt&&Date.parse(backup.exportedAt)<at)warnings.push('backup_precedes_generation_and_is_not_its_input_snapshot');
   if(playlist.timeSource?.includes('completion'))warnings.push('completion_time_is_not_exact_selection_time');
   if(playlist.tracks.some(t=>!t.id))warnings.push('some_playlist_track_ids_missing_signature_matching_used');
+  if(registers.length)warnings.push('play_registry_included_skip_registry_not_audited');
+  if(registers.some(r=>[...Object.values(r.tracks),...Object.values(r.signatures)].some(time=>time>at)))
+    warnings.push('registry_contains_later_timestamps_earlier_plays_cannot_be_reconstructed');
   const rows=playlist.tracks.map((track,index)=>{
     const sigs=signatures(rules,track);
     const matches=history.flatMap(h=>{
@@ -119,14 +135,17 @@ export function auditBackup({backup,playlist,rulesHtml,baselineHtml}){
     });
     const past=matches.filter(h=>h.at<=at).sort((a,b)=>b.at-a.at),active=past.filter(h=>h.at>at-WINDOW);
     const relevant=active.length?active:past;
+    const registryMethods=[];
+    if(track.id&&sharedBlocks.tracks.has(track.id))registryMethods.push('id');
+    if(sigs.some(s=>sharedBlocks.signatures.has(s)))registryMethods.push('signature');
     const live=excludes(rules,track),old=baseline?excludes(baseline,track):null;
     return {position:index+1,trackId:track.id??'',artists:track.artists.map(a=>a.name).join(', '),title:track.name,
       lastPlayBeforeGeneration:past[0]?.playedAt??null,
       lastPlayPL:past[0]?new Intl.DateTimeFormat('pl-PL',{timeZone:'Europe/Warsaw',dateStyle:'short',timeStyle:'medium'}).format(past[0].at):null,
       sources:[...new Set(relevant.map(h=>h.source))].sort(),methods:[...new Set(relevant.flatMap(h=>h.methods))].sort(),
-      shouldExclude:active.length>0,currentFilterExcludes:live,baselineFilterExcludes:old,
+      registryMethods,shouldExclude:active.length>0||registryMethods.length>0,currentFilterExcludes:live,baselineFilterExcludes:old,
       laterPlaysIgnored:matches.filter(h=>h.at>at).length,
-      finding:active.length?old===false&&live?'legacy_history_reader_rejection':
+      finding:registryMethods.length&&!active.length?'active_play_registry_block':active.length?old===false&&live?'legacy_history_reader_rejection':
         'prior_play_confirmed_generation_input_or_availability_unknown':past.length?'outside_14_day_window':
         matches.length?'only_later_plays':'no_prior_play_found_in_supplied_backup'};
   });
@@ -134,7 +153,7 @@ export function auditBackup({backup,playlist,rulesHtml,baselineHtml}){
   return {schemaVersion:1,generatedAt:new Date(at).toISOString(),timeSource:playlist.timeSource,
     backupExportedAt:backup.exportedAt??null,backupVersion:backup.source??null,playlistVersion:playlist.version??null,
     backupHistoryCounts,reportedHistoryCounts:playlist.reportedHistory??null,
-    summary:{tracks:rows.length,rawHistory:raw.length,loadedHistory:rules.loaded.length,
+    summary:{tracks:rows.length,rawHistory:raw.length,loadedHistory:rules.loaded.length,playRegisters:registers.length,
       baselineLoadedHistory:baseline?.loaded.length??null,expectedExclusions:violations.length,
       sharePercent:rows.length?100*violations.length/rows.length:0,
       excludedByCurrentFilter:rows.filter(r=>r.currentFilterExcludes).length,
@@ -142,7 +161,7 @@ export function auditBackup({backup,playlist,rulesHtml,baselineHtml}){
       confirmedGenerationBypassCause:null},warnings,rows};
 }
 export function csv(rows){
-  const columns=['position','artists','title','trackId','lastPlayBeforeGeneration','lastPlayPL','sources','methods','shouldExclude','currentFilterExcludes','baselineFilterExcludes','laterPlaysIgnored','finding'];
+  const columns=['position','artists','title','trackId','lastPlayBeforeGeneration','lastPlayPL','sources','methods','registryMethods','shouldExclude','currentFilterExcludes','baselineFilterExcludes','laterPlaysIgnored','finding'];
   const cell=v=>'"'+String(Array.isArray(v)?v.join('+'):v??'').replaceAll('"','""')+'"';
   return '\ufeff'+[columns.map(cell).join(','),...rows.map(r=>columns.map(k=>cell(r[k])).join(','))].join('\r\n')+'\r\n';
 }

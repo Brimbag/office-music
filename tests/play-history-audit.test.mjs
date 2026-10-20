@@ -65,6 +65,22 @@ test('saving and merging name-only Last.fm plays preserves distinct tracks at th
     mergeHistoryEntries(entries);return loadHistory().map(e=>e.trackSignature).sort();
   });assert.deepEqual(r,['fixture artist|fixture song','other artist|other song']);
 });
+test('restart retains legacy name-only history and excludes its cached candidate',async()=>{
+  const s=await harness.page();
+  try{
+    const raw=JSON.stringify([{source:'lastfm',trackName:'Fixture Song',artistNames:['Fixture Artist'],
+      playedAt:new Date(NOW-2*DAY).toISOString()}]);
+    await s.page.evaluate(raw=>localStorage.setItem(HISTORY_KEY,raw),raw);
+    await s.page.addInitScript(now=>{Date.now=()=>now;},NOW);
+    await s.page.reload();await s.page.waitForFunction(()=>window.ommStorageReady!==false);
+    const result=await s.page.evaluate(()=>{
+      const track={id:'fixtureTrack',name:'Fixture Song',artists:[{name:'Fixture Artist'}]};
+      writeSearchCache('genre:"rock"',0,[track]);
+      return {loaded:loadHistory().length,blocked:readSearchCache('genre:"rock"',0).every(t=>historyBlocksTrack(t,buildHistoryBlocklists()))};
+    });
+    assert.equal(result.loaded,1);assert.equal(result.blocked,true);assert.deepEqual(s.errors,[]);
+  }finally{await s.close();}
+});
 test('invalid JSON history is visible as an error to the filter, never treated as empty during selection',async()=>{
   const r=await withFixture(()=>{
     const track=historyTrack();historySeed([track]);localStorage.setItem(HISTORY_KEY,'{broken');
@@ -127,7 +143,7 @@ for(const [artist,title,blocked] of [
 test('history arriving while Spotify playlist creation is awaited prevents the final items write',async()=>{
   const r=await withFixture(async()=>{
     const track=historyTrack();historySeed([track]);
-    getValidAccessToken=async()=> 'mock';syncTrackCooldown=async()=>({saved:1});selectedProfiles=()=>historyProfiles;
+    getValidAccessToken=async()=> 'mock';syncTrackCooldown=syncPlayCooldown=async()=>({saved:1});selectedProfiles=()=>historyProfiles;
     cleanupOldOfficePlaylists=async()=>({});refreshLastFmBeforeGeneration=async()=>{};syncSpotifyRecentHistory=async()=>{};
     primeManualSeedArtists=primeProfileGenres=primeCommonGroupQueries=async()=>{};
     persistGenerationLog=async()=>({status:'local'});uploadCloudStateIfChanged=async()=>({saved:0});
