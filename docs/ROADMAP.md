@@ -85,3 +85,13 @@ i reguł pominięć. [Kontrakt i procedura](CLOUD_PLAY_COOLDOWN.md).
 Rzeczywisty test A→B i synchronizacja komputera z historią **zaparkowane
 do 18.10.2026** — użytkownik nie ma do niego wcześniej dostępu. Bez
 automatycznego importu backupu/generowania playlist. PR #56 osobno.
+
+## 1.0.15 — odczyt starszej historii
+
+20.10.2026 użytkownik zatwierdził scalenie i wdrożenie PR #56:
+normalizacja przed walidacją/scalaniem, odporność na pojedyncze uszkodzone
+pola i jawne zatrzymanie przy uszkodzonej całej historii. Zachowano końcową
+kontrolę i synchronizację z 1.0.14. [Zakres i regresje](PLAY_HISTORY_AUDIT_FIX.md).
+Sprawdzone generacje na dwóch komputerach nie naruszały znanych blokad;
+rzeczywisty test generowania z cache wyszukiwań pozostaje otwarty.
+Bez migracji D1 i zmian algorytmu punktacji.

@@ -1,6 +1,6 @@
 # Aktualna architektura OMM
 
-Stan: 2026-10-16, `1.0.14`; bazowy audyt `1.0.12`: `f8d5c1c`. Ten dokument zastępuje opis v42 z historycznego handoffu; szczegółowe dokumenty PR pozostają historią decyzji.
+Stan: 2026-10-20, `1.0.15`; bazowy audyt `1.0.12`: `f8d5c1c`. Ten dokument zastępuje opis v42 z historycznego handoffu; szczegółowe dokumenty PR pozostają historią decyzji.
 
 ## Aplikacja i integracje
 
@@ -58,3 +58,11 @@ przed generowaniem i końcowym zapisem. Nie zmienia mechanizmu pominięć.
 ## Blokada pominiętego Track ID — 1.0.13
 
 `track-cooldown.js` i `/api/track-cooldown` przechowują osobny rejestr ostatnich pominięć early/middle na OMM. Okno 14 × 24 h nie zależy od 👍, resetów S2, przełącznika kar ani dopasowania. Świeże blokady są sprawdzane przy kwalifikacji i w selektorze, przed fallbackiem/naprawą discovery. Przed generowaniem wymagane jest potwierdzenie synchronizacji rejestru; błąd zatrzymuje generowanie. [Kontrakt, dane i rollback](TRACK_COOLDOWN_1_0_13.md).
+
+## Bezpieczny odczyt historii — 1.0.15
+
+Historia jest normalizowana przed walidacją i scalaniem. Pojedynczy rekord
+z nieprawidłowym typem pola nie usuwa poprawnych odsłuchów, a uszkodzony
+JSON całej historii zatrzymuje generowanie przed porządkami Spotify.
+Końcowa kontrola blokad wdrożona w 1.0.14 pozostaje zachowana.
+[Zakres i lokalne narzędzie audytu](PLAY_HISTORY_AUDIT_FIX.md).

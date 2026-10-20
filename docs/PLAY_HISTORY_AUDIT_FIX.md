@@ -6,7 +6,7 @@ Pierwotny audyt dotyczył 1.0.13, `93844adf3c57bbef53cd5a94c213bc9c01e999c9`.
 Zakres: zgodny odczyt istniejącego `office_music_history_v1`, scalanie oraz
 egzekwowanie blokady po odtworzeniu. Bez zmiany wag, minimum osoby,
 fairness/xQuAD/MMR, discovery, limitów/API i mechanizmu pominięć.
-PR nie upoważnia do scalenia ani wdrożenia.
+20.10.2026 użytkownik zatwierdził scalenie i wdrożenie PR #56 jako 1.0.15.
 
 ## Potwierdzone błędy implementacji
 
